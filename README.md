@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="assets/aliro-ios.jpg" height="250" alt="aliro unlock on ios" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="assets/aliro-watchos.jpeg" height="250" alt="aliro unlock on watchos" />
+</p>
+
 # reverse engineering a phone's uwb proximity unlock
 
 just my notes on how a phone pops open a fixed reader when you walk up to it. the phone handles all
