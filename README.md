@@ -47,23 +47,31 @@ nrfutil sdk-manager toolchain install --ncs-version v3.3.0
 then fetch the sdk, build, and flash:
 
 ```bash
-./bootstrap.sh          # fetch ncs v3.3.0 + the nordic add-on into ./workspace
-./build.sh build        # → ./build/merged.hex
-./build.sh flash-erase  # first flash of a net-core image
-./build.sh flash        # every flash after that
+make bootstrap     # fetch ncs v3.3.0 + the nordic add-on into ./workspace
+make build         # → ./build/merged.hex
+make flash-erase   # first flash of a net-core image
+make flash         # every flash after that
 ```
 
-<sub>the first flash needs <code>flash-erase</code>. after that, plain <code>flash</code> is enough.</sub>
+<sub>the first flash needs <code>flash-erase</code>. after that, plain <code>flash</code> is enough. run <code>make</code> on its own for the full, grouped list.</sub>
 
 everything you can run:
 
 | command | does |
 |---|---|
-| `./build.sh build` | build to `./build/merged.hex` |
-| `./build.sh flash-erase` | first flash of a net-core (hci) image |
-| `./build.sh flash` | every flash after the first |
-| `./build.sh build-flash` | build, then flash |
-| `UWB_SELFTEST=1 ./build.sh build` | one-shot boot self-test, no iphone |
+| `make` | grouped list of every target |
+| `make bootstrap` | fetch ncs v3.3.0 + add-on (~6.5 gb), apply patches |
+| `make build` | incremental build to `./build/merged.hex` |
+| `make rebuild` | force a clean pristine build |
+| `make flash-erase` | first flash of a net-core (hci) image |
+| `make flash` | every flash after the first |
+| `make build flash` | build, then flash |
+| `make selftest` | one-shot boot self-test, no iphone |
+| `make test` | host test suite for the ccc core (no toolchain or hardware) |
+| `make coverage` | line coverage of the ccc core, plus html report |
+| `make clean` | remove `./build` |
+
+build options pass through as make variables: `make build PRETTY=1 CHIP=dw3720` (chip defaults to dw3000; also `PRISTINE=1`, `SELFTEST=1`). the `./bootstrap.sh` and `./build.sh` scripts still work directly if you prefer.
 
 ## what you need
 
