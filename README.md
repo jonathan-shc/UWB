@@ -1,8 +1,9 @@
 <h1 align="center">openaliro</h1>
 
 <p align="center">
-  <b>Walk up and the lock opens. Tap and it opens.</b><br/>
-  Secure UWB ranging + NFC for an Aliro digital key, hand-rolled in C on a bare DW3110 — <i>no UWB coprocessor</i>.
+  <b>walk up and the lock opens. tap and it opens.</b><br/>
+  an aliro digital key lock that pops your door from your iphone or apple watch:
+  by <i>walking up</i> (ultra wideband ranging) and by <i>tapping</i> (nfc).
 </p>
 
 <p align="center">
@@ -13,133 +14,151 @@
 </p>
 
 <p align="center">
-  <img src="assets/aliro-ios.jpg" height="260" alt="iPhone showing “Matter Accessory — Unlocked” on approach" />
+  <img src="assets/aliro-ios.jpg" height="260" alt="aliro unlock on ios" />
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="assets/aliro-watchos.jpeg" height="260" alt="Apple Watch unlocking the same lock from the Home app" />
+  <img src="assets/aliro-watchos.jpeg" height="260" alt="aliro unlock on watchos" />
 </p>
 
-<p align="center"><sub>Real unlocks on hardware: iPhone on approach (left), Apple Watch tap (right).</sub></p>
+<p align="center"><sub>real unlocks on hardware: iphone on approach (left), apple watch (right).</sub></p>
 
 ---
 
-This is the **reader (lock) side** of an [Aliro](https://csa-iot.org/all-solutions/aliro/) digital-key
-unlock. An iPhone drives the whole transaction over Bluetooth LE and measures distance over Ultra-Wideband
-(UWB); the lock opens when the phone is close and relocks when it walks away. It also opens on an NFC tap.
+this is the lock side of an [aliro](https://csa-iot.org/all-solutions/aliro/) digital key. your iphone runs
+the whole conversation over bluetooth le and measures how far away it is over ultra wideband. walk up and the
+door unlocks, walk off and it locks itself again. it also pops open on a plain nfc tap. no app to open, no
+button to press.
 
-## Why this is hard
+## what it does
 
-Most UWB projects lean on a turnkey ranging module that hides the radio behind a friendly API. This one
-doesn't. It runs on a **bare Qorvo DW3110** (a DWM3000EVB) with **no UWB coprocessor**, so the secure-ranging
-stack — the MAC, the PHY framing, and the STS scrambled-timestamp sequence — is rebuilt in firmware on the
-nRF5340 app core, straight over the [`deps/dw3000`](deps/dw3000) driver. Getting a phone to trust the distance
-it measures means getting all of that byte-for-byte right.
+- **hands-free unlock**: the door opens as you walk up and locks again once you leave.
+- **tap to unlock**: hold your iphone or watch to the reader (express mode, no face id needed).
+- **distance you can trust**: the ranging is tied to your key, so nobody can replay an unlock off a recorded
+  signal.
+- **no uwb coprocessor**: the whole secure ranging radio stack runs in firmware on a bare qorvo dw3110.
 
-## Quick start
+## get started
 
-Install the toolchain once per machine:
+grab the toolchain once per machine:
 
 ```bash
 nrfutil sdk-manager toolchain install --ncs-version v3.3.0
 ```
 
-Then build and flash:
+then fetch the sdk, build, and flash:
 
 ```bash
-./bootstrap.sh          # fetch NCS v3.3.0 + the Nordic add-on into ./workspace
+./bootstrap.sh          # fetch ncs v3.3.0 + the nordic add-on into ./workspace
 ./build.sh build        # → ./build/merged.hex
 ./build.sh flash-erase  # first flash of a net-core image
-./build.sh flash        # subsequent app-only flash
+./build.sh flash        # every flash after that
 ```
 
-| Command | Does |
+<sub>the first flash needs <code>flash-erase</code>. after that, plain <code>flash</code> is enough.</sub>
+
+everything you can run:
+
+| command | does |
 |---|---|
-| `./build.sh build` | Build to `./build/merged.hex` |
-| `./build.sh flash-erase` | First flash of a net-core (HCI) image |
-| `./build.sh flash` | Subsequent app-only flash |
-| `./build.sh build-flash` | Build, then flash |
-| `UWB_SELFTEST=1 ./build.sh build` | One-shot boot self-test, no iPhone |
+| `./build.sh build` | build to `./build/merged.hex` |
+| `./build.sh flash-erase` | first flash of a net-core (hci) image |
+| `./build.sh flash` | every flash after the first |
+| `./build.sh build-flash` | build, then flash |
+| `UWB_SELFTEST=1 ./build.sh build` | one-shot boot self-test, no iphone |
 
-## Hardware
+## what you need
 
-| Part | Role |
+| part | role |
 |---|---|
-| nRF5340 DK | Host SoC: BLE + Matter and the ranging engine |
-| DWM3000EVB (DW3110) | UWB radio on the Arduino header (SPIM4) |
-| X-NUCLEO-NFC12A1 (ST25R300) | NFC reader front end for the tap path (SPIM2) |
+| nRF5340 DK | the brains: ble + matter and the ranging engine |
+| DWM3000EVB (DW3110) | the uwb radio, on the arduino header (spim4) |
+| X-NUCLEO-NFC12A1 (ST25R300) | the nfc reader front end for tap (spim2) |
 
-Pin wiring is in [`integration/overlays/dw3000-nfc.overlay`](integration/overlays/dw3000-nfc.overlay).
+pin wiring lives in [`integration/overlays/dw3000-nfc.overlay`](integration/overlays/dw3000-nfc.overlay).
 
-## How the unlock works
+## how it works
 
-The transaction runs over BLE; UWB carries no application data, only the distance measurement. Both sides
-derive the ranging root key independently from the credential check, so ranging can't be replayed from
-captured BLE. The lock opens at close range and relocks beyond a hysteresis margin.
+the whole transaction rides on ble; uwb carries zero application data, just the distance. both sides derive
+the ranging key on their own from the auth, so ranging can't be replayed off sniffed ble. the door opens up
+close and relocks past a little hysteresis margin.
 
 ```mermaid
 flowchart LR
-  phone(["iPhone / Apple Watch"])
-  phone -- "BLE: auth + key agreement" --> soc
-  phone -- "UWB: secure ranging" --> uwb
-  phone -- "NFC: ECP tap" --> nfc
-  subgraph lock ["DIY lock · nRF5340 DK"]
-    soc["nRF5340 app core<br/>BLE · Matter · ranging engine"]
-    uwb["DW3110<br/>MAC / PHY / STS in firmware"]
-    nfc["ST25R300<br/>NFC reader"]
+  phone(["iphone / apple watch"])
+  phone -- "ble: auth + key agreement" --> soc
+  phone -- "uwb: secure ranging" --> uwb
+  phone -- "nfc: ecp tap" --> nfc
+  subgraph lock ["diy lock · nrf5340 dk"]
+    soc["nrf5340 app core<br/>ble · matter · ranging engine"]
+    uwb["dw3110<br/>mac · phy · sts in firmware"]
+    nfc["st25r300<br/>nfc reader"]
     soc --> uwb
     soc --> nfc
   end
 ```
 
-## Status
+## status
 
-| Capability | State |
+| capability | state |
 |---|---|
-| NFC ECP tap unlock | working |
-| BLE auth + key agreement | working |
-| On-air ranging setup | working |
-| Secure UWB ranging (distance) | working, validated on hardware |
-| Distance-gated unlock / relock | working |
+| nfc ecp tap unlock | working |
+| ble auth + key agreement | working |
+| on-air ranging setup | working |
+| secure uwb ranging (distance) | working, validated on hardware |
+| distance-gated unlock / relock | working |
 
-The full image builds, links, and fits (app FLASH ≈ 92.9 %, `merged.hex`, exit 0), and approach unlock has
-been driven end to end on an nRF5340 DK with a live iPhone.
+the full image builds, links, and fits (app flash ≈ 92.9%, `merged.hex`, exit 0), and approach unlock has
+been driven end to end on an nrf5340 dk with a live iphone.
 
-## Architecture
+<details>
+<summary><b>under the hood</b> (why this is hard, and how it's built)</summary>
 
-A layered stack, each layer selectable and depending only on the one below:
+### the hard part
 
-- **`modules/woz_uwb/`** — the UWB engine (`src/`, split into `driver/ fira/ ccc/ aliro/ facade/ shell/`):
-  the CCC key ladder, MAC, STS, and DS-TWR responder, driving `deps/dw3000` directly. The M1-M4
-  ranging-setup codec is in `src/aliro/`; the Nordic add-on calls in through `facade/woz_uwb_facade.c`.
-- **`modules/woz_aliro_ecp/`** — NFC ECP emitter for the Express (no-Face-ID) tap.
-- **`deps/dw3000/`** — Bruno Randolf's DW3000 decadriver (ISC).
+most uwb projects lean on a turnkey ranging module that hides the radio behind a friendly api. this one
+doesn't. it runs on a bare qorvo dw3110 (a dwm3000evb) with no uwb coprocessor, so the whole secure ranging
+stack, the mac, the phy framing, and the sts scrambled timestamp sequence, all get rebuilt in firmware on the
+nrf5340 app core, straight over the [`deps/dw3000`](deps/dw3000) driver. getting a phone to trust the distance
+it measures means getting every byte of that right.
 
-The Nordic add-on owns BLE / Matter and hands the engine a plaintext ranging key; the engine handles UWB
-from there. Integration onto the fetched add-on is layered and never edited in place: patches in
+### architecture
+
+a layered stack, each layer optional and leaning only on the one below it:
+
+- **`modules/woz_uwb/`**: the uwb engine (`src/`, split into `driver/ fira/ ccc/ aliro/ facade/ shell/`):
+  the ccc key ladder, mac, sts, and ds-twr responder, driving `deps/dw3000` directly. the m1-m4 ranging-setup
+  codec is in `src/aliro/`, and the nordic add-on calls in through `facade/woz_uwb_facade.c`.
+- **`modules/woz_aliro_ecp/`**: nfc ecp emitter for the express (no-face-id) tap.
+- **`deps/dw3000/`**: bruno randolf's dw3000 decadriver (isc).
+
+the nordic add-on owns ble / matter and hands the engine a plaintext ranging key; the engine takes uwb from
+there. integration onto the fetched add-on is layered and never edited in place: patches in
 `integration/patches/`, config in `integration/overlays/`, modules in `modules/` + `deps/`.
 
-## Credits
+</details>
 
-- **Nordic Semiconductor** — the nRF Connect SDK and the door-lock add-on this firmware extends.
-- **Bruno Randolf** — the ISC-licensed [`dw3000` decadriver](deps/dw3000) that drives the radio.
-- **[kormax](https://github.com/kormax/)** — research and ideas on ECP and UWB.
-- **[rednblkx](https://github.com/rednblkx/)** — research and ideas on HomeKey.
-- **[scottjg](https://github.com/scottjg/)** — help with UWB-based chipset ideas.
+## credits
 
-## License
+- **nordic semiconductor** for the nrf connect sdk and the door-lock add-on this firmware extends.
+- **bruno randolf** for the isc-licensed [`dw3000` decadriver](deps/dw3000) that drives the radio.
+- [@kormax](https://github.com/kormax/) for ideas on ecp and uwb.
+- [@rednblkx](https://github.com/rednblkx/) for ideas on homekey.
+- [@scottjg](https://github.com/scottjg/) for helping with uwb based chipset ideas.
 
-Project code (`modules/woz_uwb/`, `modules/woz_aliro_ecp/` except where noted, build scripts, docs) is
-ISC — see [`LICENSE`](LICENSE). This is a mixed-license tree, not uniformly ISC:
+## license
 
-- [`deps/dw3000/`](deps/dw3000) — Qorvo/Decawave driver under `LicenseRef-QORVO-2` (usable only with a
-  Qorvo IC; no reverse engineering).
-- `modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp` — `LicenseRef-Nordic-5-Clause` (Nordic Semiconductor).
+the project's own code (`modules/woz_uwb/`, `modules/woz_aliro_ecp/` bar the exceptions below, build scripts,
+docs) is isc, see [`LICENSE`](LICENSE). it's a mixed license tree though, not uniformly isc:
 
-Per-file `SPDX-License-Identifier` headers are authoritative. Because of the vendor terms above, the
-repository as a whole is source-available, not open source in the OSI sense.
+- [`deps/dw3000/`](deps/dw3000) is the qorvo/decawave driver under `LicenseRef-QORVO-2` (only usable with a
+  qorvo ic, no reverse engineering).
+- `modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp` is `LicenseRef-Nordic-5-Clause` (nordic semiconductor).
+
+the per-file `SPDX-License-Identifier` headers are the source of truth. because of those vendor terms, the
+repo as a whole is source-available, not open source in the osi sense.
 
 ---
 
 <p align="center"><sub>
-Personal hobby project. Not affiliated with or endorsed by any vendor or standards body.<br/>
-Provided as-is, no warranty; do not rely on it to secure anything you care about.
+personal hobby project. not affiliated with or endorsed by any vendor or standards body.<br/>
+provided as-is, no warranty, don't lean on it to secure anything you actually care about.
 </sub></p>
