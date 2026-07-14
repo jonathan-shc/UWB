@@ -121,6 +121,9 @@ from there. Integration onto the fetched add-on is layered and never edited in p
 
 - **Nordic Semiconductor** — the nRF Connect SDK and the door-lock add-on this firmware extends.
 - **Bruno Randolf** — the ISC-licensed [`dw3000` decadriver](deps/dw3000) that drives the radio.
+- **[kormax](https://github.com/kormax/)** — research and ideas on ECP and UWB.
+- **[rednblkx](https://github.com/rednblkx/)** — research and ideas on HomeKey.
+- **[scottjg](https://github.com/scottjg/)** — help with UWB-based chipset ideas.
 
 ## License
 
