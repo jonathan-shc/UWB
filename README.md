@@ -1,4 +1,4 @@
-<h1 align="center">aliro-nfc-uwb</h1>
+<h1 align="center">openaliro</h1>
 
 <p align="center">
   <b>Walk up and the lock opens. Tap and it opens.</b><br/>
