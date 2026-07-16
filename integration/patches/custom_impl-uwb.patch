@@ -297,7 +297,7 @@ index 7731eb0..53dd5eb 100644
 +{
 +#ifdef CONFIG_WOZ_ALIRO
 +	int32_t cm = 0;
-+	if (woz_uwb_last_range_cm(&cm) && mCallbacks.mRangingData) {
++	if (woz_uwb_trusted_range_cm(&cm) && mCallbacks.mRangingData) {
 +		if (cm < 0) {
 +			cm = 0;
 +		}
