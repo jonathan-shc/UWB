@@ -207,11 +207,39 @@ require_built() {
   [ -f "$BUILD/build.ninja" ] || die "no build in $BUILD" "run: $0 build"
 }
 
+# Resolve which J-Link probe to flash, into SNR. Only nRF5340DKs (board version
+# PCA10095 in nrfutil device list) qualify, so another attached probe (e.g. a
+# DWM3001CDK) is never a candidate. One DK -> auto-select it; several -> prompt;
+# none -> fail loud. The flash always names its target explicitly via --dev-id.
+resolve_snr() {
+  command -v nrfutil >/dev/null 2>&1 || die "nrfutil not found on PATH"
+  local -a snrs=()
+  local s
+  while read -r s; do snrs+=("$s"); done < <(
+    nrfutil device list 2>/dev/null | awk -v RS='' '/Board version[ \t]+PCA10095/ {print $1}'
+  )
+  if [ "${#snrs[@]}" = 0 ]; then
+    die "no nRF5340DK attached" "check: nrfutil device list"
+  elif [ "${#snrs[@]}" = 1 ]; then
+    SNR="${snrs[0]}"
+  else
+    printf '  %d nRF5340DKs attached:\n' "${#snrs[@]}"
+    local i; for i in "${!snrs[@]}"; do printf '    %d) %s\n' "$((i+1))" "${snrs[$i]}"; done
+    local pick
+    read -rp "  flash which? [1-${#snrs[@]}] " pick \
+      || die "no board selected" "non-interactive? flash directly: west flash --dev-id <snr>"
+    { [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#snrs[@]}" ]; } \
+      || die "invalid selection '$pick'"
+    SNR="${snrs[$((pick-1))]}"
+  fi
+  kv "target" "nRF5340DK $SNR"
+}
+
 case "${1:-build}" in
   build)        do_build ;;
   rebuild)      PRISTINE=1; do_build ;;
-  flash)        require_built; hdr "flash";         ( cd "$WS" && launch west flash -d "$BUILD" ) ;;
-  flash-erase)  require_built; hdr "flash (erase)"; ( cd "$WS" && launch west flash --erase -d "$BUILD" ) ;;
-  build-flash)  do_build; hdr "flash";              ( cd "$WS" && launch west flash -d "$BUILD" ) ;;
+  flash)        require_built; hdr "flash";         resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ) ;;
+  flash-erase)  require_built; hdr "flash (erase)"; resolve_snr; ( cd "$WS" && launch west flash --erase -d "$BUILD" --dev-id "$SNR" ) ;;
+  build-flash)  do_build; hdr "flash";              resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ) ;;
   *) echo "usage: [UWB_CHIP=dw3000|dw3720] [PRISTINE=1] $0 {build|rebuild|flash|flash-erase|build-flash}"; exit 2 ;;
 esac
