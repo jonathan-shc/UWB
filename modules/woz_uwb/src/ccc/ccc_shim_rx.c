@@ -109,6 +109,20 @@ static uint64_t g_t_poll_rx;
 static uint64_t g_t_resp_tx;
 static uint64_t g_t_final_rx;
 
+/* Range-integrity gate (layers 2-3): the Final RFRAME's STS verdict and, when
+ * CONFIG_WOZ_RANGE_GATE_NLOS is defined, its first-path diagnostics — captured at the
+ * Final RX event and consumed once when the matching Final_Data decodes. The
+ * verdict defaults fail-closed so a block with no fresh capture cannot pass a
+ * strict gate. See fira_session.h for the predicates and thresholds. */
+static int32_t  g_final_sts_verdict = -1;
+static int16_t  g_final_sts_index;
+#if defined(CONFIG_WOZ_RANGE_GATE_NLOS)
+static uint32_t g_final_fp_f1;
+static uint32_t g_final_fp_f2;
+static uint32_t g_final_fp_f3;
+static uint32_t g_final_cir_power;
+#endif
+
 /** @brief Per-session Pre-POLL decrypt constants (mUPSK1 + UAD-derived src/dest/keysource): depend only on URSK + STS_Index0, derived once and reused. */
 static bool     g_uad_cached;
 static uint8_t  g_c_mupsk1[CCC_MUPSK1_LEN];
@@ -157,6 +171,8 @@ void ccc_shim_rx_log_reset(void)
 	g_pp_pending = false;
 	g_await_final = false;
 	g_poll_ip_for_final = 0u;
+	g_final_sts_verdict = -1; /* fail-closed until a Final RFRAME is measured */
+	g_final_sts_index = 0;
 #if CCC_RX_LOCK_SWEEP
 	g_locked = false;
 	g_sweep_cand = 0u;
@@ -395,11 +411,26 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 				      tw.t_reply1 + tw.t_reply2;
 			int32_t tof = (den != 0) ? (int32_t)(num / den) : 0;
 			int d_mm = (int)(((int64_t)tof * 4692) / 1000);
+			/* Range-integrity gate (layers 2-3): the STS-quality floor and,
+			 * when CONFIG_WOZ_RANGE_GATE_NLOS is defined, the first-path integrity
+			 * check. Shadow by default (log the verdict, still latch); define
+			 * CONFIG_WOZ_RANGE_GATE_STRICT to drop a failing block instead. Layers 1
+			 * (plausibility) and 4 (consensus) live in fira_session below. */
+			bool sts_ok = fira_session_sts_quality_ok(g_final_sts_verdict,
+								  g_final_sts_index);
+			bool fp_ok = true;
+#if defined(CONFIG_WOZ_RANGE_GATE_NLOS)
+			fp_ok = fira_session_first_path_ok(g_final_fp_f1, g_final_fp_f2,
+							   g_final_fp_f3, g_final_cir_power);
+#endif
 
 			DIAGK("DIST tof=%d d=%dmm rep1=%u rnd2=%u rnd1=%u rep2=%u\n",
 			       (int)tof, d_mm,
 			       (unsigned)t_reply1, (unsigned)t_round2,
 			       (unsigned)tw.t_round1, (unsigned)tw.t_reply2);
+			DIAGK("GATE sts=%d verdict=%d sts_ok=%d fp_ok=%d\n",
+			       (int)g_final_sts_index, (int)g_final_sts_verdict,
+			       (int)sts_ok, (int)fp_ok);
 #if defined(CONFIG_WOZ_PRETTY_SHELL)
 			/* Curated one-liner: the per-block distance, gated behind `aliro frames` (default off in pretty) so the console stays quiet unless asked. */
 			if (uwb_rxdiag_rng_get()) {
@@ -408,7 +439,18 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			}
 #endif
 			/* Feed the range into fira_session_last_range -> UltraWideBandImpl::ReportRange -> AccessManager -> BoltLockMgr -> Matter DoorLock cluster. */
-			fira_session_set_ccc_range_cm(d_mm / 10, fd.ranging_block);
+#if defined(CONFIG_WOZ_RANGE_GATE_STRICT)
+			if (sts_ok && fp_ok)
+#else
+			(void)sts_ok;
+			(void)fp_ok;
+#endif
+				fira_session_set_ccc_range_cm(d_mm / 10, fd.ranging_block);
+
+			/* Consume the per-block capture: the next block must re-stash a
+			 * fresh verdict, else a strict gate fails closed. */
+			g_final_sts_verdict = -1;
+			g_final_sts_index = 0;
 		}
 	}
 }
@@ -866,6 +908,23 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		if (ip != 0u) {
 			g_t_final_rx = ip40; /* t6: responder Final RX */
 			qret = dwt_readstsquality(&stsq, 0);
+			/* Range-integrity gate (layer 2): stash this Final RFRAME's STS
+			 * verdict for the Final_Data decode that computes the distance. */
+			g_final_sts_verdict = qret;
+			g_final_sts_index = stsq;
+#if defined(CONFIG_WOZ_RANGE_GATE_NLOS)
+			{
+				/* Layer 3 (opt-in): first-path vs channel power from the
+				 * Ipatov CIR, read here off the ranging critical path. */
+				dwt_rxdiag_t rxd;
+
+				dwt_readdiagnostics(&rxd);
+				g_final_fp_f1 = rxd.ipatovF1;
+				g_final_fp_f2 = rxd.ipatovF2;
+				g_final_fp_f3 = rxd.ipatovF3;
+				g_final_cir_power = rxd.ipatovPower;
+			}
+#endif
 		}
 		/* Final result (DS-TWR leg 3): cper=0 => the idx+2 STS correlated; ip is the responder's third timestamp, d = Final - POLL ~= 2 slots. */
 		DIAGK("FINAL result st=%08x cper=%u ip=%08x d=%d(%dus) stsq=%d/%d idx=%08x\n",

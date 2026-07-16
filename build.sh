@@ -124,6 +124,13 @@ do_build() {
   local selftest=""
   [ "${UWB_SELFTEST:-0}" = 1 ] && selftest="-DCONFIG_WOZ_UWB_SELFTEST=y"
 
+  # Range-integrity gate (see modules/woz_uwb/Kconfig). Default off = shadow mode
+  # (verdict logged, every block still latches). NLOS=1 reads the first-path
+  # diagnostics; STRICT=1 drops a block that fails the STS/first-path checks.
+  local strict="" nlos=""
+  [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
+  [ "${NLOS:-0}" = 1 ]   && nlos="-DCONFIG_WOZ_RANGE_GATE_NLOS=y"
+
   # PRETTY=1: layer woz-pretty.conf after woz-aliro.conf (curated console +
   # log-level cuts). Reversible: drop PRETTY and the flag + levels revert to the
   # verbose default. It rides EXTRA_CONF_FILE (in the build signature), so
@@ -152,6 +159,8 @@ do_build() {
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n
   )
   [ -n "$selftest" ] && dflags+=("$selftest")
+  [ -n "$strict" ] && dflags+=("$strict")
+  [ -n "$nlos" ] && dflags+=("$nlos")
 
   local sig sig_file="${BUILD%/}.aliro_build_sig"
   sig="$(printf '%s\0' "$BOARD" "$APP" "$NCS_VER" "${dflags[@]}" | sha | awk '{print $1}')"
@@ -172,7 +181,7 @@ do_build() {
   kv "app"   "$(basename "$APP")"
   [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}${nlos:+   (gate NLOS)}"
   if [ "$pristine" = 1 ]; then
     kv "mode" "${YLW}pristine${RST} ${DIM}($reason)${RST}"
   else

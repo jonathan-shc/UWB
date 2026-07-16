@@ -45,6 +45,8 @@ static uint16_t g_last_range_addr;
 static uint8_t  g_last_range_nlos;
 static uint32_t g_last_range_block;
 static int64_t  g_last_range_ms;
+/* Layer 4: run length of consecutive plausible, mutually consistent blocks. */
+static uint8_t  g_range_trust;
 
 /** @brief Fetch the most recent valid DS-TWR range; out-params optional (NULL to skip). */
 bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out,
@@ -73,11 +75,67 @@ bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out,
 }
 
 #if defined(CONFIG_WOZ_ALIRO)
+bool fira_session_range_plausible(int32_t cm)
+{
+	return cm >= -FIRA_RANGE_NEG_TOL_CM && cm <= FIRA_RANGE_MAX_CM;
+}
+
+bool fira_session_sts_quality_ok(int32_t driver_verdict, int16_t quality_index)
+{
+	return driver_verdict >= 0 && quality_index >= FIRA_STS_QUALITY_MIN;
+}
+
+bool fira_session_first_path_ok(uint32_t f1, uint32_t f2, uint32_t f3,
+				uint32_t cir_power)
+{
+	uint64_t fp = (uint64_t)f1 * f1 + (uint64_t)f2 * f2 + (uint64_t)f3 * f3;
+	uint64_t rx;
+
+	if (fp == 0u) {
+		return false; /* no first path at all — reject */
+	}
+	/* LOS while total channel power / first-path power stays under the ratio
+	 * ceiling. rx = C<<17; compare x100 so FIRA_FP_RATIO_X100 stays integer. */
+	rx = (uint64_t)cir_power << 17;
+	return rx * 100u <= (uint64_t)FIRA_FP_RATIO_X100 * fp;
+}
+
+bool fira_session_range_trusted(void)
+{
+	return g_range_trust >= FIRA_RANGE_TRUST_K;
+}
+
 void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block)
 {
+	int32_t delta;
+
+	/* Layer 1: reject a physically impossible / out-of-envelope measurement
+	 * outright — never let a spoofed negative masquerade as 0 cm. The prior
+	 * good range and its trust stay put; an implausible block earns none. */
+	if (!fira_session_range_plausible(cm)) {
+		g_range_trust = 0u;
+		return;
+	}
+	/* Legitimate point-blank reads dip slightly negative (calibration slop). */
+	if (cm < 0) {
+		cm = 0;
+	}
+
+	/* Layer 4: consecutive plausible blocks that agree build trust; a jump
+	 * restarts the run. The block still latches, so telemetry stays live. */
+	delta = (cm >= g_last_range_cm) ? (cm - g_last_range_cm)
+				       : (g_last_range_cm - cm);
+	if (g_have_range && delta <= FIRA_RANGE_SPREAD_CM) {
+		if (g_range_trust < FIRA_RANGE_TRUST_K) {
+			g_range_trust++;
+		}
+	} else {
+		g_range_trust = 1u; /* first agreeing sample of a (new) run */
+	}
+
 	/* Latch the CCC responder's distance into the store the mRangingData seam reads. */
 	g_have_range = true;
-	g_last_range_cm = (cm < 0) ? 0 : cm;
+	g_last_range_cm = cm;
 	g_last_range_addr = 0u;
 	g_last_range_nlos = 0u;
 	g_last_range_block = block;
