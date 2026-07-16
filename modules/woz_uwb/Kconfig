@@ -78,3 +78,14 @@ config WOZ_PRETTY_SHELL
 	  Pairs with integration/overlays/woz-pretty.conf, which carries the
 	  matching log-level cuts. Default n = today's verbose output, byte-for-byte.
 	  Reverse by dropping the PRETTY=1 build switch (flag returns to n).
+
+config WOZ_RANGE_GATE_STRICT
+	bool "Range gate: enforce STS quality (drop suspect blocks)"
+	depends on WOZ_ALIRO
+	help
+	  Enforce the layer-2 STS-quality check: a block whose STS correlated poorly
+	  is dropped rather than fed to the unlock seam. Default n = shadow mode: the
+	  verdict is logged (GATE line) but every block still latches, so a mis-tuned
+	  threshold cannot block a real unlock. Enable only after sizing
+	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
+	  (consensus) are always active in fira_session.c regardless of this option.

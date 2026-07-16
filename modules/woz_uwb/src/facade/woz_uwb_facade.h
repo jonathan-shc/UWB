@@ -41,6 +41,16 @@ void woz_uwb_stop(void);
 /** Latest distance in cm; true if a valid range has been seen. */
 bool woz_uwb_last_range_cm(int32_t *cm_out);
 
+/**
+ * Latest distance in cm, gated by the range-integrity consensus (layer 4):
+ * true only when a valid range has been seen AND it is trusted
+ * (fira_session_range_trusted()). This is the accessor the unlock decision
+ * must use so a single unverified/spoofed block cannot drive an unlock; raw
+ * telemetry keeps using woz_uwb_last_range_cm(). Without CONFIG_WOZ_ALIRO
+ * there is no trust concept and this matches woz_uwb_last_range_cm().
+ */
+bool woz_uwb_trusted_range_cm(int32_t *cm_out);
+
 #ifdef __cplusplus
 }
 #endif

@@ -64,6 +64,24 @@ void test_facade(void)
 	T_OK("range.present", woz_uwb_last_range_cm(&cm));
 	T_EQ("range.cm", cm, 150);
 
+	t_group("trusted_range_cm gates the unlock seam on layer-4 consensus");
+	/* Four agreeing blocks saturate trust at K regardless of prior state. */
+	fira_session_set_ccc_range_cm(150, 4u);
+	fira_session_set_ccc_range_cm(150, 5u);
+	fira_session_set_ccc_range_cm(150, 6u);
+	fira_session_set_ccc_range_cm(150, 7u);
+	cm = -1;
+	T_OK("trusted.present", woz_uwb_trusted_range_cm(&cm));
+	T_EQ("trusted.cm", cm, 150);
+	/* A spoofed (implausible) block clears trust and does not latch: the raw
+	 * accessor still returns the last good range, but the trusted accessor
+	 * (what the unlock seam uses) refuses it. */
+	fira_session_set_ccc_range_cm(-400, 8u);
+	cm = -1;
+	T_OK("spoof.raw.kept", woz_uwb_last_range_cm(&cm));
+	T_EQ("spoof.raw.cm", cm, 150);
+	T_OK("spoof.trusted.refused", !woz_uwb_trusted_range_cm(&cm));
+
 	/* Leave the fira store cleared for any later reader. */
 	fira_session_set_provisioned_ursk(NULL);
 }

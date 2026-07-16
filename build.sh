@@ -20,6 +20,28 @@ set -euo pipefail
 
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS="${ALIRO_WS:-$TREE/workspace}"
+
+# A linked git worktree usually has no NCS workspace of its own (the ~6.5 GB tree
+# lives in the primary checkout). Sharing the primary's is a trap: it holds one
+# patch state at a time, so a build here can silently compile a sibling branch's
+# patches. So on the first build in a fresh worktree, auto-seed an isolated
+# copy-on-write clone (near-zero disk on APFS) that carries THIS branch's patches.
+# If seeding can't happen (off APFS, primary not bootstrapped, etc.) fall back to
+# the shared primary workspace so builds still work. An explicit ALIRO_WS wins.
+if [ -z "${ALIRO_WS:-}" ] && [ ! -d "$WS/.west" ]; then
+  if ! { [ -x "$TREE/ws-seed.sh" ] && "$TREE/ws-seed.sh"; }; then
+    _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
+    if [ -n "$_common" ]; then
+      case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
+      _main="$(cd "$(dirname "$_common")" 2>/dev/null && pwd || true)"
+      if [ -n "$_main" ] && [ -d "$_main/workspace/.west" ]; then WS="$_main/workspace"; fi
+    fi
+  fi
+fi
+# Test seam: print the resolved workspace and stop, so the resolution logic above
+# can be exercised without running preflight or a west build. Used by tests only.
+if [ -n "${ALIRO_RESOLVE_ONLY:-}" ]; then echo "$WS"; exit 0; fi
+
 NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$TREE/integration/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
@@ -102,6 +124,12 @@ do_build() {
   local selftest=""
   [ "${UWB_SELFTEST:-0}" = 1 ] && selftest="-DCONFIG_WOZ_UWB_SELFTEST=y"
 
+  # Range-integrity gate (see modules/woz_uwb/Kconfig). Default off = shadow mode
+  # (verdict logged, every block still latches). STRICT=1 drops a block whose STS
+  # correlated poorly instead of feeding it to the unlock seam.
+  local strict=""
+  [ "${STRICT:-0}" = 1 ] && strict="-DCONFIG_WOZ_RANGE_GATE_STRICT=y"
+
   # PRETTY=1: layer woz-pretty.conf after woz-aliro.conf (curated console +
   # log-level cuts). Reversible: drop PRETTY and the flag + levels revert to the
   # verbose default. It rides EXTRA_CONF_FILE (in the build signature), so
@@ -130,6 +158,7 @@ do_build() {
     -DCONFIG_SHELL=n -DCONFIG_CHIP_LIB_SHELL=n -DCONFIG_NCS_SAMPLE_MATTER_TEST_SHELL=n
   )
   [ -n "$selftest" ] && dflags+=("$selftest")
+  [ -n "$strict" ] && dflags+=("$strict")
 
   local sig sig_file="${BUILD%/}.aliro_build_sig"
   sig="$(printf '%s\0' "$BOARD" "$APP" "$NCS_VER" "${dflags[@]}" | sha | awk '{print $1}')"
@@ -148,8 +177,9 @@ do_build() {
 
   hdr "build"
   kv "app"   "$(basename "$APP")"
+  [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
-  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}"
+  kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}${strict:+   (gate STRICT)}"
   if [ "$pristine" = 1 ]; then
     kv "mode" "${YLW}pristine${RST} ${DIM}($reason)${RST}"
   else
@@ -175,11 +205,39 @@ require_built() {
   [ -f "$BUILD/build.ninja" ] || die "no build in $BUILD" "run: $0 build"
 }
 
+# Resolve which J-Link probe to flash, into SNR. Only nRF5340DKs (board version
+# PCA10095 in nrfutil device list) qualify, so another attached probe (e.g. a
+# DWM3001CDK) is never a candidate. One DK -> auto-select it; several -> prompt;
+# none -> fail loud. The flash always names its target explicitly via --dev-id.
+resolve_snr() {
+  command -v nrfutil >/dev/null 2>&1 || die "nrfutil not found on PATH"
+  local -a snrs=()
+  local s
+  while read -r s; do snrs+=("$s"); done < <(
+    nrfutil device list 2>/dev/null | awk -v RS='' '/Board version[ \t]+PCA10095/ {print $1}'
+  )
+  if [ "${#snrs[@]}" = 0 ]; then
+    die "no nRF5340DK attached" "check: nrfutil device list"
+  elif [ "${#snrs[@]}" = 1 ]; then
+    SNR="${snrs[0]}"
+  else
+    printf '  %d nRF5340DKs attached:\n' "${#snrs[@]}"
+    local i; for i in "${!snrs[@]}"; do printf '    %d) %s\n' "$((i+1))" "${snrs[$i]}"; done
+    local pick
+    read -rp "  flash which? [1-${#snrs[@]}] " pick \
+      || die "no board selected" "non-interactive? flash directly: west flash --dev-id <snr>"
+    { [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#snrs[@]}" ]; } \
+      || die "invalid selection '$pick'"
+    SNR="${snrs[$((pick-1))]}"
+  fi
+  kv "target" "nRF5340DK $SNR"
+}
+
 case "${1:-build}" in
   build)        do_build ;;
   rebuild)      PRISTINE=1; do_build ;;
-  flash)        require_built; hdr "flash";         ( cd "$WS" && launch west flash -d "$BUILD" ) ;;
-  flash-erase)  require_built; hdr "flash (erase)"; ( cd "$WS" && launch west flash --erase -d "$BUILD" ) ;;
-  build-flash)  do_build; hdr "flash";              ( cd "$WS" && launch west flash -d "$BUILD" ) ;;
+  flash)        require_built; hdr "flash";         resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ) ;;
+  flash-erase)  require_built; hdr "flash (erase)"; resolve_snr; ( cd "$WS" && launch west flash --erase -d "$BUILD" --dev-id "$SNR" ) ;;
+  build-flash)  do_build; hdr "flash";              resolve_snr; ( cd "$WS" && launch west flash -d "$BUILD" --dev-id "$SNR" ) ;;
   *) echo "usage: [UWB_CHIP=dw3000|dw3720] [PRISTINE=1] $0 {build|rebuild|flash|flash-erase|build-flash}"; exit 2 ;;
 esac

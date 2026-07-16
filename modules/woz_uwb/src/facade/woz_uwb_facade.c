@@ -78,3 +78,16 @@ bool woz_uwb_last_range_cm(int32_t *cm_out)
 {
 	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL);
 }
+
+bool woz_uwb_trusted_range_cm(int32_t *cm_out)
+{
+#if defined(CONFIG_WOZ_ALIRO)
+	/* Layer 4: only surface the range to the unlock seam once K consecutive
+	 * agreeing plausible blocks have built trust, so a lone spoofed block
+	 * cannot flip open-allowed. */
+	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL) &&
+	       fira_session_range_trusted();
+#else
+	return fira_session_last_range(cm_out, NULL, NULL, NULL, NULL);
+#endif
+}
