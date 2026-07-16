@@ -431,6 +431,13 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			DIAGK("GATE sts=%d verdict=%d sts_ok=%d fp_ok=%d\n",
 			       (int)g_final_sts_index, (int)g_final_sts_verdict,
 			       (int)sts_ok, (int)fp_ok);
+#if defined(CONFIG_WOZ_RANGE_GATE_NLOS)
+			/* Raw first-path metrics for threshold tuning: capture these
+			 * across legit vs attack runs, then set FIRA_FP_RATIO_X100. */
+			DIAGK("GATEFP f1=%u f2=%u f3=%u cir=%u\n",
+			       (unsigned)g_final_fp_f1, (unsigned)g_final_fp_f2,
+			       (unsigned)g_final_fp_f3, (unsigned)g_final_cir_power);
+#endif
 #if defined(CONFIG_WOZ_PRETTY_SHELL)
 			/* Curated one-liner: the per-block distance, gated behind `aliro frames` (default off in pretty) so the console stays quiet unless asked. */
 			if (uwb_rxdiag_rng_get()) {
