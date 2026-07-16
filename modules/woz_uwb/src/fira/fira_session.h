@@ -58,8 +58,9 @@ bool fira_session_sts_quality_ok(int32_t driver_verdict, int16_t quality_index);
 /* Layer 4 — cross-block consensus. A single injected block cannot move an
  * unlock decision alone: a range is "trusted" only once K consecutive plausible
  * blocks agree to within SPREAD. This does not gate the latched last-range (the
- * shell/telemetry still track live values); it is an extra signal the unlock
- * policy should AND with distance and age. */
+ * shell/telemetry still track live values); it is the trust bit now wired into
+ * the unlock path via woz_uwb_trusted_range_cm(), which surfaces a distance only
+ * once trust is built. */
 #define FIRA_RANGE_TRUST_K   3	/* consecutive agreeing blocks to trust */
 #define FIRA_RANGE_SPREAD_CM 50	/* max block-to-block delta to stay agreed */
 
