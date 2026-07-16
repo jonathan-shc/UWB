@@ -20,6 +20,19 @@ set -euo pipefail
 
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS="${ALIRO_WS:-$TREE/workspace}"
+
+# In a linked git worktree the fetched (~6.5 GB) NCS workspace usually lives only
+# in the primary checkout. If this tree has no bootstrapped workspace of its own,
+# fall back to the primary checkout's so `build`/`flash` work from a worktree with
+# no second bootstrap and no env exports. An explicit ALIRO_WS always wins.
+if [ -z "${ALIRO_WS:-}" ] && [ ! -d "$WS/.west" ]; then
+  _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_common" ]; then
+    case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
+    _main="$(cd "$(dirname "$_common")" 2>/dev/null && pwd || true)"
+    if [ -n "$_main" ] && [ -d "$_main/workspace/.west" ]; then WS="$_main/workspace"; fi
+  fi
+fi
 NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$TREE/integration/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
@@ -148,6 +161,7 @@ do_build() {
 
   hdr "build"
   kv "app"   "$(basename "$APP")"
+  [ "$WS" != "$TREE/workspace" ] && kv "workspace" "${DIM}shared${RST} $WS"
   kv "board" "$BOARD"
   kv "chip"  "$CHIP_NAME${selftest:+   (self-test ON)}${pretty_conf:+   (pretty ON)}"
   if [ "$pristine" = 1 ]; then
