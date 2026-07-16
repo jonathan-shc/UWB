@@ -85,21 +85,6 @@ bool fira_session_sts_quality_ok(int32_t driver_verdict, int16_t quality_index)
 	return driver_verdict >= 0 && quality_index >= FIRA_STS_QUALITY_MIN;
 }
 
-bool fira_session_first_path_ok(uint32_t f1, uint32_t f2, uint32_t f3,
-				uint32_t cir_power)
-{
-	uint64_t fp = (uint64_t)f1 * f1 + (uint64_t)f2 * f2 + (uint64_t)f3 * f3;
-	uint64_t rx;
-
-	if (fp == 0u) {
-		return false; /* no first path at all — reject */
-	}
-	/* LOS while total channel power / first-path power stays under the ratio
-	 * ceiling. rx = C<<17; compare x100 so FIRA_FP_RATIO_X100 stays integer. */
-	rx = (uint64_t)cir_power << 17;
-	return rx * 100u <= (uint64_t)FIRA_FP_RATIO_X100 * fp;
-}
-
 bool fira_session_range_trusted(void)
 {
 	return g_range_trust >= FIRA_RANGE_TRUST_K;

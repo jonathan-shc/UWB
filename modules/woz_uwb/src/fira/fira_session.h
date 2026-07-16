@@ -55,20 +55,6 @@ bool fira_session_range_plausible(int32_t cm);
  *  @param quality_index   the signed STS quality index it wrote. */
 bool fira_session_sts_quality_ok(int32_t driver_verdict, int16_t quality_index);
 
-/* Layer 3 — first-path integrity. A clean line-of-sight first path carries most
- * of the channel power, so total-channel-power / first-path-power stays small;
- * an injected early path (or heavy NLOS bounce) inflates it. Per Decawave APS006
- * the ratio in dB is 10*log10((C<<17)/(F1^2+F2^2+F3^2)); the per-PRF constant and
- * accumulator count cancel, so only F1..F3 and the channel power are needed. The
- * ceiling is stored x100 to stay integer: 398 ~ 6.0 dB. */
-#define FIRA_FP_RATIO_X100 398	/* ~6 dB total-vs-first-path gap ceiling */
-
-/** @brief Layer 3: true if the Ipatov first path looks like a genuine LOS path.
- *  @param f1,f2,f3   ipatovF1..F3 first-path magnitude points.
- *  @param cir_power  ipatovPower (channel-area power estimate). */
-bool fira_session_first_path_ok(uint32_t f1, uint32_t f2, uint32_t f3,
-				uint32_t cir_power);
-
 /* Layer 4 — cross-block consensus. A single injected block cannot move an
  * unlock decision alone: a range is "trusted" only once K consecutive plausible
  * blocks agree to within SPREAD. This does not gate the latched last-range (the

@@ -79,25 +79,13 @@ config WOZ_PRETTY_SHELL
 	  matching log-level cuts. Default n = today's verbose output, byte-for-byte.
 	  Reverse by dropping the PRETTY=1 build switch (flag returns to n).
 
-config WOZ_RANGE_GATE_NLOS
-	bool "Range gate: read first-path diagnostics (layer 3)"
-	depends on WOZ_ALIRO
-	help
-	  Read the Ipatov CIR first-path diagnostics (dwt_readdiagnostics) at the
-	  Final RFRAME RX and evaluate fira_session_first_path_ok() — the layer-3
-	  line-of-sight / injected-first-path check. Default n keeps the ranging RX
-	  path byte-identical (the check reports "ok"); n reads no extra registers.
-	  Turn on to log the first-path verdict; pair with WOZ_RANGE_GATE_STRICT to
-	  actually drop a suspect block. Tune FIRA_FP_RATIO_X100 in fira_session.h.
-
 config WOZ_RANGE_GATE_STRICT
-	bool "Range gate: enforce STS-quality + first-path (drop suspect blocks)"
+	bool "Range gate: enforce STS quality (drop suspect blocks)"
 	depends on WOZ_ALIRO
 	help
-	  Enforce the layer-2 (STS quality) and layer-3 (first-path, when
-	  WOZ_RANGE_GATE_NLOS is set) checks: a block that fails is dropped rather
-	  than fed to the unlock seam. Default n = shadow mode: the verdict is logged
-	  (GATE line) but every block still latches, so a mis-tuned threshold cannot
-	  block a real unlock. Enable only after sizing FIRA_STS_QUALITY_MIN (and, if
-	  used, FIRA_FP_RATIO_X100) from bench captures. Layers 1 (plausibility) and
-	  4 (consensus) are always active in fira_session.c regardless of this option.
+	  Enforce the layer-2 STS-quality check: a block whose STS correlated poorly
+	  is dropped rather than fed to the unlock seam. Default n = shadow mode: the
+	  verdict is logged (GATE line) but every block still latches, so a mis-tuned
+	  threshold cannot block a real unlock. Enable only after sizing
+	  FIRA_STS_QUALITY_MIN from bench captures. Layers 1 (plausibility) and 4
+	  (consensus) are always active in fira_session.c regardless of this option.

@@ -81,18 +81,6 @@ void test_fira(void)
 	T_OK("sts.below_floor",
 	     !fira_session_sts_quality_ok(0, (int16_t)(FIRA_STS_QUALITY_MIN - 1)));
 
-	t_group("layer 3: first-path integrity");
-	/* Strong LOS: first-path power dominates -> small ratio -> accept. */
-	T_OK("fp.los_ok", fira_session_first_path_ok(1000, 900, 800, 2));
-	/* Injected/weak first path: tiny F, large channel power -> ratio blows up. */
-	T_OK("fp.nlos_reject", !fira_session_first_path_ok(10, 10, 10, 100000));
-	/* No first path at all -> reject. */
-	T_OK("fp.zero_reject", !fira_session_first_path_ok(0, 0, 0, 5000));
-	/* Realistic DW3000 Ipatov magnitudes (~2^20) must not overflow the
-	 * f1^2+f2^2+f3^2 accumulation and still classify a strong LOS path. */
-	T_OK("fp.realistic_los",
-	     fira_session_first_path_ok(1u << 20, 1u << 20, 1u << 20, 2u));
-
 	t_group("layer 4: cross-block consensus builds and breaks trust");
 	fira_session_set_ccc_range_cm(90, 30u);
 	fira_session_set_ccc_range_cm(92, 31u); /* within SPREAD of 90 */

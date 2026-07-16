@@ -20,7 +20,6 @@ PRETTY   ?=
 PRISTINE ?=
 SELFTEST ?=
 STRICT   ?=
-NLOS     ?=
 
 # Serial monitor (make term). PORT auto-detects the nRF5340DK console (VCOM1 —
 # this firmware's console + Zephyr shell live there; VCOM0 is silent). Override
@@ -36,8 +35,7 @@ ENV := $(strip \
   $(if $(PRETTY),PRETTY=$(PRETTY)) \
   $(if $(PRISTINE),PRISTINE=$(PRISTINE)) \
   $(if $(SELFTEST),UWB_SELFTEST=$(SELFTEST)) \
-  $(if $(STRICT),STRICT=$(STRICT)) \
-  $(if $(NLOS),NLOS=$(NLOS)))
+  $(if $(STRICT),STRICT=$(STRICT)))
 
 .PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test coverage test-ws flash flash-erase term clean
 
@@ -54,7 +52,7 @@ ws-seed:
 ##@ Build
 ## build: incremental build            -> build/merged.hex
 ##   Options: CHIP=dw3720 (default dw3000)  PRETTY=1  PRISTINE=1  SELFTEST=1
-##            NLOS=1 (log first-path check)  STRICT=1 (drop suspect ranges)
+##            STRICT=1 (drop suspect ranges)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720
 build:
 	@$(ENV) ./build.sh build
