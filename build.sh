@@ -21,18 +21,27 @@ set -euo pipefail
 TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS="${ALIRO_WS:-$TREE/workspace}"
 
-# In a linked git worktree the fetched (~6.5 GB) NCS workspace usually lives only
-# in the primary checkout. If this tree has no bootstrapped workspace of its own,
-# fall back to the primary checkout's so `build`/`flash` work from a worktree with
-# no second bootstrap and no env exports. An explicit ALIRO_WS always wins.
+# A linked git worktree usually has no NCS workspace of its own (the ~6.5 GB tree
+# lives in the primary checkout). Sharing the primary's is a trap: it holds one
+# patch state at a time, so a build here can silently compile a sibling branch's
+# patches. So on the first build in a fresh worktree, auto-seed an isolated
+# copy-on-write clone (near-zero disk on APFS) that carries THIS branch's patches.
+# If seeding can't happen (off APFS, primary not bootstrapped, etc.) fall back to
+# the shared primary workspace so builds still work. An explicit ALIRO_WS wins.
 if [ -z "${ALIRO_WS:-}" ] && [ ! -d "$WS/.west" ]; then
-  _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
-  if [ -n "$_common" ]; then
-    case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
-    _main="$(cd "$(dirname "$_common")" 2>/dev/null && pwd || true)"
-    if [ -n "$_main" ] && [ -d "$_main/workspace/.west" ]; then WS="$_main/workspace"; fi
+  if ! { [ -x "$TREE/ws-seed.sh" ] && "$TREE/ws-seed.sh"; }; then
+    _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
+    if [ -n "$_common" ]; then
+      case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
+      _main="$(cd "$(dirname "$_common")" 2>/dev/null && pwd || true)"
+      if [ -n "$_main" ] && [ -d "$_main/workspace/.west" ]; then WS="$_main/workspace"; fi
+    fi
   fi
 fi
+# Test seam: print the resolved workspace and stop, so the resolution logic above
+# can be exercised without running preflight or a west build. Used by tests only.
+if [ -n "${ALIRO_RESOLVE_ONLY:-}" ]; then echo "$WS"; exit 0; fi
+
 NCS_VER="${NCS_VER:-v3.3.0}"
 OV="$TREE/integration/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"

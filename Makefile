@@ -27,12 +27,17 @@ ENV := $(strip \
   $(if $(PRISTINE),PRISTINE=$(PRISTINE)) \
   $(if $(SELFTEST),UWB_SELFTEST=$(SELFTEST)))
 
-.PHONY: help bootstrap build rebuild pretty selftest test coverage flash flash-erase clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test coverage test-ws flash flash-erase clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
 bootstrap:
 	@$(ENV) ./bootstrap.sh
+
+## ws-seed: give THIS worktree its own workspace (APFS COW clone, ~0 disk)
+##   Idempotent. Isolates worktrees so branch-bouncing can't build stale patches.
+ws-seed:
+	@$(REPO_ROOT)/ws-seed.sh
 
 ##@ Build
 ## build: incremental build            -> build/merged.hex
@@ -64,6 +69,12 @@ test:
 coverage:
 	@$(REPO_ROOT)/tests/host/coverage.sh
 
+## test-ws: hermetic tests for per-worktree workspace auto-seeding
+##   Runs in a temp dir with a stub bootstrap — no west, no hardware, and it
+##   never touches this repo's own workspace/ or build/.
+test-ws:
+	@$(REPO_ROOT)/tests/tooling/ws_seed_test.sh
+
 ##@ Flash
 ## flash: app-only flash
 flash:
@@ -77,6 +88,15 @@ flash-erase:
 ## clean: remove ./build
 clean:
 	@rm -rf build && printf '  removed ./build\n'
+
+## ws-clean: remove THIS worktree's local build + seeded workspace
+##   Frees the per-worktree caches; re-seed with `make ws-seed`. A symlinked
+##   workspace (pointing at the primary) is left alone — only a real local dir
+##   is removed, never the shared source.
+ws-clean:
+	@rm -rf build
+	@if [ -d workspace ] && [ ! -L workspace ]; then rm -rf workspace && printf '  removed ./build + ./workspace\n'; \
+	else printf '  removed ./build (no local workspace to remove)\n'; fi
 
 ## help: this grouped, colourised target list
 help:
