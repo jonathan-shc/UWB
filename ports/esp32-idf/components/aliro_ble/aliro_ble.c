@@ -2,10 +2,11 @@
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * aliro_ble Phase 2.1: NimBLE bring-up, Aliro GATT service (0xFFF2) with the
- * SPSM/protocol-version READ and the device-version WRITE, and advertising.
- * The L2CAP CoC server behind the published SPSM lands in 2.2; aliro_ble_send()
- * and the on_data/on_connected callbacks are wired then. See SPEC.md.
+ * aliro_ble Phase 2.2: NimBLE bring-up, Aliro GATT service (0xFFF2) with the
+ * SPSM/protocol-version READ and the device-version WRITE, advertising, and the
+ * L2CAP CoC server on the published SPSM that carries the Aliro transaction.
+ * Inbound SDUs are dispatched to cb.on_data; replies go via aliro_ble_send().
+ * The Phase-3 M1-M4 handshake rides on exactly those two calls. See SPEC.md.
  */
 #include <string.h>
 
@@ -15,6 +16,7 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
+#include "host/ble_l2cap.h"
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
@@ -54,6 +56,143 @@ static uint16_t s_read_payload_len;
 static uint8_t s_own_addr_type;
 
 static void aliro_advertise(void);
+
+/* ---- L2CAP CoC (Phase 2.2): the Aliro transaction channel on the SPSM ---- */
+
+#ifndef CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM
+#define CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM 1
+#endif
+
+#define ALIRO_L2CAP_MTU     512u
+#define ALIRO_COC_BUF_COUNT (6u * CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM)
+
+static os_membuf_t s_coc_mem[OS_MEMPOOL_SIZE(ALIRO_COC_BUF_COUNT, ALIRO_L2CAP_MTU)];
+static struct os_mempool s_coc_mempool;
+static struct os_mbuf_pool s_coc_mbuf_pool;
+
+/* Active CoC channels (one per session, up to COC_MAX_NUM). */
+static struct {
+	bool active;
+	uint16_t conn_handle;
+	struct ble_l2cap_chan *chan;
+} s_coc[CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM];
+
+static void coc_track(uint16_t conn_handle, struct ble_l2cap_chan *chan)
+{
+	for (size_t i = 0; i < CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM; i++) {
+		if (!s_coc[i].active) {
+			s_coc[i].active = true;
+			s_coc[i].conn_handle = conn_handle;
+			s_coc[i].chan = chan;
+			return;
+		}
+	}
+}
+
+static void coc_untrack(const struct ble_l2cap_chan *chan)
+{
+	for (size_t i = 0; i < CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM; i++) {
+		if (s_coc[i].active && s_coc[i].chan == chan) {
+			s_coc[i].active = false;
+			return;
+		}
+	}
+}
+
+static struct ble_l2cap_chan *coc_chan_for(uint16_t conn_handle)
+{
+	for (size_t i = 0; i < CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM; i++) {
+		if (s_coc[i].active && s_coc[i].conn_handle == conn_handle) {
+			return s_coc[i].chan;
+		}
+	}
+	return NULL;
+}
+
+/* Give the stack a fresh receive buffer so the next SDU can be assembled. */
+static int coc_arm_rx(struct ble_l2cap_chan *chan)
+{
+	struct os_mbuf *rx = os_mbuf_get_pkthdr(&s_coc_mbuf_pool, 0);
+	if (rx == NULL) {
+		ESP_LOGE(TAG, "coc: out of rx buffers");
+		return BLE_HS_ENOMEM;
+	}
+	return ble_l2cap_recv_ready(chan, rx);
+}
+
+static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
+{
+	(void)arg;
+	switch (event->type) {
+	case BLE_L2CAP_EVENT_COC_ACCEPT:
+		/* Incoming CoC on our SPSM: arm the first receive buffer. */
+		return coc_arm_rx(event->accept.chan);
+
+	case BLE_L2CAP_EVENT_COC_CONNECTED:
+		if (event->connect.status != 0) {
+			ESP_LOGW(TAG, "coc connect failed status=%d", event->connect.status);
+			return 0;
+		}
+		coc_track(event->connect.conn_handle, event->connect.chan);
+		ESP_LOGI(TAG, "coc connected (conn %u)", event->connect.conn_handle);
+		if (s_cb.on_connected) {
+			s_cb.on_connected(event->connect.conn_handle);
+		}
+		return 0;
+
+	case BLE_L2CAP_EVENT_COC_DISCONNECTED:
+		coc_untrack(event->disconnect.chan);
+		ESP_LOGI(TAG, "coc disconnected (conn %u)", event->disconnect.conn_handle);
+		if (s_cb.on_disconnected) {
+			s_cb.on_disconnected(event->disconnect.conn_handle);
+		}
+		return 0;
+
+	case BLE_L2CAP_EVENT_COC_DATA_RECEIVED: {
+		struct os_mbuf *om = event->receive.sdu_rx;
+		if (om != NULL) {
+			uint8_t buf[ALIRO_L2CAP_MTU];
+			uint16_t len = 0;
+			if (ble_hs_mbuf_to_flat(om, buf, sizeof(buf), &len) == 0) {
+				ESP_LOGI(TAG, "coc rx %u bytes (conn %u)", len,
+					 event->receive.conn_handle);
+				if (s_cb.on_data) {
+					s_cb.on_data(event->receive.conn_handle, buf, len);
+				}
+			}
+			os_mbuf_free_chain(om);
+		}
+		return coc_arm_rx(event->receive.chan); /* re-arm for the next SDU */
+	}
+
+	default:
+		return 0;
+	}
+}
+
+static void l2cap_init(void)
+{
+	int rc = os_mempool_init(&s_coc_mempool, ALIRO_COC_BUF_COUNT,
+				 ALIRO_L2CAP_MTU, s_coc_mem, "aliro_coc");
+	if (rc != 0) {
+		ESP_LOGE(TAG, "coc mempool init rc=%d", rc);
+		return;
+	}
+	rc = os_mbuf_pool_init(&s_coc_mbuf_pool, &s_coc_mempool, ALIRO_L2CAP_MTU,
+			       ALIRO_COC_BUF_COUNT);
+	if (rc != 0) {
+		ESP_LOGE(TAG, "coc mbuf pool init rc=%d", rc);
+		return;
+	}
+	rc = ble_l2cap_create_server(ALIRO_L2CAP_SPSM, ALIRO_L2CAP_MTU,
+				     l2cap_event_cb, NULL);
+	if (rc != 0) {
+		ESP_LOGE(TAG, "l2cap create_server rc=%d", rc);
+		return;
+	}
+	ESP_LOGI(TAG, "L2CAP CoC server up on SPSM 0x%04x (MTU %u)",
+		 (unsigned)ALIRO_L2CAP_SPSM, (unsigned)ALIRO_L2CAP_MTU);
+}
 
 static uint8_t encode_features(const struct aliro_ble_features *f)
 {
@@ -279,6 +418,8 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 		ESP_LOGW(TAG, "device_name_set rc=%d", rc);
 	}
 
+	l2cap_init(); /* register the Aliro L2CAP CoC server on the SPSM */
+
 	nimble_port_freertos_init(host_task);
 	return 0;
 }
@@ -290,7 +431,31 @@ uint16_t aliro_ble_spsm(void)
 
 int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len)
 {
-	(void)conn_handle; (void)data; (void)len;
-	ESP_LOGW(TAG, "aliro_ble_send: L2CAP not up yet (Phase 2.2)");
-	return -1; /* L2CAP CoC arrives in 2.2 */
+	if (data == NULL || len == 0) {
+		return -1;
+	}
+	struct ble_l2cap_chan *chan = coc_chan_for(conn_handle);
+	if (chan == NULL) {
+		ESP_LOGW(TAG, "aliro_ble_send: no CoC channel for conn %u", conn_handle);
+		return -1;
+	}
+
+	struct os_mbuf *sdu = os_mbuf_get_pkthdr(&s_coc_mbuf_pool, 0);
+	if (sdu == NULL) {
+		return -1;
+	}
+	int rc = os_mbuf_append(sdu, data, len);
+	if (rc != 0) {
+		os_mbuf_free_chain(sdu);
+		return -1;
+	}
+
+	rc = ble_l2cap_send(chan, sdu);
+	if (rc == 0 || rc == BLE_HS_ESTALLED) {
+		/* Stack owns the sdu now; ESTALLED = queued, flushed on TX_UNSTALLED. */
+		return 0;
+	}
+	os_mbuf_free_chain(sdu);
+	ESP_LOGW(TAG, "ble_l2cap_send rc=%d", rc);
+	return -1;
 }

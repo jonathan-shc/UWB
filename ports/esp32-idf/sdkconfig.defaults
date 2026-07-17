@@ -16,6 +16,8 @@ CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Phase 2 BLE transport: NimBLE host (Aliro GATT service + L2CAP CoC). BLE-only
-# on the S3; NimBLE is the peripheral host. L2CAP CoC count is bumped in 2.2.
+# on the S3; NimBLE is the peripheral host. L2CAP CoC carries the Aliro
+# transaction (M1-M4); allow a couple of concurrent sessions.
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
