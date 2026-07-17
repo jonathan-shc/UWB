@@ -8,3 +8,9 @@ CONFIG_FREERTOS_HZ=1000
 
 # The codec allocates + the DS-TWR bring-up runs on the main task.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Matter-ready flash layout (see partitions.csv). Phase 1 uses only `factory`;
+# staged now so adding esp-matter later needs no reshuffle. PSRAM stays off until
+# Matter is added (its heap wants it) — a deliberate Phase-2 flip, not needed here.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
