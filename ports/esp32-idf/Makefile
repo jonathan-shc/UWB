@@ -23,6 +23,8 @@ IDFPY := . "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py
 PORT ?=
 BAUD ?= 115200
 LOG ?=
+# make flash FORCE=1 stops whatever holds the UART (a monitor/tio) before flashing.
+FORCE ?=
 
 # USB vendor ids (decimal, as ioreg reports them) used to classify ports.
 # Keep values trailing-whitespace-free: an inline comment would leak spaces into
@@ -54,6 +56,23 @@ else \
 fi
 endef
 
+# Flashing needs the UART exclusively. If a monitor/tio holds $$port, refuse with
+# a clear message (FORCE=1 stops the holder first). Non-destructive by default.
+define ENSURE_PORT_FREE
+holder=$$(lsof -t "$$port" 2>/dev/null | tr '\n' ' '); \
+if [ -n "$$holder" ]; then \
+	if [ "$(FORCE)" = "1" ]; then \
+		echo "  FORCE: stopping port holder(s): $$holder"; \
+		kill $$holder 2>/dev/null || true; \
+		sleep 1; \
+	else \
+		echo "  $$port is held by PID(s): $$holder" >&2; \
+		echo "  quit it (idf.py monitor: ctrl-]  ·  tio: ctrl-t q) or run: make flash FORCE=1" >&2; \
+		exit 1; \
+	fi; \
+fi
+endef
+
 .PHONY: help check-idf build menuconfig size flash app-flash flash-erase monitor term ports clean
 
 check-idf:
@@ -77,18 +96,21 @@ size: check-idf
 ## flash: build + write bootloader + partition table + app
 flash: check-idf
 	@$(RESOLVE_PORT); \
+	$(ENSURE_PORT_FREE); \
 	echo "  flashing $$port"; \
 	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" flash
 
 ## app-flash: build + write only the app  (fast iteration)
 app-flash: check-idf
 	@$(RESOLVE_PORT); \
+	$(ENSURE_PORT_FREE); \
 	echo "  app-flashing $$port"; \
 	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" app-flash
 
 ## flash-erase: full chip erase, then flash  (after a partition change)
 flash-erase: check-idf
 	@$(RESOLVE_PORT); \
+	$(ENSURE_PORT_FREE); \
 	echo "  erasing + flashing $$port"; \
 	. "$(IDF_EXPORT)" >/dev/null 2>&1 && idf.py -p "$$port" erase-flash && idf.py -p "$$port" flash
 
