@@ -316,11 +316,15 @@ static void prepoll_decode(const uint8_t *frame, uint16_t datalength)
 	if (g_poll_stride != 0u) {
 		uint32_t widx = g_poll_sts_index + g_poll_stride;
 
-		/* Warm the POLL (widx), Response_0 (widx+1) AND Final (widx+2) — same round, same dURSK, only STS-V advances — so no leg runs a KDF. */
+		/* Warm the POLL (widx), Response_0 (widx+1) AND Final — same round, same dURSK, only STS-V advances — so no leg runs a KDF. */
+		/* EXPERIMENT-2RESP: with 2 responders the phone's Final RFRAME sits one
+		 * slot later, at STS index Poll_STS_Index+3 (slot_offset FINAL =
+		 * N_responder+2 = 4, vs POLL offset 1), so warm the Final at widx+3 (was
+		 * widx+2). Response_0 stays at widx+1 (we are responder 0). */
 		if (ccc_shim_sts_for_index(widx, g_warm_dursk, g_warm_sts_v) == 0 &&
 		    ccc_shim_sts_for_index(widx + 1u, g_warm_resp_dursk,
 					   g_warm_resp_sts_v) == 0 &&
-		    ccc_shim_sts_for_index(widx + 2u, g_warm_final_dursk,
+		    ccc_shim_sts_for_index(widx + 3u, g_warm_final_dursk,
 					   g_warm_final_sts_v) == 0) {
 			g_warm_index = widx;
 			g_warm_valid = true;
@@ -387,6 +391,37 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		       (unsigned)fd.ranging_block, (unsigned)fd.ranging_ts_final_tx,
 		       (unsigned)fd.num_responders, (unsigned)fd.responders[0].timestamp);
 		g_fd_logged++;
+	}
+
+	/* EXPERIMENT-2RESP: the decisive outcome signal. num_responders is the count
+	 * the phone actually built into the round; it rides the SP0 Final_Data on the
+	 * permanent listen, independent of the SP3 Final-RFRAME arm, so it survives an
+	 * arm miss. Log every record plus the Final_Data arrival slot offset
+	 * (Final_Data RX - most-recent POLL RX, whole slots): 4 => the phone grew the
+	 * round for 2 responders (PASS), 3 => it kept the 1-responder round (SOFT-FAIL). */
+	{
+		/* One ranging slot in full 40-bit DTU. Equals CCC_RX_SLOT_HI32 (499000, the
+		 * hi32/bits[39:8] domain) << 8; defined locally because that macro lives
+		 * further down inside the WOZ_CCC_PREPOLL_LISTEN block. Keep the two equal. */
+		const uint64_t slot_dtu = (uint64_t)499000u << 8;
+		uint8_t fdts[5] = { 0 };
+		uint64_t fd_rx;
+		int fd_slots;
+
+		dwt_readrxtimestamp_ipatov(fdts);
+		fd_rx = ts5_to_u64(fdts);
+		fd_slots = (g_t_poll_rx != 0u)
+				   ? (int)((fd_rx - g_t_poll_rx) / slot_dtu)
+				   : -1;
+		DIAGK("FINALDATA-2RESP blk=%u nresp=%u fd_slots=%d\n",
+		       (unsigned)fd.ranging_block, (unsigned)fd.num_responders, fd_slots);
+		for (uint8_t i = 0u; i < fd.num_responders && i < 2u; i++) {
+			DIAGK("  resp[%u] idx=%u ts=%u unc=%u status=%u\n", (unsigned)i,
+			       (unsigned)fd.responders[i].responder_index,
+			       (unsigned)fd.responders[i].timestamp,
+			       (unsigned)fd.responders[i].timestamp_uncertainty,
+			       (unsigned)fd.responders[i].ranging_status);
+		}
 	}
 
 	/* DS-TWR: reply1 = Response TX - POLL RX, round2 = Final RX - Response TX; ccc_responder_ds_twr pulls round1/reply2 from the Final_Data. ToF in 15.65 ps ticks. */
@@ -791,7 +826,8 @@ static int tx_response_sp3(uint32_t poll_ip, uint32_t resp_idx)
 	return (r == DWT_SUCCESS) ? 0 : -EIO;
 }
 
-/** Arm the delayed SP3-ND RX for the phone's Final (POLL + 2 slots) at STS index Poll_STS_Index+2, packing the g_armed_final_* STS (no KDF). */
+/** Arm the delayed SP3-ND RX for the phone's Final at STS index Poll_STS_Index+3, packing the g_armed_final_* STS (no KDF).
+ *  EXPERIMENT-2RESP: for a 2-responder round the Final is at POLL + 3 slots (responder 1's silent slot sits at POLL + 2); was POLL + 2 slots / index+2. */
 static int arm_final_sp3(uint32_t poll_ip)
 {
 	static uint32_t dbg_n;
@@ -805,7 +841,7 @@ static int arm_final_sp3(uint32_t poll_ip)
 	dwt_configurestskey(&k);
 	__real_dwt_configurestsiv(&v);
 	dwt_configurestsloadiv();
-	dx = poll_ip + 2u * CCC_RX_SLOT_HI32; /* Final RMARKER = POLL + 2 slots */
+	dx = poll_ip + 3u * CCC_RX_SLOT_HI32; /* EXPERIMENT-2RESP: Final RMARKER = POLL + 3 slots (was + 2) */
 	now = dwt_readsystimestamphi32();
 	dwt_setdelayedtrxtime(dx - CCC_RX_POLL_LEAD);
 	dwt_setrxtimeout(CCC_RX_POLL_WIN_TO);
@@ -814,7 +850,7 @@ static int arm_final_sp3(uint32_t poll_ip)
 		DIAGK("FINALARM r=%d dx-now=%d(%dus) idx=%08x\n",
 		       r, (int32_t)((dx - CCC_RX_POLL_LEAD) - now),
 		       (int32_t)((dx - CCC_RX_POLL_LEAD) - now) / 250,
-		       (unsigned)(g_armed_index + 2u));
+		       (unsigned)(g_armed_index + 3u)); /* EXPERIMENT-2RESP: +3 */
 		dbg_n++;
 	}
 	return (r == DWT_SUCCESS) ? 0 : -EIO;
@@ -887,6 +923,10 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 	if (g_await_final) {
 		unsigned cper = (st & 0x10000000u) ? 1u : 0u;
 		int d = (ip != 0u) ? (int)(ip - g_poll_ip_for_final) : 0;
+		/* EXPERIMENT-2RESP: Final RFRAME arrival slot offset (Final RX - POLL RX in
+		 * whole slots). Expect 3 if the phone accepted the 2-responder round, 2 if
+		 * it fell back to 1 responder (in which case this arm at +3 misses it). */
+		int d_slots = (ip != 0u) ? (int)((ip - g_poll_ip_for_final) / CCC_RX_SLOT_HI32) : -1;
 		int16_t stsq = 0;
 		int qret = 0;
 
@@ -899,10 +939,10 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 			g_final_sts_verdict = qret;
 			g_final_sts_index = stsq;
 		}
-		/* Final result (DS-TWR leg 3): cper=0 => the idx+2 STS correlated; ip is the responder's third timestamp, d = Final - POLL ~= 2 slots. */
-		DIAGK("FINAL result st=%08x cper=%u ip=%08x d=%d(%dus) stsq=%d/%d idx=%08x\n",
-		       (unsigned)st, cper, (unsigned)ip, d, d / 250, (int)stsq, qret,
-		       (unsigned)(g_armed_index + 2u));
+		/* Final result (DS-TWR leg 3): cper=0 => the idx+3 STS correlated; ip is the responder's third timestamp, d = Final - POLL. */
+		DIAGK("FINAL result st=%08x cper=%u ip=%08x d=%d(%dus) slots=%d stsq=%d/%d idx=%08x\n",
+		       (unsigned)st, cper, (unsigned)ip, d, d / 250, d_slots, (int)stsq, qret,
+		       (unsigned)(g_armed_index + 3u));
 		revert_to_sp0_listen();
 	} else if (g_await_poll) {
 		unsigned cper = (st & 0x10000000u) ? 1u : 0u;

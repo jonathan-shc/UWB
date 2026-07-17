@@ -180,7 +180,12 @@ aliro_uwb_msg_build_m3(struct aliro_uwb_session *session)
 		     chaps_per_slot) &&
 	     aliro_uwb_msg_builder_add_u8(
 		     &builder,
-		     ALIRO_UWB_RANGING_SERVICE_ATTR_NUMBER_RESPONDERS_NODES, 1) &&
+		     /* EXPERIMENT-2RESP: advertise 2 responders to the phone (was 1).
+		      * MUST stay equal to rcfg[12] Number_Responder_Nodes in
+		      * cherry_ccc_shim.c: both feed the RangingConfiguration SaltedHash
+		      * the Wallet independently recomputes; a mismatch diverges every
+		      * derived STS/key and nothing decodes (a false HARD-FAIL). */
+		     ALIRO_UWB_RANGING_SERVICE_ATTR_NUMBER_RESPONDERS_NODES, 2) &&
 	     aliro_uwb_msg_builder_add_u8(
 		     &builder,
 		     ALIRO_UWB_RANGING_SERVICE_ATTR_NUMBER_SLOTS_PER_ROUND,
