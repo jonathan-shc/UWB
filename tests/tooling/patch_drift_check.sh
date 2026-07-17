@@ -59,7 +59,8 @@ check() {
 echo "==> patch drift check (add-on pin ${PIN:0:10}…)"
 check addon "https://github.com/nrfconnect/ncs-door-lock-and-access-control" "$PIN" \
   "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" \
-  "$P/pretty-shell.patch" "$P/console-quiet-flood.patch"
+  "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" \
+  "$P/kpersistent-orphan-selfheal.patch"
 
 # nrf revision from the add-on's manifest at the pin (blob fetched on demand).
 git -C "$WORK/addon" show FETCH_HEAD:west.yml >"$WORK/addon-west.yml"
@@ -77,4 +78,4 @@ MATTER_REPO="$(west_field "$WORK/nrf-west.yml" matter repo-path)"
 check matter "https://github.com/nrfconnect/${MATTER_REPO:-sdk-connectedhomeip}" "$MATTER_REV" \
   "$P/matter-ble-multi-identity.patch"
 
-echo "    ✓ all 6 patches apply cleanly at the pinned revisions"
+echo "    ✓ all 7 patches apply cleanly at the pinned revisions"
