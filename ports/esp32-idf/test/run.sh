@@ -32,5 +32,15 @@ cc -std=c11 -O1 -Wall -Wextra \
 "$CBIN"
 
 echo
+echo "== host: aliro_apdu wire-codec KAT =="
+READER="$HERE/../components/aliro_reader"
+ABIN="$(mktemp -t aliro_apdu_kat.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$READER" \
+   "$HERE/test_aliro_apdu.c" "$READER/aliro_apdu.c" -o "$ABIN"
+"$ABIN"
+rm -f "$ABIN"
+
+echo
 echo "== target: port build + link-seam guard =="
 bash "$HERE/verify_port.sh"

@@ -132,8 +132,8 @@ enum aliro_salt_type {
 int aliro_salt_build(enum aliro_salt_type type, const uint8_t txid[ALIRO_TXID_LEN],
 		     const uint8_t span_s1[ALIRO_EC_PUBX_LEN],
 		     const uint8_t reader_value[ALIRO_EC_PUBX_LEN],
-		     const uint8_t reader_id[32], uint16_t proto_version_reader,
-		     uint16_t proto_version_device,
+		     const uint8_t reader_id[32], uint16_t proto_version,
+		     uint8_t exp_phase_type, uint8_t user_auth_policy,
 		     const uint8_t s3opt[ALIRO_EC_PUBX_LEN] /* NULL for type 1 */,
 		     uint8_t *out, size_t *out_len);
 

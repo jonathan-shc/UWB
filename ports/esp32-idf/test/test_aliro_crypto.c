@@ -265,8 +265,8 @@ int main(void)
 		rid[i] = (uint8_t)(0x11 * (i & 0x0f));
 	}
 	T_OK("salt.build",
-	     aliro_salt_build(ALIRO_SALT_SESSION, txid, pubx, pubx, rid, 0x0100, 0x0100,
-			      NULL, saltbuf, &saltlen) == 0);
+	     aliro_salt_build(ALIRO_SALT_SESSION, txid, pubx, pubx, rid, 0x0100, 0x02,
+			      0x00, NULL, saltbuf, &saltlen) == 0);
 	/* type1 salt: 32+12+32+2+2+32+16+2 = 130 bytes (no s3opt). */
 	T_EQ("salt.len", saltlen, 130);
 
@@ -285,7 +285,7 @@ int main(void)
 	/* Behavior-lock golden (tied to the provisional salt layout): any change
 	 * to the schedule or salt flips this. Not an interop vector. */
 	t_vec("ursk.golden", urskc, 32,
-	      "0a08c4a74c20742eb38c15af4364d2ee4a87f6c866a5cff070082bb89dc60ba8");
+	      "86e71857763bbac92a1500f651cdde27aaf509ad0d7e0ed65fd75f1e676b2254");
 
 	uint8_t ek[32], dk[32], us[32];
 

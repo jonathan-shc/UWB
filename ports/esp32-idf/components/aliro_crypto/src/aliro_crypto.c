@@ -157,30 +157,29 @@ static int append(uint8_t *out, size_t *pos, size_t cap, const void *src, size_t
 int aliro_salt_build(enum aliro_salt_type type, const uint8_t txid[ALIRO_TXID_LEN],
 		     const uint8_t span_s1[ALIRO_EC_PUBX_LEN],
 		     const uint8_t reader_value[ALIRO_EC_PUBX_LEN],
-		     const uint8_t reader_id[32], uint16_t proto_version_reader,
-		     uint16_t proto_version_device,
+		     const uint8_t reader_id[32], uint16_t proto_version,
+		     uint8_t exp_phase_type, uint8_t user_auth_policy,
 		     const uint8_t s3opt[ALIRO_EC_PUBX_LEN], uint8_t *out,
 		     size_t *out_len)
 {
 	size_t pos = 0;
-	uint8_t vr[2] = { (uint8_t)(proto_version_reader >> 8),
-			  (uint8_t)proto_version_reader };
-	uint8_t vd[2] = { (uint8_t)(proto_version_device >> 8),
-			  (uint8_t)proto_version_device };
+	uint8_t ver[2] = { (uint8_t)(proto_version >> 8), (uint8_t)proto_version };
+	uint8_t policy[2] = { exp_phase_type, user_auth_policy };
 	int rc = 0;
 
-	/* Confirmed append order (facts §6). The two fully-uncertain Salt
-	 * sub-fields (items 4 and 10) are omitted pending the state-machine
-	 * study in 3.2; every other item is placed as recovered. */
+	/* Confirmed append order. Item 6 = the single negotiated protocol version
+	 * (big-endian); item 9 = the expedited-phase-type + user-auth-policy bytes.
+	 * The two still-unresolved Salt sub-fields (items 4 and 10) are omitted —
+	 * the interop seam to confirm at bench. */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, span_s1, ALIRO_EC_PUBX_LEN);       /* 1 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX,
 		     k_salt_label + (size_t)type * 12u, 12);                      /* 2 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, reader_id, 32);                    /* 3 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, k_salt_const, sizeof(k_salt_const)); /* 5 */
-	rc |= append(out, &pos, ALIRO_SALT_MAX, vr, sizeof(vr));                   /* 6 */
+	rc |= append(out, &pos, ALIRO_SALT_MAX, ver, sizeof(ver));                 /* 6 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, reader_value, ALIRO_EC_PUBX_LEN);  /* 7 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, txid, ALIRO_TXID_LEN);            /* 8 */
-	rc |= append(out, &pos, ALIRO_SALT_MAX, vd, sizeof(vd));                   /* 9 */
+	rc |= append(out, &pos, ALIRO_SALT_MAX, policy, sizeof(policy));           /* 9 */
 	if (type != ALIRO_SALT_SESSION && s3opt != NULL) {                        /* 11 */
 		rc |= append(out, &pos, ALIRO_SALT_MAX, s3opt, ALIRO_EC_PUBX_LEN);
 	}

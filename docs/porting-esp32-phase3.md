@@ -81,11 +81,25 @@ handshake completes — however correct the code.
   — the domain labels and fixed constant are pinned, but a couple of negotiated
   version/parameter sub-fields are placed on a best-effort basis and are the seam to
   confirm at bench once 3.2 populates them.
-- **3.2** APDU secure channel + the auth state machine (AUTH0/AUTH1, EXCHANGE), wired
-  into `aliro_reader`'s `on_data` / `aliro_ble_send` seam; finalises the salt transcript.
-- **3.3** completion + URSK → `woz_uwb_start_aliro(cfg)` (replacing the canned URSK).
-- **3.4** (with Phase 4) provision the reader identity/keys so a real phone can auth.
+- **3.2 — IMPLEMENTED (builds; wire codec host-KAT'd).** `aliro_apdu`
+  (`ports/esp32-idf/components/aliro_reader/aliro_apdu.{c,h}`): single-byte-tag
+  BER-TLV plus the AUTH0/AUTH1 command builders, the ECDSA authentication-data
+  transcript (the exact signed bytes, with the reader/device usage domain
+  separators), the AUTH0/AUTH1 response parsers, the EXCHANGE command + the
+  zero-length `98 00` URSK-ready trigger, and the 4-byte L2CAP envelope
+  (`[type&0x3F][opcode][len_be16]`). Host KAT: `test/test_aliro_apdu.c` in `run.sh`.
+  `aliro_reader` now drives the transaction (AUTH0 → AUTH1 → EXCHANGE), running
+  ECDH + the key schedule to derive the URSK, replying via `aliro_ble_send`, with
+  heavy diagnostic logging.
+- **3.3 — IMPLEMENTED (builds).** On a completed handshake the reader binds the
+  derived URSK (`woz_uwb_bind_ursk`) and starts the responder
+  (`woz_uwb_start_aliro`); ranging parameters are canned until the M1-M4
+  negotiation is parsed (a later increment).
+- **3.4** (with Phase 4) provision the reader identity/keys + issuer trust so a real
+  phone can auth. `aliro_reader` uses a clearly-marked dev identity until then.
 
-**Verification reality:** end-to-end needs a provisioned phone (Phase 4). The 3.1
-crypto/URSK schedule is verified now against known-answer vectors and self-consistency;
-byte-exact interop (the salt transcript) is confirmed at bench with a real device.
+**Verification reality:** the wire codec and the key schedule are host-KAT verified
+now; the whole firmware builds and links. The assembled transaction cannot complete
+end-to-end until the reader is provisioned (Phase 4) and a real credential is present,
+and byte-exact interop of the salt transcript is confirmed at bench with a device.
+The diagnostic logging at each step is there to make that bench bring-up tractable.
