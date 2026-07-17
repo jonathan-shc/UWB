@@ -1,0 +1,169 @@
+/* ESP-IDF SPI backend for the DW3000 decadriver — implements dw3000_spi.h.
+ * Replaces the Zephyr deps/dw3000/platform/dw3000_spi.c (not compiled here).
+ *
+ * CS is a plain GPIO (spics_io_num = -1), matching the Zephyr cs-gpios model, so
+ * the wakeup path can hold CS low ~500us. Each DW3000 command is one CS-low
+ * full-duplex transfer: header + body assembled in a DMA-capable, word-aligned
+ * bounce buffer; on reads the body slice of the RX buffer is copied back. */
+#include "dw3000_spi.h"
+
+#include <string.h>
+
+#include "board_pins.h"
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
+#include "esp_attr.h"
+#include "esp_log.h"
+#include "esp_rom_sys.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
+static const char *const TAG = "dw3000_spi";
+
+static spi_device_handle_t s_dev_slow;
+static spi_device_handle_t s_dev_fast;
+static spi_device_handle_t s_cur;
+static SemaphoreHandle_t s_lock;
+
+/* Max DW3000 single SPI transfer: ~1023 B frame + a few header bytes. */
+#define DW_XFER_MAX 2048
+static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_txbuf[DW_XFER_MAX];
+static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_rxbuf[DW_XFER_MAX];
+
+int dw3000_spi_init(void)
+{
+	if (s_lock == NULL) {
+		s_lock = xSemaphoreCreateMutex();
+	}
+
+	/* CS as GPIO, idle high (DW3000 CS is active low). */
+	gpio_config_t cs = {
+		.pin_bit_mask = 1ULL << WOZ_DW3000_PIN_CS,
+		.mode = GPIO_MODE_OUTPUT,
+	};
+	gpio_config(&cs);
+	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
+
+	spi_bus_config_t bus = {
+		.mosi_io_num = WOZ_DW3000_PIN_MOSI,
+		.miso_io_num = WOZ_DW3000_PIN_MISO,
+		.sclk_io_num = WOZ_DW3000_PIN_SCLK,
+		.quadwp_io_num = -1,
+		.quadhd_io_num = -1,
+		.max_transfer_sz = DW_XFER_MAX,
+	};
+	esp_err_t e = spi_bus_initialize(WOZ_DW3000_SPI_HOST, &bus, SPI_DMA_CH_AUTO);
+	if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) {
+		ESP_LOGE(TAG, "spi_bus_initialize failed: %d", e);
+		return -1;
+	}
+
+	spi_device_interface_config_t dev = {
+		.mode = 0, /* DW3000: SPI mode 0 (CPOL=0, CPHA=0) */
+		.spics_io_num = -1, /* manual CS via GPIO */
+		.queue_size = 1,
+		.clock_speed_hz = WOZ_DW3000_SPI_SLOW_HZ,
+	};
+	if (spi_bus_add_device(WOZ_DW3000_SPI_HOST, &dev, &s_dev_slow) != ESP_OK) {
+		ESP_LOGE(TAG, "add slow device failed");
+		return -1;
+	}
+	dev.clock_speed_hz = WOZ_DW3000_SPI_FAST_HZ;
+	if (spi_bus_add_device(WOZ_DW3000_SPI_HOST, &dev, &s_dev_fast) != ESP_OK) {
+		ESP_LOGE(TAG, "add fast device failed");
+		return -1;
+	}
+	s_cur = s_dev_slow;
+	ESP_LOGI(TAG, "DW3000 SPI up (slow %d Hz / fast %d Hz)",
+		 WOZ_DW3000_SPI_SLOW_HZ, WOZ_DW3000_SPI_FAST_HZ);
+	return 0;
+}
+
+void dw3000_spi_speed_slow(void) { s_cur = s_dev_slow; }
+void dw3000_spi_speed_fast(void) { s_cur = s_dev_fast; }
+
+void dw3000_spi_fini(void)
+{
+	if (s_dev_slow) {
+		spi_bus_remove_device(s_dev_slow);
+		s_dev_slow = NULL;
+	}
+	if (s_dev_fast) {
+		spi_bus_remove_device(s_dev_fast);
+		s_dev_fast = NULL;
+	}
+	spi_bus_free(WOZ_DW3000_SPI_HOST);
+}
+
+/* One CS-low command: [header][body|zeros][crc?]; capture RX body slice when
+ * rx_body != NULL. */
+static int32_t dw_xfer(const uint8_t *hdr, uint16_t hlen, const uint8_t *body,
+		       uint16_t blen, uint8_t *rx_body, const uint8_t *crc)
+{
+	size_t total = (size_t)hlen + blen + (crc ? 1u : 0u);
+
+	if (total == 0 || total > DW_XFER_MAX) {
+		return -1;
+	}
+
+	xSemaphoreTake(s_lock, portMAX_DELAY);
+
+	memcpy(s_txbuf, hdr, hlen);
+	if (body && blen) {
+		memcpy(s_txbuf + hlen, body, blen);
+	} else if (blen) {
+		memset(s_txbuf + hlen, 0, blen);
+	}
+	if (crc) {
+		s_txbuf[hlen + blen] = *crc;
+	}
+
+	spi_transaction_t t = {
+		.length = total * 8u,
+		.tx_buffer = s_txbuf,
+		.rx_buffer = rx_body ? s_rxbuf : NULL,
+	};
+
+	gpio_set_level(WOZ_DW3000_PIN_CS, 0);
+	esp_err_t e = spi_device_polling_transmit(s_cur, &t);
+	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
+
+	if (e == ESP_OK && rx_body && blen) {
+		memcpy(rx_body, s_rxbuf + hlen, blen);
+	}
+
+	xSemaphoreGive(s_lock);
+	return (e == ESP_OK) ? 0 : -1;
+}
+
+int32_t dw3000_spi_read(uint16_t headerLength, uint8_t *headerBuffer,
+			uint16_t readLength, uint8_t *readBuffer)
+{
+	return dw_xfer(headerBuffer, headerLength, NULL, readLength, readBuffer,
+		       NULL);
+}
+
+int32_t dw3000_spi_write(uint16_t headerLength, const uint8_t *headerBuffer,
+			 uint16_t bodyLength, const uint8_t *bodyBuffer)
+{
+	return dw_xfer(headerBuffer, headerLength, bodyBuffer, bodyLength, NULL,
+		       NULL);
+}
+
+int32_t dw3000_spi_write_crc(uint16_t headerLength, const uint8_t *headerBuffer,
+			     uint16_t bodyLength, const uint8_t *bodyBuffer,
+			     uint8_t crc8)
+{
+	return dw_xfer(headerBuffer, headerLength, bodyBuffer, bodyLength, NULL,
+		       &crc8);
+}
+
+void dw3000_spi_wakeup(void)
+{
+	/* CS active low: drive low ~500us to wake, then release (Qorvo CS-toggle). */
+	gpio_set_level(WOZ_DW3000_PIN_CS, 0);
+	esp_rom_delay_us(500);
+	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
+}
+
+void dw3000_spi_trace_output(void) { /* SPI trace not built in this port. */ }

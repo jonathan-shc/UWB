@@ -1,0 +1,14 @@
+# Matter-ready partition table for the ESP32-S3 (16 MB flash, N16R8).
+#
+# Pre-staged in Phase 1 so adding esp-matter later does not reshuffle flash: the
+# 4 MB factory app has ample room for engine + BLE + Matter, and the fctry NVS is
+# where esp-matter keeps its factory data (Matter DAC / cert provider). Today the
+# Phase-1 bring-up app (~0.3 MB) sits in `factory` and the data partitions are
+# empty. Offsets are left blank so ESP-IDF computes + aligns them (the factory app
+# lands on the required 0x10000 boundary: 0x9000 + nvs 0x6000 + phy 0x1000 = 0x10000).
+#
+# Name,     Type, SubType, Offset,  Size,   Flags
+nvs,        data, nvs,     ,        0x6000,
+phy_init,   data, phy,     ,        0x1000,
+factory,    app,  factory, ,        0x400000,
+fctry,      data, nvs,     ,        0x6000,

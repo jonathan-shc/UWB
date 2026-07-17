@@ -1,0 +1,23 @@
+# ESP32-S3 target; 16 MB flash (N16R8). PSRAM left off for Phase 1 (engine hot
+# buffers belong in internal SRAM anyway).
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# 1 kHz tick so k_msleep(ms) has 1 ms granularity (default 100 Hz = 10 ms).
+CONFIG_FREERTOS_HZ=1000
+
+# The codec allocates + the DS-TWR bring-up runs on the main task.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Matter-ready flash layout (see partitions.csv). Phase 1 uses only `factory`;
+# staged now so adding esp-matter later needs no reshuffle. PSRAM stays off until
+# Matter is added (its heap wants it) — a deliberate Phase-2 flip, not needed here.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Phase 2 BLE transport: NimBLE host (Aliro GATT service + L2CAP CoC). BLE-only
+# on the S3; NimBLE is the peripheral host. L2CAP CoC carries the Aliro
+# transaction (M1-M4); allow a couple of concurrent sessions.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
