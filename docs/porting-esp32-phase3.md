@@ -59,13 +59,33 @@ handshake completes — however correct the code.
 
 ## Phase 3 plan (incremental, commit per step)
 
-- **3.1** `aliro_crypto` on mbedTLS-PSA: P-256 ECDH, ECDSA, AES-256-GCM, SHA-256, and
-  the KDF chain, plus the 160-byte derived-block / URSK schedule — with **host
-  known-answer tests**. Verifiable now, no hardware.
-- **3.2** APDU secure channel + the auth state machine, wired into `aliro_reader`'s
-  `on_data` / `aliro_ble_send` seam.
+- **3.1 — DONE (host-KAT'd + builds on target).** `aliro_crypto`
+  (`ports/esp32-idf/components/aliro_crypto`): a portable SHA-256 / HMAC / HKDF /
+  X9.63-KDF core (compiled identically on host and target) plus an mbedTLS-PSA
+  backend for AES-256-GCM and P-256 ECDH/ECDSA. On top of that, the key schedule:
+  - stage 1 `Z = SHA-256( ecdh_shared(32) ‖ 0x00000001 ‖ txid(16) )` (single-block
+    X9.63), then stage 2 `block160 = HKDF-SHA256(salt = transcript, IKM = Z,
+    info = devicePubX(32), L = 160)`, with the **URSK = block[128:160]** and the two
+    directional session keys split from the low segments;
+  - the `Kpersistent` / cryptogram-key single-block derivations (same HKDF, different
+    salt / label);
+  - the AES-256-GCM secure channel: 12-byte nonce = 8-byte big-endian direction
+    (0 = seal, 1 = open) ‖ 4-byte big-endian per-direction counter, separate
+    non-wrapping counters.
+
+  Host KATs (`ports/esp32-idf/test/test_aliro_crypto.c`, in `run.sh`) pass against
+  FIPS-180-4, RFC 4231, RFC 5869, a GCM spec vector, and cross-check the schedule
+  wiring; the whole component also builds and links into the firmware.
+
+  Provisional: the exact byte layout of the HKDF **salt transcript** (`aliro_salt_build`)
+  — the domain labels and fixed constant are pinned, but a couple of negotiated
+  version/parameter sub-fields are placed on a best-effort basis and are the seam to
+  confirm at bench once 3.2 populates them.
+- **3.2** APDU secure channel + the auth state machine (AUTH0/AUTH1, EXCHANGE), wired
+  into `aliro_reader`'s `on_data` / `aliro_ble_send` seam; finalises the salt transcript.
 - **3.3** completion + URSK → `woz_uwb_start_aliro(cfg)` (replacing the canned URSK).
 - **3.4** (with Phase 4) provision the reader identity/keys so a real phone can auth.
 
-**Verification reality:** end-to-end needs a provisioned phone (Phase 4). Only the 3.1
-crypto/URSK unit is verifiable now, against known-answer vectors.
+**Verification reality:** end-to-end needs a provisioned phone (Phase 4). The 3.1
+crypto/URSK schedule is verified now against known-answer vectors and self-consistency;
+byte-exact interop (the salt transcript) is confirmed at bench with a real device.
