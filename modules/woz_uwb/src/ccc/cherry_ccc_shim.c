@@ -142,10 +142,10 @@ struct cherry_ccc_session *cherry_ccc_session_create_aliro_responder(
 }
 
 struct cherry_session *
-// Cast a CCC session pointer to its embedded base session structure; caller must ensure the pointer is non-null and actually points to a cherry_ccc_session.
+// Cast a CCC session pointer to its embedded base session structure; null propagates (the header wrappers rely on it).
 cherry_ccc_session_to_base(struct cherry_ccc_session *session)
 {
-	return &session->base;
+	return session ? &session->base : NULL;
 }
 
 // Retrieve the user data pointer stored in the base session; returns NULL if session is null.
