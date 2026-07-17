@@ -104,6 +104,9 @@ static int cmd_range(const struct shell *sh, size_t argc, char **argv)
 		    nlos ? C_YEL "yes" C_RST : C_GRN "no" C_RST);
 	shell_print(sh, "  " C_DIM "block    " C_RST "%u", block);
 	shell_print(sh, "  " C_DIM "age      " C_RST "%lld ms", (long long)age_ms);
+	shell_print(sh, "  " C_DIM "trusted  " C_RST "%s",
+		    fira_session_range_trusted()
+		    ? C_GRN "yes ●" C_RST : C_YEL "no ○" C_RST);
 	return 0;
 }
 
@@ -214,8 +217,10 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 	int64_t age_ms = 0;
 	if (fira_session_last_range(&cm, NULL, NULL, &block, &age_ms)) {
 		shell_print(sh, "  " C_DIM "range   " C_RST C_CYN "%d cm" C_RST
-			    C_DIM " (blk %u, %lld ms ago)" C_RST,
-			    cm, block, (long long)age_ms);
+			    C_DIM " (blk %u, %lld ms ago)" C_RST " %s",
+			    cm, block, (long long)age_ms,
+			    fira_session_range_trusted()
+			    ? C_GRN "trusted" C_RST : C_YEL "untrusted" C_RST);
 	} else {
 		shell_print(sh, "  " C_DIM "range   " C_RST C_DIM "none yet" C_RST);
 	}
