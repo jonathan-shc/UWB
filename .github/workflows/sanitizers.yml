@@ -1,0 +1,18 @@
+# The same host suite rebuilt under ASan + UBSan (make test-san). The parser and
+# session code here ultimately consume attacker-controlled radio input, so memory
+# bugs and UB in this core are security bugs — they fail loud, not silent.
+name: sanitizers
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  asan-ubsan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run host suite under ASan + UBSan
+        run: make test-san
