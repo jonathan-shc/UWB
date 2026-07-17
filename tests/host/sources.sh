@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034  # every list here is consumed by the sourcing scripts
 # Shared source lists for the host test + coverage builds. Sourced by run.sh and
 # coverage.sh; the caller must set $ROOT to the repo root.
 #
