@@ -143,11 +143,18 @@ do_build() {
   local lat_conf=""
   [ "${LAT:-0}" = 1 ] && lat_conf=";$OV/diag-latency.conf"
 
+  # NVS=1: layer diag-extnvs.conf (DBG logging for external_nvs / Zephyr NVS /
+  # matter_access / app Aliro modules + the ext_nvs shell) to find why a learned
+  # Access Document vanishes across reboot. Off-by-default diagnostic; rides
+  # EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
+  local nvs_conf=""
+  [ "${NVS:-0}" = 1 ] && nvs_conf=";$OV/diag-extnvs.conf"
+
   # Every -D flag that, if changed, requires a from-scratch configure. Overlay
   # *content* edits are handled incrementally by Zephyr (configure-deps), so only
   # flag changes are captured here.
   local -a dflags=(
-    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}"
+    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}${nvs_conf}"
     -Dipc_radio_EXTRA_CONF_FILE="$OV/ipc_radio.conf"
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay"
     -DPM_STATIC_YML_FILE="$OV/pm_static.yml"
