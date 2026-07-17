@@ -74,6 +74,23 @@ Failure chain after any reboot, without the fixes below:
   a ratchet advance now survives reboot; this is documented in the ratchet
   Kconfig help.
 
+### Interaction: the BLE advertisement's Dynamic Tag (found on bench, 2026-07-17)
+
+The Aliro BLE advertisement embeds an expiry timestamp of `lock unix time +
+CONFIG_DOOR_LOCK_ALIRO_BLE_SERVICE_DYNAMIC_TAG_EXPIRY_DURATION_S` (default
+900 s) when the wall clock is valid (`aliro_service.cpp`,
+`PrepareAdvertisingDataLocked`), and "expiry unavailable" when it is not.
+iPhones accept the unavailable form but silently ignore an advertisement whose
+expiry lies in their past. A clock that is valid but *behind* real time by
+more than the window therefore kills unlock-on-approach for every phone, while
+NFC and Matter keep working. Both of this repo's time fixes create exactly
+that state (the restored clock understates real time by the accumulated
+power-off duration; a ratcheted clock understates it by the presented
+document's age), so `integration/overlays/woz-aliro.conf` disables the Dynamic
+Tag until a real time source exists. Stock firmware never hits this: its clock
+is either fresh (before the first reboot) or invalid (after), never
+valid-but-stale.
+
 ### Deferred: network time (SNTP / DefaultNTP)
 
 Real network time is the only fix that makes expiry and schedule enforcement
