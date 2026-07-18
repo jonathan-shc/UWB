@@ -28,16 +28,24 @@ extern "C" {
  *  reader still runs; ranging just won't start). */
 int aliro_ranging_init(void);
 
-/** Start the M1-M4 ranging setup for a connection: create the session bound to
- *  the 32-byte @ursk and emit M1 now (over the peer's L2CAP channel). Returns 0
- *  if M1 was sent, negative on failure or if a ranging session is already active
- *  (the DW3000 is single-session). */
-int aliro_ranging_start(uint16_t conn_handle, const uint8_t *ursk);
+struct aliro_secchan; /* the BleSK ranging channel (from aliro_crypto.h) */
 
-/** Feed one inbound post-auth SDU (M2/M4/notification, raw bytes with its own
- *  4-byte header) to the active ranging session. M4 makes the engine start the
- *  responder with the negotiated parameters. Returns 0 if consumed, negative if
- *  there is no active session for this connection or the engine rejected it. */
+/** Arm the M1-M4 ranging setup for a connection: create the session with ranging
+ *  session id @session_id, bound to the 32-byte @ursk and the BleSK ranging channel
+ *  @sc_ble, whose reader-direction counter is used to seal the engine's outbound SDUs
+ *  (continuing from the AP-Completed message). @session_id MUST match the value the
+ *  device derived from the AUTH0 transaction id (big-endian txid[12..15]); it is
+ *  advertised in M1 and the device indexes its URSK by it. M1 is NOT sent here — the
+ *  engine emits it when the device sends its Initiate-Ranging-Session. Returns 0 on
+ *  success, negative on failure or if a ranging session is already active (the DW3000
+ *  is single-session). */
+int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t *ursk,
+			struct aliro_secchan *sc_ble);
+
+/** Feed one inbound post-auth PLAINTEXT SDU (already BleSK-opened by the reader;
+ *  proto/id/len header + payload) to the active ranging session. M4 makes the
+ *  engine start the responder with the negotiated parameters. Returns 0 if
+ *  consumed, negative if there is no active session or the engine rejected it. */
 int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len);
 
 /** Tear down the ranging session for a connection (on disconnect). No-op if none

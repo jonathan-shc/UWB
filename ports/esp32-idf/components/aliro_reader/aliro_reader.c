@@ -90,7 +90,8 @@ enum txn_phase {
 	PH_IDLE = 0,    /* connected; awaiting the peer's first message */
 	PH_SENT_AUTH0,  /* AUTH0 sent; awaiting AUTH0Response */
 	PH_SENT_AUTH1,  /* AUTH1 sent; awaiting AUTH1Response */
-	PH_ESTABLISHED, /* URSK derived; ranging setup (M1-M4) driven by aliro_ranging */
+	PH_SENT_EXCHANGE, /* EXCHANGE sent; awaiting its response, then AP-Completed */
+	PH_ESTABLISHED, /* AP-Completed sent; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
 };
 
@@ -103,6 +104,8 @@ static const char *phase_str(enum txn_phase p)
 		return "SENT_AUTH0";
 	case PH_SENT_AUTH1:
 		return "SENT_AUTH1";
+	case PH_SENT_EXCHANGE:
+		return "SENT_EXCHANGE";
 	case PH_ESTABLISHED:
 		return "ESTABLISHED";
 	case PH_FAILED:
@@ -125,7 +128,8 @@ static struct aliro_session {
 	uint8_t txid[ALIRO_TXID_LEN];
 	uint8_t device_eph_pub[ALIRO_P256_POINT];
 	uint8_t z[32];
-	struct aliro_secchan sc;
+	struct aliro_secchan sc;      /* AP secure channel (ExpeditedSK) */
+	struct aliro_secchan sc_ble;  /* ranging channel (BleSKReader/Device), §11.8 */
 	uint8_t ursk[ALIRO_URSK_LEN];
 
 	/* The phone's 0xA5 proprietary-info TLV (tag+len+value), captured from its
@@ -336,6 +340,30 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	aliro_crypto_split(block, 1, enc, dec, s->ursk);
 	aliro_secchan_init(&s->sc, enc, dec);
 
+	/* Ranging channel keys (§11.8.1): BleSKReader/BleSKDevice off BleSK (block
+	 * offset 96); salt = reader_supported_versions || user_device_selected_version.
+	 * We advertise and select v1.0 only, so salt = 01 00 01 00. Its own counters
+	 * (fresh from 1) live in s->sc_ble and carry across AP-Completed + M1..M4. */
+	{
+		uint8_t ble_r[ALIRO_SESSION_KEY_LEN], ble_d[ALIRO_SESSION_KEY_LEN];
+		uint8_t ble_salt[sizeof(k_proto_versions) + 2];
+		size_t bsl = 0;
+
+		for (size_t i = 0; i < sizeof(k_proto_versions) / sizeof(k_proto_versions[0]);
+		     i++) {
+			ble_salt[bsl++] = (uint8_t)(k_proto_versions[i] >> 8);
+			ble_salt[bsl++] = (uint8_t)(k_proto_versions[i] & 0xffu);
+		}
+		ble_salt[bsl++] = (uint8_t)(ALIRO_VERSION >> 8); /* selected = only version */
+		ble_salt[bsl++] = (uint8_t)(ALIRO_VERSION & 0xffu);
+		if (aliro_crypto_derive_ble_keys(block, ble_salt, bsl, ble_r, ble_d) != 0) {
+			ESP_LOGE(TAG, "[conn %u] BleSK derivation failed", s->conn_handle);
+			s->phase = PH_FAILED;
+			return;
+		}
+		aliro_secchan_init(&s->sc_ble, ble_r, ble_d);
+	}
+
 	/* Decrypt the body: <ciphertext || 16-byte GCM tag>, the first inbound message
 	 * (dec counter 1 per §8.3.1.13 init). A tag mismatch means the session key,
 	 * counter, or ct/tag framing is off — the on-hardware test of the key schedule. */
@@ -432,17 +460,86 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	memcpy(payload + exn, tag, ALIRO_GCM_TAG_LEN);
 	send_ap_command(s->conn_handle, ALIRO_INS_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
 
-	/* Auth + secure channel + URSK are done. DIAGNOSTIC BUILD: hold the
-	 * reader-initiated M1 and instead decrypt/observe whatever the phone sends
-	 * next, to pin the real ranging-setup flow. Rationale: the engine speaks the
-	 * spec proto-1 M1-M4 handshake, but the nyrek live-iPhone capture shows the
-	 * device drives ranging via proto-3 (encrypted config) + proto-2
-	 * (InitiateRangingSession); our own capture had the phone GeneralError right
-	 * after our M1. Re-enable aliro_ranging_start once the flow is confirmed. */
-	s->phase = PH_ESTABLISHED;
-	ESP_LOGI(TAG, "[conn %u] URSK derived; observing phone ranging flow (M1 held)",
+	/* Auth + both channels + URSK are ready. Wait for the EXCHANGE response before
+	 * completing the AP: §11.1.1 requires the reader to send Reader-Status-AP-Completed
+	 * (BleSK-sealed) after EXCHANGE succeeds, otherwise the device stalls and drops
+	 * (URSK_Unavailable). on_exchange_response drives that + ranging. */
+	s->phase = PH_SENT_EXCHANGE;
+	ESP_LOGI(TAG, "[conn %u] URSK derived; EXCHANGE sent, awaiting response",
 		 s->conn_handle);
 	ESP_LOG_BUFFER_HEXDUMP(TAG, s->ursk, ALIRO_URSK_LEN, ESP_LOG_INFO);
+}
+
+/* Reader-Status-Access-Protocol-Completed (§11.1.1 / §11.7.3.4.1): a proto-2
+ * Notification, message-id 0x03, carrying one Reader Information Attribute
+ * (id 0x00, len 2, value = unsolicited-status-reporting mode in bits 15:13). The
+ * device will not initiate ranging until it receives this. Plaintext message the
+ * BleSK channel then seals: [02][03][00 04][00 02 20 00]. */
+static const uint8_t k_ap_completed_plain[] = {
+	0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00,
+};
+
+/* Handle the EXCHANGE response, then complete the AP and arm ranging. The body is
+ * an AP (proto-0) response on the ExpeditedSK channel: <ct || 16B tag> SW1SW2. */
+static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, size_t len)
+{
+	uint16_t sw;
+
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		ESP_LOGE(TAG, "[conn %u] EXCHANGE response too short", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	uint8_t body[16];
+	size_t bodylen = (len >= ALIRO_GCM_TAG_LEN) ? len - ALIRO_GCM_TAG_LEN : 0;
+
+	if (bodylen == 0 || bodylen > sizeof(body) ||
+	    aliro_secchan_open(&s->sc, NULL, 0, pl, bodylen, pl + bodylen, body) != 0) {
+		ESP_LOGE(TAG, "[conn %u] EXCHANGE response decrypt failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	/* Success body = 00 02 00 00 (len 0x0002, error 0x0000). Non-zero error bytes
+	 * (body[2..4]) mean the device rejected a request. */
+	bool ok = bodylen >= 4u && body[2] == 0x00u && body[3] == 0x00u;
+
+	ESP_LOGI(TAG, "[conn %u] EXCHANGE response: %s", s->conn_handle,
+		 ok ? "success (URSK armed)" : "ERROR");
+	ESP_LOG_BUFFER_HEXDUMP(TAG, body, bodylen, ESP_LOG_INFO);
+	if (!ok) {
+		s->phase = PH_FAILED;
+		return;
+	}
+
+	/* Reader-Status-AP-Completed, BleSK-sealed on the ranging channel (counter 1). */
+	uint8_t wire[64];
+	size_t wl;
+
+	if (aliro_msg_seal(&s->sc_ble, k_ap_completed_plain, sizeof(k_ap_completed_plain),
+			   wire, sizeof(wire), &wl) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AP-Completed seal failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	int rc = aliro_ble_send(s->conn_handle, wire, wl);
+
+	ESP_LOGI(TAG, "[conn %u] Reader-Status-AP-Completed sent (%u B, rc=%d)", s->conn_handle,
+		 (unsigned)wl, rc);
+
+	/* Arm the ranging engine with the URSK + the BleSK channel; M1 is emitted by the
+	 * engine when the device sends its Initiate-Ranging-Session (proto-2 id-1). The
+	 * ranging session id is NOT reader's free choice: the device derives it as the
+	 * big-endian last 4 bytes of the 16-byte AUTH0 transaction id (libaliro
+	 * AccessProtocolCrypto::GetSessionId = rev(txid[12..15])) and indexes its URSK by
+	 * it. A mismatch makes M1 land on a device with no URSK for that session
+	 * (GeneralError URSK_Unavailable). */
+	uint32_t ranging_sid = ((uint32_t)s->txid[12] << 24) | ((uint32_t)s->txid[13] << 16) |
+			       ((uint32_t)s->txid[14] << 8) | (uint32_t)s->txid[15];
+
+	s->phase = PH_ESTABLISHED;
+	if (aliro_ranging_start(s->conn_handle, ranging_sid, s->ursk, &s->sc_ble) != 0) {
+		ESP_LOGW(TAG, "[conn %u] ranging setup did not arm", s->conn_handle);
+	}
 }
 
 /* Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
@@ -490,8 +587,11 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 
 	/* A Notification Event mid-auth is the device rejecting us: GeneralError is
 	 * encoded [01 01 <code>]. Surface <code> — it is the exact reason the phone
-	 * bailed, far more legible than a downstream parse failure. */
-	if (type == ALIRO_PROTO_NOTIFICATION && opcode == ALIRO_NOTIF_EVENT) {
+	 * bailed, far more legible than a downstream parse failure. Only pre-ranging:
+	 * once ESTABLISHED, proto-2 events ride the BleSK channel encrypted, so pl[] is
+	 * ciphertext here — the real event must be opened below, not read raw. */
+	if (s->phase != PH_ESTABLISHED && type == ALIRO_PROTO_NOTIFICATION &&
+	    opcode == ALIRO_NOTIF_EVENT) {
 		uint8_t code = (pl_len >= 3u) ? pl[2] : 0xffu;
 
 		ESP_LOGW(TAG, "[conn %u] device GeneralError 0x%02x in phase %s", s->conn_handle,
@@ -525,40 +625,28 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	case PH_SENT_AUTH1:
 		on_auth1_response(s, pl, pl_len);
 		break;
+	case PH_SENT_EXCHANGE:
+		on_exchange_response(s, pl, pl_len);
+		break;
 	case PH_ESTABLISHED: {
-		/* DIAGNOSTIC: post-EXCHANGE SDUs ride the secure channel. Decrypt the
-		 * payload as <ciphertext || 16-byte GCM tag> and dump the plaintext to pin
-		 * the phone's real ranging-setup messages. proto-0 access responses carry a
-		 * trailing SW1SW2, so also try 2 fewer ct bytes; a plaintext (unencrypted)
-		 * message falls through to the raw dump. secchan_open leaves the dec counter
-		 * untouched on failure, so trying both framings is counter-safe. */
-		uint8_t pt[256];
-		bool shown = false;
+		/* Ranging SDUs (proto 1/2/3) ride the BleSK channel: open the whole SDU
+		 * (<hdr><ct||16B tag>), dump the plaintext, and hand it to the engine, which
+		 * emits M1 on the Initiate-Ranging-Session and M3 on M2. The engine's replies
+		 * are BleSK-sealed by aliro_ranging's tx callback. */
+		uint8_t plain[256];
+		size_t plen;
 
-		for (size_t swpad = 0; swpad <= 2u && !shown; swpad += 2u) {
-			if (pl_len < ALIRO_GCM_TAG_LEN + swpad) {
-				continue;
-			}
-			size_t ctl = pl_len - ALIRO_GCM_TAG_LEN - swpad;
-
-			if (ctl > sizeof(pt)) {
-				continue;
-			}
-			if (aliro_secchan_open(&s->sc, NULL, 0, pl, ctl, pl + ctl, pt) == 0) {
-				ESP_LOGI(TAG,
-					 "[conn %u] EST SDU DECRYPTED (proto=0x%02x id=0x%02x, %u B, sw_pad=%u):",
-					 s->conn_handle, type, opcode, (unsigned)ctl,
-					 (unsigned)swpad);
-				ESP_LOG_BUFFER_HEXDUMP(TAG, pt, ctl, ESP_LOG_INFO);
-				shown = true;
-			}
-		}
-		if (!shown) {
+		if (aliro_msg_open(&s->sc_ble, data, len, plain, sizeof(plain), &plen) != 0) {
 			ESP_LOGW(TAG,
-				 "[conn %u] EST SDU decrypt failed (proto=0x%02x id=0x%02x, %u B); raw:",
+				 "[conn %u] ranging SDU open FAILED (proto=0x%02x id=0x%02x, %u B); raw:",
 				 s->conn_handle, type, opcode, (unsigned)pl_len);
 			ESP_LOG_BUFFER_HEXDUMP(TAG, pl, pl_len, ESP_LOG_INFO);
+			break;
 		}
+		ESP_LOGI(TAG, "[conn %u] ranging SDU (proto=0x%02x id=0x%02x, %u B plaintext):",
+			 s->conn_handle, plain[0], plain[1], (unsigned)plen);
+		ESP_LOG_BUFFER_HEXDUMP(TAG, plain, plen, ESP_LOG_INFO);
+		aliro_ranging_feed(s->conn_handle, plain, plen);
 		break;
 	}
 	default:

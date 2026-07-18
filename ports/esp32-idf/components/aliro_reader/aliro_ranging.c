@@ -15,6 +15,7 @@
 #include "esp_log.h"
 
 #include "aliro_ble.h"
+#include "aliro_crypto.h"
 #include "woz_uwb_facade.h"
 
 #include "cherry/cherry.h"
@@ -27,8 +28,6 @@
 static const char *TAG = "aliro_ranging";
 
 #define ALIRO_VERSION        0x0100u
-/* Reader-chosen UWB session id (any non-zero); advertised in M1, echoed in M2. */
-#define ALIRO_UWB_SESSION_ID 0x02b02fd4u
 /* Upper bound on an inbound ranging SDU (mirrors the reference kMaxBleMessage). */
 #define ALIRO_RANGING_MSG_MAX 256u
 
@@ -56,6 +55,10 @@ static struct aliro_uwb_session *s_sess;
 static uint16_t s_sess_conn;
 static bool s_sess_active;
 
+/* The connection's BleSK ranging channel (owned by the reader session), used to
+ * seal the engine's outbound SDUs. Borrowed for the session's lifetime. */
+static struct aliro_secchan *s_sc_ble;
+
 /* ---- engine callbacks (invoked synchronously on the BLE-host task) ---- */
 
 /* Send an adapter-built message verbatim over the peer's L2CAP channel. The
@@ -70,10 +73,22 @@ static void uwb_tx_cb(struct aliro_uwb_message *message,
 	uint16_t conn = (uint16_t)(uintptr_t)user_data;
 
 	if (message != NULL) {
-		int rc = aliro_ble_send(conn, message->data, message->len);
+		uint8_t wire[ALIRO_RANGING_MSG_MAX + ALIRO_GCM_TAG_LEN];
+		size_t wl;
 
-		ESP_LOGI(TAG, "[conn %u] UWB TX %u bytes (rc=%d)", conn,
-			 (unsigned)message->len, rc);
+		/* The engine hands us a plaintext [proto][id][len][payload]; BleSK-seal it
+		 * (§11.8.2, the 4-byte header as AAD) before it goes on the wire. */
+		if (s_sc_ble != NULL &&
+		    aliro_msg_seal(s_sc_ble, message->data, message->len, wire, sizeof(wire),
+				   &wl) == 0) {
+			int rc = aliro_ble_send(conn, wire, wl);
+
+			ESP_LOGI(TAG, "[conn %u] ranging TX proto=0x%02x id=0x%02x (%u B, rc=%d)",
+				 conn, message->data[0], message->data[1], (unsigned)wl, rc);
+		} else {
+			ESP_LOGE(TAG, "[conn %u] ranging TX seal failed (%u B)", conn,
+				 (unsigned)message->len);
+		}
 	}
 	aliro_uwb_session_message_free(message);
 }
@@ -158,10 +173,11 @@ int aliro_ranging_init(void)
 	return 0;
 }
 
-int aliro_ranging_start(uint16_t conn_handle, const uint8_t *ursk)
+int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t *ursk,
+			struct aliro_secchan *sc_ble)
 {
-	if (s_adapter == NULL || ursk == NULL) {
-		ESP_LOGW(TAG, "[conn %u] ranging start: adapter not ready", conn_handle);
+	if (s_adapter == NULL || ursk == NULL || sc_ble == NULL) {
+		ESP_LOGW(TAG, "[conn %u] ranging start: adapter/keys not ready", conn_handle);
 		return -1;
 	}
 	if (s_sess_active) {
@@ -175,7 +191,7 @@ int aliro_ranging_start(uint16_t conn_handle, const uint8_t *ursk)
 	woz_uwb_stop();
 
 	struct aliro_uwb_session *sess = aliro_uwb_session_create(
-		s_adapter, ALIRO_UWB_SESSION_ID, uwb_ev_cb, uwb_tx_cb,
+		s_adapter, session_id, uwb_ev_cb, uwb_tx_cb,
 		(void *)(uintptr_t)conn_handle);
 
 	if (sess == NULL) {
@@ -189,19 +205,15 @@ int aliro_ranging_start(uint16_t conn_handle, const uint8_t *ursk)
 	}
 	aliro_uwb_session_set_protocol_version(sess, ALIRO_VERSION);
 
+	s_sc_ble = sc_ble;
 	s_sess = sess;
 	s_sess_conn = conn_handle;
 	s_sess_active = true;
 
-	/* Emits M1 synchronously via uwb_tx_cb before returning. */
-	if (aliro_uwb_session_init_setup(sess) != ALIRO_UWB_ERR_NONE) {
-		ESP_LOGE(TAG, "[conn %u] init_setup (M1) failed", conn_handle);
-		s_sess = NULL;
-		s_sess_active = false;
-		aliro_uwb_session_destroy(sess);
-		return -1;
-	}
-	ESP_LOGI(TAG, "[conn %u] ranging setup started (M1 sent)", conn_handle);
+	/* No eager M1: the engine emits it (via uwb_tx_cb, BleSK-sealed) when the
+	 * device sends its Initiate-Ranging-Session (proto-2 id-1). */
+	ESP_LOGI(TAG, "[conn %u] ranging armed (session id 0x%08x); awaiting "
+		      "Initiate-Ranging-Session", conn_handle, (unsigned)session_id);
 	return 0;
 }
 
@@ -247,6 +259,7 @@ void aliro_ranging_stop(uint16_t conn_handle)
 	 * direct free (no CCC session yet) leaves no dangling pointer. */
 	s_sess = NULL;
 	s_sess_active = false;
+	s_sc_ble = NULL; /* borrowed from the reader session; drop before it is freed */
 	ESP_LOGI(TAG, "[conn %u] tearing down UWB ranging session", conn_handle);
 	aliro_uwb_session_destroy(sess);
 }

@@ -138,6 +138,85 @@ int aliro_secchan_open(struct aliro_secchan *sc, const uint8_t *aad,
 	return rc;
 }
 
+/* ---- Aliro message security (§11.8): ranging/notification SDUs ---- */
+
+int aliro_crypto_derive_ble_keys(const uint8_t block[ALIRO_KEY_BLOCK_LEN],
+				 const uint8_t *salt, size_t salt_len,
+				 uint8_t ble_reader[ALIRO_SESSION_KEY_LEN],
+				 uint8_t ble_device[ALIRO_SESSION_KEY_LEN])
+{
+	const uint8_t *ble_sk = block + ALIRO_BLESK_OFFSET;
+	int rc;
+
+	rc = aliro_hkdf(salt, salt_len, ble_sk, 32, (const uint8_t *)"BleSKReader", 11,
+			ble_reader, ALIRO_SESSION_KEY_LEN);
+	if (rc != 0) {
+		return rc;
+	}
+	return aliro_hkdf(salt, salt_len, ble_sk, 32, (const uint8_t *)"BleSKDevice", 11,
+			  ble_device, ALIRO_SESSION_KEY_LEN);
+}
+
+int aliro_msg_seal(struct aliro_secchan *sc, const uint8_t *plain, size_t plain_len,
+		   uint8_t *wire, size_t wire_cap, size_t *wire_len)
+{
+	if (plain_len < 4u) {
+		return -1;
+	}
+	size_t len_plain = plain_len - 4u;
+
+	if ((((size_t)plain[2] << 8) | plain[3]) != len_plain) {
+		return -1; /* header length must equal the actual payload length */
+	}
+	size_t wl = 4u + len_plain + ALIRO_GCM_TAG_LEN;
+
+	if (wl > wire_cap) {
+		return -1;
+	}
+	uint16_t wlen = (uint16_t)(len_plain + ALIRO_GCM_TAG_LEN);
+
+	wire[0] = plain[0];
+	wire[1] = plain[1];
+	wire[2] = (uint8_t)(wlen >> 8);
+	wire[3] = (uint8_t)(wlen & 0xffu);
+	/* AAD = the 4-byte header carrying the PLAINTEXT length (= plain[0..4]). */
+	if (aliro_secchan_seal(sc, plain, 4u, plain + 4u, len_plain, wire + 4u,
+			       wire + 4u + len_plain) != 0) {
+		return -1;
+	}
+	*wire_len = wl;
+	return 0;
+}
+
+int aliro_msg_open(struct aliro_secchan *sc, const uint8_t *wire, size_t wire_len,
+		   uint8_t *plain, size_t plain_cap, size_t *plain_len)
+{
+	if (wire_len < 4u + ALIRO_GCM_TAG_LEN) {
+		return -1;
+	}
+	size_t len_wire = ((size_t)wire[2] << 8) | wire[3];
+
+	if (len_wire + 4u != wire_len || len_wire < ALIRO_GCM_TAG_LEN) {
+		return -1;
+	}
+	size_t len_plain = len_wire - ALIRO_GCM_TAG_LEN;
+
+	if (4u + len_plain > plain_cap) {
+		return -1;
+	}
+	/* AAD = [proto][id][len_plain BE] — the plaintext length, not the wire length. */
+	uint8_t aad[4] = { wire[0], wire[1], (uint8_t)(len_plain >> 8),
+			   (uint8_t)(len_plain & 0xffu) };
+
+	if (aliro_secchan_open(sc, aad, 4u, wire + 4u, len_plain, wire + 4u + len_plain,
+			       plain + 4u) != 0) {
+		return -1;
+	}
+	memcpy(plain, aad, 4u);
+	*plain_len = 4u + len_plain;
+	return 0;
+}
+
 /* ---- CreateSalt transcript (provisional layout — see header) ---- */
 
 /* 36-byte domain label, sliced into three 12-byte labels by salt type. The

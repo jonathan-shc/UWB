@@ -117,6 +117,38 @@ int aliro_secchan_open(struct aliro_secchan *sc, const uint8_t *aad,
 		       const uint8_t tag[ALIRO_GCM_TAG_LEN], uint8_t *pt);
 
 /*
+ * ---- Aliro message security (§11.8): ranging/notification SDUs -----------
+ *
+ * Proto-1/2/3 SDUs (UWB Ranging Service M1-M4, Notification, Supplementary) ride
+ * a SEPARATE AES-256-GCM channel from the AP secure channel: BleSKReader/
+ * BleSKDevice keys (HKDF off BleSK = block offset 96), fresh per-direction
+ * counters starting at 1, and the 4-byte header (with the PLAINTEXT payload
+ * length) as AAD. Wire form: [proto][id][len_be16][encrypted_payload||16B tag],
+ * where len_be16 = plaintext length + 16. Reuse struct aliro_secchan for it
+ * (enc=BleSKReader, dec=BleSKDevice; aliro_secchan_init sets both counters to 1).
+ */
+#define ALIRO_BLESK_OFFSET 96u /* BleSK = block[96 .. 127] (§8.3.1.12/.13) */
+
+/* Derive BleSKReader + BleSKDevice from the 160-byte block per §11.8.1:
+ * HKDF-SHA256(ikm=BleSK, info="BleSKReader"/"BleSKDevice", L=32,
+ * salt = reader_supported_versions || user_device_selected_version). 0 on ok. */
+int aliro_crypto_derive_ble_keys(const uint8_t block[ALIRO_KEY_BLOCK_LEN],
+				 const uint8_t *salt, size_t salt_len,
+				 uint8_t ble_reader[ALIRO_SESSION_KEY_LEN],
+				 uint8_t ble_device[ALIRO_SESSION_KEY_LEN]);
+
+/* Seal an engine plaintext message [proto][id][len_plain_be16][payload] into the
+ * on-wire [proto][id][(len_plain+16)_be16][ct||tag], sealed under sc with the
+ * 4-byte plaintext-length header as AAD (§11.8.2). *wire_len set on 0-return. */
+int aliro_msg_seal(struct aliro_secchan *sc, const uint8_t *plain, size_t plain_len,
+		   uint8_t *wire, size_t wire_cap, size_t *wire_len);
+
+/* Inverse of aliro_msg_seal: open a wire SDU into the engine plaintext form,
+ * verifying the tag. Returns <0 on a tag mismatch (drop the connection then). */
+int aliro_msg_open(struct aliro_secchan *sc, const uint8_t *wire, size_t wire_len,
+		   uint8_t *plain, size_t plain_cap, size_t *plain_len);
+
+/*
  * ---- CreateSalt transcript builder --------------------------------------
  *
  * Builds the stage-2 HKDF salt byte-exact to Aliro §8.3.1.13 (salt_volatile for
