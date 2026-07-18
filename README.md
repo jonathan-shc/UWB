@@ -110,6 +110,8 @@ an nRF5340 DK with a live iPhone.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the pieces fit together.
 - [`docs/protocol-notes.md`](docs/protocol-notes.md): protocol behavior observed on real
   hardware.
+- [`docs/protocol-research.md`](docs/protocol-research.md): reverse-engineering report on
+  the BLE + UWB proximity-unlock protocol.
 
 <details>
 <summary><b>Under the hood</b> (why this is hard, and how it is built)</summary>
