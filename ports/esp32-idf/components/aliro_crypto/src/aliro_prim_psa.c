@@ -117,6 +117,29 @@ int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR],
 	return rc;
 }
 
+int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
+				uint8_t pub[ALIRO_P256_POINT])
+{
+	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+	psa_key_id_t k = 0;
+	size_t publen = 0;
+	int rc = -1;
+
+	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_EXPORT);
+	psa_set_key_algorithm(&attr, PSA_ALG_ECDH);
+	psa_set_key_type(&attr, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+	psa_set_key_bits(&attr, 256);
+	if (psa_import_key(&attr, priv, ALIRO_P256_SCALAR, &k) != PSA_SUCCESS) {
+		return -1;
+	}
+	if (psa_export_public_key(k, pub, ALIRO_P256_POINT, &publen) == PSA_SUCCESS &&
+	    publen == ALIRO_P256_POINT) {
+		rc = 0;
+	}
+	psa_destroy_key(k);
+	return rc;
+}
+
 int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR],
 		    const uint8_t peer_pub[ALIRO_P256_POINT],
 		    uint8_t shared_x[ALIRO_P256_SCALAR])

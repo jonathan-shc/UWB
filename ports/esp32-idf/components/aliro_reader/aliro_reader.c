@@ -50,6 +50,36 @@ static bool s_loaded;
 static uint8_t s_last_cred_pub[ALIRO_CRED_PUB_LEN];
 static bool s_have_last_cred;
 
+/* Reader group key X = the X coordinate of pub(sign_priv). This is salt field 1
+ * (reader_group_identifier_key.x) in the §8.3.1.13 key schedule; both sides must
+ * agree on it, so it is derived from the provisioned signingKey (its public
+ * counterpart = the verificationKey the credential was provisioned with).
+ * Recomputed whenever s_id changes. */
+static uint8_t s_reader_group_x[ALIRO_EC_PUBX_LEN];
+static bool s_have_group_x;
+
+/* Fallback SELECT-response 0xA5 proprietary-info TLV for a CSA-app, protocol
+ * v1.0-only device (Table 10-2): a5 08 [80 02 0000] [5c 02 0100]. Used only when
+ * the phone's op-0x05 message carried no 0xA5 TLV (a live device sends its own). */
+static const uint8_t k_a5_csa_v1[] = {
+	0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0x01, 0x00,
+};
+
+/* Recover the reader group key X from the provisioned signingKey. Call after any
+ * mutation of s_id. Leaves s_have_group_x=false (and logs) on failure. */
+static void compute_reader_group_x(void)
+{
+	uint8_t pub[ALIRO_P256_POINT];
+
+	if (aliro_ec_p256_pub_from_priv(s_id.sign_priv, pub) == 0) {
+		memcpy(s_reader_group_x, pub + 1, ALIRO_EC_PUBX_LEN);
+		s_have_group_x = true;
+	} else {
+		s_have_group_x = false;
+		ESP_LOGE(TAG, "reader group key derivation failed; salt field 1 unavailable");
+	}
+}
+
 /* Guards s_trust + s_last_cred_pub/s_have_last_cred, which the BLE-host task
  * (on_auth1_response) and the REPL task (the aliro-prov/aliro-trust commands)
  * both touch. s_id/s_loaded are set once at boot before the REPL starts, so they
@@ -97,6 +127,12 @@ static struct aliro_session {
 	uint8_t z[32];
 	struct aliro_secchan sc;
 	uint8_t ursk[ALIRO_URSK_LEN];
+
+	/* The phone's 0xA5 proprietary-info TLV (tag+len+value), captured from its
+	 * op-0x05 Initiate-Access-Protocol message; the trailing field of the
+	 * session-key salt. a5_len==0 means none seen (use the CSA v1.0 default). */
+	uint8_t a5_tlv[64];
+	size_t a5_len;
 } s_sessions[ALIRO_MAX_SESSIONS];
 
 static struct aliro_session *session_find(uint16_t conn_handle)
@@ -143,6 +179,7 @@ static void load_provisioning(void)
 			 s_trust.count);
 	}
 	ESP_LOGI(TAG, "prov source: %s", rc == 0 ? "NVS" : "dev default");
+	compute_reader_group_x();
 	s_loaded = true;
 }
 
@@ -270,15 +307,67 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 		ESP_LOGW(TAG, "[conn %u] AUTH1Response SW=0x%04x (expected 0x9000)", s->conn_handle,
 			 sw);
 	}
-	/* The AUTH1Response body is AES-GCM-encrypted under the secure channel (Aliro
-	 * §12; homekey standard_auth: decrypt_response). Dump it so the ct/tag framing
-	 * can be pinned before wiring the decrypt; a plaintext TLV parse WILL fail. */
-	ESP_LOGI(TAG, "[conn %u] AUTH1Response body %u B (encrypted; to decrypt):",
-		 s->conn_handle, (unsigned)len);
-	ESP_LOG_BUFFER_HEXDUMP(TAG, pl, len, ESP_LOG_INFO);
-	if (aliro_apdu_parse_auth1_response(pl, len, &r) != 0) {
-		ESP_LOGE(TAG, "[conn %u] AUTH1Response parse failed (expected: body is encrypted)",
+	/* Establish the secure channel BEFORE reading the body: the AUTH1Response is
+	 * AES-256-GCM-encrypted under it (Aliro §8.3.1.6/.7). salt_volatile (§8.3.1.13)
+	 * = reader_group_key.x || "Volatile****" || reader_id || interface_byte(BLE) ||
+	 * 0x5C 0x02 || version || reader_eph.x || txid || flag || phone 0xA5 TLV; info =
+	 * the device (Access Credential) ephemeral pub X; ikm = Kdh (s->z). The URSK and
+	 * the ExpeditedSKReader/Device channel keys fall out of the same 160-byte block. */
+	uint8_t salt[ALIRO_SALT_MAX], block[ALIRO_KEY_BLOCK_LEN];
+	uint8_t enc[ALIRO_SESSION_KEY_LEN], dec[ALIRO_SESSION_KEY_LEN];
+	size_t slen;
+	const uint8_t *a5 = s->a5_len ? s->a5_tlv : k_a5_csa_v1;
+	size_t a5n = s->a5_len ? s->a5_len : sizeof(k_a5_csa_v1);
+
+	if (!s_have_group_x) {
+		ESP_LOGE(TAG, "[conn %u] no reader group key; cannot build session salt",
 			 s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (aliro_salt_build(ALIRO_SALT_SESSION, s->txid, s_reader_group_x,
+			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_IFACE_BLE,
+			     ALIRO_VERSION, 0x00u, 0x01u, NULL, a5, a5n, salt, &slen) != 0 ||
+	    aliro_crypto_derive_block(s->z, salt, slen, s->device_eph_pub + 1, block) != 0) {
+		ESP_LOGE(TAG, "[conn %u] key-block derivation failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	aliro_crypto_split(block, 1, enc, dec, s->ursk);
+	aliro_secchan_init(&s->sc, enc, dec);
+
+	/* Decrypt the body: <ciphertext || 16-byte GCM tag>, the first inbound message
+	 * (dec counter 1 per §8.3.1.13 init). A tag mismatch means the session key,
+	 * counter, or ct/tag framing is off — the on-hardware test of the key schedule. */
+	if (len < ALIRO_GCM_TAG_LEN) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response too short for a GCM tag (%u B)",
+			 s->conn_handle, (unsigned)len);
+		s->phase = PH_FAILED;
+		return;
+	}
+	size_t ctlen = len - ALIRO_GCM_TAG_LEN;
+	uint8_t ptbuf[256];
+
+	if (ctlen > sizeof(ptbuf)) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response too large (%u B)", s->conn_handle,
+			 (unsigned)ctlen);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (aliro_secchan_open(&s->sc, NULL, 0, pl, ctlen, pl + ctlen, ptbuf) != 0) {
+		ESP_LOGE(TAG,
+			 "[conn %u] AUTH1Response GCM auth FAILED (%u ct B): session key / "
+			 "counter / ct-tag framing mismatch",
+			 s->conn_handle, (unsigned)ctlen);
+		s->phase = PH_FAILED;
+		return;
+	}
+	ESP_LOGI(TAG, "[conn %u] AUTH1Response DECRYPTED (%u B plaintext):", s->conn_handle,
+		 (unsigned)ctlen);
+	ESP_LOG_BUFFER_HEXDUMP(TAG, ptbuf, ctlen, ESP_LOG_INFO);
+
+	if (aliro_apdu_parse_auth1_response(ptbuf, ctlen, &r) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response (decrypted) parse failed", s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
 	}
@@ -297,8 +386,8 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	}
 	if (aliro_ecdsa_p256_verify(cred_pub, td, tn, r.device_sig) != 0) {
 		ESP_LOGW(TAG,
-			 "[conn %u] device signature INVALID (expected until a "
-			 "provisioned credential is present)",
+			 "[conn %u] device signature INVALID (may need key lookup by "
+			 "identifier; the decrypt itself succeeded)",
 			 s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
@@ -329,22 +418,6 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 		return;
 	}
 
-	/* Establish the secure channel: HKDF key block -> session keys + URSK. */
-	uint8_t salt[ALIRO_SALT_MAX], block[ALIRO_KEY_BLOCK_LEN];
-	uint8_t enc[ALIRO_SESSION_KEY_LEN], dec[ALIRO_SESSION_KEY_LEN];
-	size_t slen;
-
-	if (aliro_salt_build(ALIRO_SALT_SESSION, s->txid, s->device_eph_pub + 1,
-			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_VERSION, 0x00u, 0x01u,
-			     NULL, salt, &slen) != 0 ||
-	    aliro_crypto_derive_block(s->z, salt, slen, s->device_eph_pub + 1, block) != 0) {
-		ESP_LOGE(TAG, "[conn %u] key-block derivation failed", s->conn_handle);
-		s->phase = PH_FAILED;
-		return;
-	}
-	aliro_crypto_split(block, 1, enc, dec, s->ursk);
-	aliro_secchan_init(&s->sc, enc, dec);
-
 	/* EXCHANGE: seal the URSK-ready trigger and frame it. */
 	uint8_t ex[16], ct[16], tag[ALIRO_GCM_TAG_LEN], payload[32];
 	size_t exn;
@@ -367,6 +440,27 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	if (aliro_ranging_start(s->conn_handle, s->ursk) != 0) {
 		ESP_LOGW(TAG, "[conn %u] ranging setup did not start", s->conn_handle);
 	}
+}
+
+/* Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
+ * proprietary-information TLV (short-form BER length; the A5 value is small) and
+ * copy the whole TLV (tag+len+value) into out. Returns the stored length, or 0
+ * if no well-formed 0xA5 TLV fits. */
+static size_t capture_a5_tlv(const uint8_t *pl, size_t pl_len, uint8_t *out, size_t cap)
+{
+	for (size_t i = 0; i + 2u <= pl_len; i++) {
+		if (pl[i] != 0xA5u) {
+			continue;
+		}
+		size_t vlen = pl[i + 1];         /* short-form length only */
+		size_t tlv = 2u + vlen;
+
+		if (vlen < 0x80u && i + tlv <= pl_len && tlv <= cap) {
+			memcpy(out, pl + i, tlv);
+			return tlv;
+		}
+	}
+	return 0;
 }
 
 /* Consume one inbound Aliro transaction SDU. */
@@ -405,10 +499,20 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 
 	switch (s->phase) {
 	case PH_IDLE:
-		/* First peer message = SELECT / proprietary-info. Version negotiation
-		 * rides the GATT characteristic; here we log it and drive AUTH0.
-		 * (Bench-tunable: some peers expect the reader to send AUTH0 on
-		 * channel-up rather than after this first message.) */
+		/* First peer message = op-0x05 Initiate Access Protocol, carrying the
+		 * phone's 0xA5 proprietary-info TLV. Capture that TLV for the session-key
+		 * salt (§8.3.1.13 trailing field) before driving AUTH0; fall back to the
+		 * CSA v1.0 default if the phone sent none. Version negotiation rides the
+		 * GATT characteristic. */
+		s->a5_len = capture_a5_tlv(pl, pl_len, s->a5_tlv, sizeof(s->a5_tlv));
+		if (s->a5_len == 0) {
+			ESP_LOGW(TAG,
+				 "[conn %u] no 0xA5 TLV in op-0x05; salt will use CSA v1.0 default",
+				 s->conn_handle);
+		} else {
+			ESP_LOGI(TAG, "[conn %u] captured phone 0xA5 TLV (%u B) for session salt",
+				 s->conn_handle, (unsigned)s->a5_len);
+		}
 		ESP_LOGI(TAG, "[conn %u] peer opened; starting access protocol", s->conn_handle);
 		start_auth(s);
 		break;
@@ -695,6 +799,7 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
 	s_id = id;
 	xSemaphoreGive(s_prov_lock);
+	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
 	ESP_LOGI(TAG, "Matter-provisioned reader identity stored");
 	return 0;
 }
@@ -744,6 +849,7 @@ int aliro_reader_provision_clear(void)
 	s_id = id;
 	s_trust = ts;
 	xSemaphoreGive(s_prov_lock);
+	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
 	ESP_LOGI(TAG, "reader provisioning cleared (reverted to dev identity)");
 	return 0;
 }

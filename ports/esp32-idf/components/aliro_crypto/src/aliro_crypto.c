@@ -79,8 +79,10 @@ void aliro_secchan_init(struct aliro_secchan *sc,
 {
 	memcpy(sc->enc_key, enc_key, ALIRO_SESSION_KEY_LEN);
 	memcpy(sc->dec_key, dec_key, ALIRO_SESSION_KEY_LEN);
-	sc->enc_ctr = 0;
-	sc->dec_ctr = 0;
+	/* Aliro §8.3.1 initialises both per-direction counters to 1 (NOT 0 like the
+	 * HomeKey channel). The first inbound decrypt therefore uses device_counter=1. */
+	sc->enc_ctr = 1;
+	sc->dec_ctr = 1;
 }
 
 void aliro_crypto_gcm_nonce(uint64_t direction, uint32_t counter,
@@ -157,9 +159,11 @@ static int append(uint8_t *out, size_t *pos, size_t cap, const void *src, size_t
 int aliro_salt_build(enum aliro_salt_type type, const uint8_t txid[ALIRO_TXID_LEN],
 		     const uint8_t span_s1[ALIRO_EC_PUBX_LEN],
 		     const uint8_t reader_value[ALIRO_EC_PUBX_LEN],
-		     const uint8_t reader_id[32], uint16_t proto_version,
-		     uint8_t exp_phase_type, uint8_t user_auth_policy,
-		     const uint8_t s3opt[ALIRO_EC_PUBX_LEN], uint8_t *out,
+		     const uint8_t reader_id[32], uint8_t interface_byte,
+		     uint16_t proto_version, uint8_t exp_phase_type,
+		     uint8_t user_auth_policy,
+		     const uint8_t s3opt[ALIRO_EC_PUBX_LEN],
+		     const uint8_t *a5_tlv, size_t a5_tlv_len, uint8_t *out,
 		     size_t *out_len)
 {
 	size_t pos = 0;
@@ -167,19 +171,23 @@ int aliro_salt_build(enum aliro_salt_type type, const uint8_t txid[ALIRO_TXID_LE
 	uint8_t policy[2] = { exp_phase_type, user_auth_policy };
 	int rc = 0;
 
-	/* Confirmed append order. Item 6 = the single negotiated protocol version
-	 * (big-endian); item 9 = the expedited-phase-type + user-auth-policy bytes.
-	 * The two still-unresolved Salt sub-fields (items 4 and 10) are omitted —
-	 * the interop seam to confirm at bench. */
+	/* Aliro §8.3.1.13 salt_volatile append order. Item 4 = the interface_byte
+	 * (0xC3 BLE / 0x5E NFC); item 6 = the protocol version (big-endian); item 9
+	 * = the flag (command_parameters || authentication_policy); item 10 = the
+	 * 0xA5 SELECT-response proprietary-information TLV (Table 10-2). */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, span_s1, ALIRO_EC_PUBX_LEN);       /* 1 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX,
 		     k_salt_label + (size_t)type * 12u, 12);                      /* 2 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, reader_id, 32);                    /* 3 */
+	rc |= append(out, &pos, ALIRO_SALT_MAX, &interface_byte, 1);              /* 4 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, k_salt_const, sizeof(k_salt_const)); /* 5 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, ver, sizeof(ver));                 /* 6 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, reader_value, ALIRO_EC_PUBX_LEN);  /* 7 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, txid, ALIRO_TXID_LEN);            /* 8 */
 	rc |= append(out, &pos, ALIRO_SALT_MAX, policy, sizeof(policy));           /* 9 */
+	if (a5_tlv != NULL && a5_tlv_len > 0) {                                   /* 10 */
+		rc |= append(out, &pos, ALIRO_SALT_MAX, a5_tlv, a5_tlv_len);
+	}
 	if (type != ALIRO_SALT_SESSION && s3opt != NULL) {                        /* 11 */
 		rc |= append(out, &pos, ALIRO_SALT_MAX, s3opt, ALIRO_EC_PUBX_LEN);
 	}
