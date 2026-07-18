@@ -14,6 +14,7 @@
 #include "bsp/esp-bsp.h"
 #include "led_strip.h"
 #include "led_strip_rmt.h"
+#include "lock_led.h"
 
 #include <app_priv.h>
 
@@ -21,8 +22,7 @@ static const char *TAG = "app_driver";
 
 /* Single WS2812 on the ESP32-S3-WROOM N16R8 devkit. GPIO48 per the board
  * pinout; clear of the DW3000 (GPIO 4,5,6,10-13) and of octal PSRAM (33-37). */
-#define LOCK_LED_GPIO       48
-#define LOCK_LED_BRIGHTNESS 32 /* full scale is blinding at arm's length */
+#define LOCK_LED_GPIO 48
 
 static led_strip_handle_t s_lock_led;
 
@@ -75,13 +75,7 @@ void app_driver_led_lock_state(bool locked, bool aliro)
     if (s_lock_led == NULL) {
         return; /* init failed or was never called: stay silent */
     }
-    if (locked) {
-        led_strip_clear(s_lock_led);
-        return;
-    }
-    /* Unlocked. Blue when the UWB approach path drove it, green for a Home-app
-     * or console unlock, so the two are distinguishable at a glance. */
-    led_strip_set_pixel(s_lock_led, 0, 0, aliro ? 0 : LOCK_LED_BRIGHTNESS,
-                        aliro ? LOCK_LED_BRIGHTNESS : 0);
+    struct lock_led_rgb c = lock_led_color(locked, aliro);
+    led_strip_set_pixel(s_lock_led, 0, c.r, c.g, c.b);
     led_strip_refresh(s_lock_led);
 }

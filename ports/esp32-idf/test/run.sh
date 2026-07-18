@@ -51,5 +51,15 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$PBIN"
 
 echo
+echo "== host: bolt-state LED policy =="
+MATTER_MAIN="$HERE/../../esp32-matter/main"
+LBIN="$(mktemp -t lock_led.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$MATTER_MAIN" \
+   "$HERE/test_lock_led.c" "$MATTER_MAIN/lock_led.c" -o "$LBIN"
+"$LBIN"
+rm -f "$LBIN"
+
+echo
 echo "== target: port build + link-seam guard =="
 bash "$HERE/verify_port.sh"
