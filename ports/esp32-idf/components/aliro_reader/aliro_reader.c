@@ -270,8 +270,15 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 		ESP_LOGW(TAG, "[conn %u] AUTH1Response SW=0x%04x (expected 0x9000)", s->conn_handle,
 			 sw);
 	}
+	/* The AUTH1Response body is AES-GCM-encrypted under the secure channel (Aliro
+	 * §12; homekey standard_auth: decrypt_response). Dump it so the ct/tag framing
+	 * can be pinned before wiring the decrypt; a plaintext TLV parse WILL fail. */
+	ESP_LOGI(TAG, "[conn %u] AUTH1Response body %u B (encrypted; to decrypt):",
+		 s->conn_handle, (unsigned)len);
+	ESP_LOG_BUFFER_HEXDUMP(TAG, pl, len, ESP_LOG_INFO);
 	if (aliro_apdu_parse_auth1_response(pl, len, &r) != 0) {
-		ESP_LOGE(TAG, "[conn %u] AUTH1Response parse failed", s->conn_handle);
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response parse failed (expected: body is encrypted)",
+			 s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
 	}

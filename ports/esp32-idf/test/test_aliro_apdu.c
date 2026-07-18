@@ -112,12 +112,12 @@ int main(void)
 	aliro_apdu_build_exchange(1, 0x0005, 1, out, sizeof(out), &n);
 	veq("status+ready.bytes", out, n, "970200059800");
 
-	printf("\n== AUTH0 standard path: empty phase + APDU wrap + SW strip ==\n");
+	printf("\n== AUTH0 standard path: 1-byte phase (41 01 00) + APDU wrap + SW strip ==\n");
 	okc("build.phase0", aliro_apdu_build_auth0(0x00, 0x01, 0x0100, pub, txid, rid, out,
 						   sizeof(out), &n) == 0);
-	okc("phase.empty", out[0] == 0x41 && out[1] == 0x00); /* zero-length 41 00 */
-	okc("user_pol.01", out[2] == 0x42 && out[3] == 0x01 && out[4] == 0x01);
-	okc("len==128", n == 128); /* one byte shorter than the non-empty-phase path */
+	okc("phase.1byte", out[0] == 0x41 && out[1] == 0x01 && out[2] == 0x00); /* 41 01 00, not empty */
+	okc("user_pol.01", out[3] == 0x42 && out[4] == 0x01 && out[5] == 0x01);
+	okc("len==129", n == 129);
 	{
 		uint8_t apdu[300];
 		size_t alen;
@@ -125,7 +125,7 @@ int main(void)
 		okc("wrap.ok", aliro_apdu_wrap(ALIRO_INS_AUTH0, out, n, apdu, sizeof(apdu),
 					       &alen) == 0);
 		okc("wrap.hdr", apdu[0] == 0x80 && apdu[1] == 0x80 && apdu[2] == 0x00 &&
-					apdu[3] == 0x00 && apdu[4] == (uint8_t)n);
+					apdu[3] == 0x00 && apdu[4] == (uint8_t)n); /* Lc = 0x81 */
 		okc("wrap.le0", apdu[5 + n] == 0x00);   /* Le */
 		okc("wrap.len", alen == n + 6);         /* CLA INS P1 P2 Lc <n> Le */
 	}
