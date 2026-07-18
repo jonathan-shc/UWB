@@ -59,13 +59,47 @@ handshake completes — however correct the code.
 
 ## Phase 3 plan (incremental, commit per step)
 
-- **3.1** `aliro_crypto` on mbedTLS-PSA: P-256 ECDH, ECDSA, AES-256-GCM, SHA-256, and
-  the KDF chain, plus the 160-byte derived-block / URSK schedule — with **host
-  known-answer tests**. Verifiable now, no hardware.
-- **3.2** APDU secure channel + the auth state machine, wired into `aliro_reader`'s
-  `on_data` / `aliro_ble_send` seam.
-- **3.3** completion + URSK → `woz_uwb_start_aliro(cfg)` (replacing the canned URSK).
-- **3.4** (with Phase 4) provision the reader identity/keys so a real phone can auth.
+- **3.1 — DONE (host-KAT'd + builds on target).** `aliro_crypto`
+  (`ports/esp32-idf/components/aliro_crypto`): a portable SHA-256 / HMAC / HKDF /
+  X9.63-KDF core (compiled identically on host and target) plus an mbedTLS-PSA
+  backend for AES-256-GCM and P-256 ECDH/ECDSA. On top of that, the key schedule:
+  - stage 1 `Z = SHA-256( ecdh_shared(32) ‖ 0x00000001 ‖ txid(16) )` (single-block
+    X9.63), then stage 2 `block160 = HKDF-SHA256(salt = transcript, IKM = Z,
+    info = devicePubX(32), L = 160)`, with the **URSK = block[128:160]** and the two
+    directional session keys split from the low segments;
+  - the `Kpersistent` / cryptogram-key single-block derivations (same HKDF, different
+    salt / label);
+  - the AES-256-GCM secure channel: 12-byte nonce = 8-byte big-endian direction
+    (0 = seal, 1 = open) ‖ 4-byte big-endian per-direction counter, separate
+    non-wrapping counters.
 
-**Verification reality:** end-to-end needs a provisioned phone (Phase 4). Only the 3.1
-crypto/URSK unit is verifiable now, against known-answer vectors.
+  Host KATs (`ports/esp32-idf/test/test_aliro_crypto.c`, in `run.sh`) pass against
+  FIPS-180-4, RFC 4231, RFC 5869, a GCM spec vector, and cross-check the schedule
+  wiring; the whole component also builds and links into the firmware.
+
+  Provisional: the exact byte layout of the HKDF **salt transcript** (`aliro_salt_build`)
+  — the domain labels and fixed constant are pinned, but a couple of negotiated
+  version/parameter sub-fields are placed on a best-effort basis and are the seam to
+  confirm at bench once 3.2 populates them.
+- **3.2 — IMPLEMENTED (builds; wire codec host-KAT'd).** `aliro_apdu`
+  (`ports/esp32-idf/components/aliro_reader/aliro_apdu.{c,h}`): single-byte-tag
+  BER-TLV plus the AUTH0/AUTH1 command builders, the ECDSA authentication-data
+  transcript (the exact signed bytes, with the reader/device usage domain
+  separators), the AUTH0/AUTH1 response parsers, the EXCHANGE command + the
+  zero-length `98 00` URSK-ready trigger, and the 4-byte L2CAP envelope
+  (`[type&0x3F][opcode][len_be16]`). Host KAT: `test/test_aliro_apdu.c` in `run.sh`.
+  `aliro_reader` now drives the transaction (AUTH0 → AUTH1 → EXCHANGE), running
+  ECDH + the key schedule to derive the URSK, replying via `aliro_ble_send`, with
+  heavy diagnostic logging.
+- **3.3 — IMPLEMENTED (builds).** On a completed handshake the reader binds the
+  derived URSK (`woz_uwb_bind_ursk`) and starts the responder
+  (`woz_uwb_start_aliro`); ranging parameters are canned until the M1-M4
+  negotiation is parsed (a later increment).
+- **3.4** (with Phase 4) provision the reader identity/keys + issuer trust so a real
+  phone can auth. `aliro_reader` uses a clearly-marked dev identity until then.
+
+**Verification reality:** the wire codec and the key schedule are host-KAT verified
+now; the whole firmware builds and links. The assembled transaction cannot complete
+end-to-end until the reader is provisioned (Phase 4) and a real credential is present,
+and byte-exact interop of the salt transcript is confirmed at bench with a device.
+The diagnostic logging at each step is there to make that bench bring-up tractable.
