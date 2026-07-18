@@ -152,25 +152,25 @@ static void load_provisioning(void)
  * NOT the BLE opcode — the phone rejects a raw TLV under opcode=INS. */
 static int send_ap_command(uint16_t conn, uint8_t ins, const uint8_t *tlv, size_t len)
 {
-	uint8_t apdu[600];
+	/* One buffer [type][op][len_be16][APDU]. This runs on the small nimble_host
+	 * callback stack, so build the APDU past a 4-byte header and fill the header in
+	 * place rather than staging a second frame buffer. AUTH0/AUTH1/EXCHANGE APDUs
+	 * are all well under 256 B. */
+	uint8_t frame[ALIRO_ENVELOPE_HDR + 256];
 	size_t alen;
 
-	if (aliro_apdu_wrap(ins, tlv, len, apdu, sizeof(apdu), &alen) != 0) {
+	if (aliro_apdu_wrap(ins, tlv, len, frame + ALIRO_ENVELOPE_HDR,
+			    sizeof(frame) - ALIRO_ENVELOPE_HDR, &alen) != 0) {
 		ESP_LOGE(TAG, "[conn %u] APDU wrap failed (ins 0x%02x len %u)", conn, ins,
 			 (unsigned)len);
 		return -1;
 	}
+	frame[0] = ALIRO_PROTO_ACCESS;
+	frame[1] = ALIRO_AP_OP_COMMAND;
+	frame[2] = (uint8_t)(alen >> 8);
+	frame[3] = (uint8_t)(alen & 0xffu);
 
-	uint8_t frame[600];
-	size_t flen;
-
-	if (aliro_ble_frame(ALIRO_PROTO_ACCESS, ALIRO_AP_OP_COMMAND, apdu, alen, frame,
-			    sizeof(frame), &flen) != 0) {
-		ESP_LOGE(TAG, "[conn %u] frame build failed (ins 0x%02x len %u)", conn, ins,
-			 (unsigned)alen);
-		return -1;
-	}
-	int rc = aliro_ble_send(conn, frame, flen);
+	int rc = aliro_ble_send(conn, frame, ALIRO_ENVELOPE_HDR + alen);
 
 	ESP_LOGI(TAG, "[conn %u] TX ins 0x%02x, %u APDU bytes (send rc=%d)", conn, ins,
 		 (unsigned)alen, rc);

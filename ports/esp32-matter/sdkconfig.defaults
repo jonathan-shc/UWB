@@ -12,6 +12,11 @@ CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
 # 0, so ble_l2cap_create_server() returns BLE_HS_ENOTSUP. Match the esp32-idf port.
 CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
 
+# The Aliro reader runs its P-256 credential-auth (ECDH + ECDSA sign/verify + HKDF)
+# inside the NimBLE L2CAP callback, i.e. on the nimble_host task. The 4096-byte
+# default overflows that stack mid-transaction; the software P-256 path needs more.
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=16384
+
 #enable lwip ipv6 autoconfig
 CONFIG_LWIP_IPV6_AUTOCONFIG=y
 
