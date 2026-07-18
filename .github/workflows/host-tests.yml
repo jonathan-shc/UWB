@@ -25,7 +25,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: run host KAT suite
         run: make test
 
@@ -35,7 +35,7 @@ jobs:
       CC: clang # coverage.sh's instrumentation flags are clang-only
       COV_MIN: "85" # line-% floor; total was 89.2% when set
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: install llvm (llvm-profdata / llvm-cov)
         run: sudo apt-get update -q && sudo apt-get install -y -q llvm
       - name: build instrumented + run + report
