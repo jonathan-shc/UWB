@@ -25,7 +25,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: run host KAT suite
         run: make test
 
@@ -35,7 +35,7 @@ jobs:
       CC: clang # coverage.sh's instrumentation flags are clang-only
       COV_MIN: "85" # line-% floor; total was 89.2% when set
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: install llvm (llvm-profdata / llvm-cov)
         run: sudo apt-get update -q && sudo apt-get install -y -q llvm
       - name: build instrumented + run + report
@@ -49,7 +49,7 @@ jobs:
           print(f"total line coverage {pct:.2f}% (floor {floor:.0f}%)")
           sys.exit(0 if pct >= floor else 1)
           EOF
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-html
           path: build/coverage/html

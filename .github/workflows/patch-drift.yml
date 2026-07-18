@@ -22,6 +22,6 @@ jobs:
   drift:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: apply all patches against the pinned revisions
         run: tests/tooling/patch_drift_check.sh

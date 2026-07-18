@@ -27,13 +27,13 @@ jobs:
     # filesystem it serves.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: hermetic workspace-seeding tests
         run: make test-ws
 
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: shellcheck all tracked scripts
         run: git ls-files '*.sh' | xargs shellcheck -S warning
