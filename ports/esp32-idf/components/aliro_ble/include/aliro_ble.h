@@ -73,6 +73,14 @@ const struct ble_gatt_svc_def *aliro_ble_service_def(void);
  *  advertising. Returns 0 on success. */
 int aliro_ble_start_attached(void);
 
+/** Set the provisioned Aliro advertising params (BLE-UWB approach discovery): the
+ *  truncated reader group id (8) + sub id (2), the group resolving key (16) for
+ *  the dynamic tag, and the tx-power byte. Call before start_attached(); once set,
+ *  the reader advertises the full resolvable 0xFFF2 service data instead of the
+ *  bare service UUID, so the phone can approach-connect. */
+void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
+			      const uint8_t grk[16], int8_t tx_power);
+
 #ifdef __cplusplus
 }
 #endif

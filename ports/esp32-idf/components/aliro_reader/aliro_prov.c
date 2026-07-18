@@ -32,13 +32,15 @@ static const uint8_t k_dev_sign_priv[ALIRO_READER_PRIV_LEN] = {
 };
 
 static const uint8_t k_magic[4] = { 'A', 'P', 'R', 'V' };
-#define ALIRO_PROV_VERSION 0x01u
-#define ALIRO_PROV_FLAG_DEV 0x01u
+#define ALIRO_PROV_VERSION   0x02u /* current: includes grk(16) */
+#define ALIRO_PROV_VERSION_1 0x01u /* legacy: no grk (still parsed) */
+#define ALIRO_PROV_FLAG_DEV  0x01u
 
 void aliro_prov_dev_default(struct aliro_reader_identity *id,
 			    struct aliro_trust_store *ts)
 {
 	if (id != NULL) {
+		memset(id, 0, sizeof(*id)); /* zeroes grk (dev has none) + padding */
 		memcpy(id->reader_id, k_dev_reader_id, ALIRO_READER_ID_LEN);
 		memcpy(id->sign_priv, k_dev_sign_priv, ALIRO_READER_PRIV_LEN);
 		id->is_dev = true;
@@ -59,7 +61,7 @@ int aliro_prov_serialize(const struct aliro_reader_identity *id,
 	}
 
 	size_t need = ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN +
-		      ALIRO_READER_PRIV_LEN + 1u +
+		      ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN + 1u +
 		      (size_t)count * ALIRO_CRED_PUB_LEN;
 
 	if (out == NULL || cap < need) {
@@ -76,6 +78,8 @@ int aliro_prov_serialize(const struct aliro_reader_identity *id,
 	p += ALIRO_READER_ID_LEN;
 	memcpy(p, id->sign_priv, ALIRO_READER_PRIV_LEN);
 	p += ALIRO_READER_PRIV_LEN;
+	memcpy(p, id->grk, ALIRO_GRK_LEN);
+	p += ALIRO_GRK_LEN;
 	*p++ = count;
 	for (uint8_t i = 0; i < count; i++) {
 		memcpy(p, ts->cred_pub[i], ALIRO_CRED_PUB_LEN);
@@ -92,14 +96,25 @@ int aliro_prov_deserialize(const uint8_t *buf, size_t len,
 			   struct aliro_reader_identity *id,
 			   struct aliro_trust_store *ts)
 {
-	const size_t fixed = ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN +
-			     ALIRO_READER_PRIV_LEN + 1u;
-
-	if (buf == NULL || len < fixed) {
+	if (buf == NULL || len < ALIRO_PROV_BLOB_HDR ||
+	    memcmp(buf, k_magic, sizeof(k_magic)) != 0) {
 		return -1;
 	}
-	if (memcmp(buf, k_magic, sizeof(k_magic)) != 0 ||
-	    buf[4] != ALIRO_PROV_VERSION) {
+
+	/* grk was added in v2; v1 blobs (no grk) are still parsed for back-compat. */
+	size_t grk_len;
+	if (buf[4] == ALIRO_PROV_VERSION) {
+		grk_len = ALIRO_GRK_LEN;
+	} else if (buf[4] == ALIRO_PROV_VERSION_1) {
+		grk_len = 0u;
+	} else {
+		return -1;
+	}
+
+	const size_t fixed = ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN +
+			     ALIRO_READER_PRIV_LEN + grk_len + 1u;
+
+	if (len < fixed) {
 		return -1;
 	}
 
@@ -116,6 +131,12 @@ int aliro_prov_deserialize(const uint8_t *buf, size_t len,
 		id->is_dev = (buf[5] & ALIRO_PROV_FLAG_DEV) != 0u;
 		memcpy(id->reader_id, p, ALIRO_READER_ID_LEN);
 		memcpy(id->sign_priv, p + ALIRO_READER_ID_LEN, ALIRO_READER_PRIV_LEN);
+		if (grk_len == ALIRO_GRK_LEN) {
+			memcpy(id->grk, p + ALIRO_READER_ID_LEN + ALIRO_READER_PRIV_LEN,
+			       ALIRO_GRK_LEN);
+		} else {
+			memset(id->grk, 0, ALIRO_GRK_LEN);
+		}
 	}
 	if (ts != NULL) {
 		memset(ts, 0, sizeof(*ts));

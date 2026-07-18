@@ -189,7 +189,7 @@ CHIP_ERROR AliroReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
 	memcpy(readerId, mGroupIdentifier, sizeof(mGroupIdentifier));
 	memcpy(readerId + sizeof(mGroupIdentifier), mGroupSubIdentifier,
 	       sizeof(mGroupSubIdentifier));
-	int rc = aliro_reader_provision_identity(readerId, mSigningKey);
+	int rc = aliro_reader_provision_identity(readerId, mSigningKey, mGroupResolvingKey);
 
 	ChipLogProgress(Zcl,
 			"Aliro reader configured — identity provisioned (groupResolvingKey=%d, "

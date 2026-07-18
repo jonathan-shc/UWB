@@ -58,9 +58,11 @@ int aliro_reader_trust_last(void);
 
 /** Store the reader identity provisioned over Matter and persist it to NVS:
  *  reader_id = groupIdentifier(16) || groupSubIdentifier(16),
- *  sign_priv = signingKey(32); clears the dev flag. Existing trust anchors are
- *  preserved. Returns 0 on success, negative on an NVS error. */
-int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t sign_priv[32]);
+ *  sign_priv = signingKey(32), grk = groupResolvingKey(16) for the BLE-UWB
+ *  advertising dynamic tag (pass all-zero if none); clears the dev flag. Existing
+ *  trust anchors are preserved. Returns 0 on success, negative on an NVS error. */
+int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t sign_priv[32],
+				    const uint8_t grk[16]);
 
 /** Add a trusted credential public key (uncompressed P-256, 65 bytes) presented
  *  over Matter SetCredential and persist. Returns 0 (added), 1 (already

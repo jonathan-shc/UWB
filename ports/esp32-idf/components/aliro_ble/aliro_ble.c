@@ -20,6 +20,9 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#include "host/ble_hs_id.h"
+
+#include "mbedtls/aes.h"
 
 #include "aliro_ble.h"
 
@@ -54,6 +57,15 @@ static uint8_t s_read_payload[2u + 1u + (2u * ALIRO_MAX_VERSIONS) + 1u + 1u];
 static uint16_t s_read_payload_len;
 
 static uint8_t s_own_addr_type;
+
+/* Provisioned Aliro advertising params (set via aliro_ble_set_adv_params). With
+ * s_adv_aliro set, aliro_advertise emits the full 0xFFF2 service data + a
+ * GroupResolvingKey-derived dynamic tag; else the bare service UUID (Phase-2). */
+static uint8_t s_adv_group_id[8];
+static uint8_t s_adv_sub_id[2];
+static uint8_t s_adv_grk[16];
+static int8_t s_adv_tx_power;
+static bool s_adv_aliro;
 
 static void aliro_advertise(void);
 
@@ -318,18 +330,89 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 	}
 }
 
+/* Assemble the 0xFFF2 service data (26 B = 2-byte UUID + 24-byte payload) with the
+ * GroupResolvingKey dynamic tag. Payload layout (bytes 0..23):
+ *   [0]      flags: bit7 = BLE+UWB supported, bits2:0 = version (0)
+ *   [1]      tx power (int8)
+ *   [2..9]   truncated reader group id (8)     = reader_id[0..7]
+ *   [10..11] truncated reader group sub id (2) = reader_id[16..17]
+ *   [12..15] dynamic-tag expiry, big-endian (0xFFFFFFFF = no clock)
+ *   [16]     reserved (0)
+ *   [17..23] dynamic tag = AES-128(GRK, 00*6 ‖ reverse(AdvA) ‖ BE32(expiry))[0..6]
+ * Reverse-engineered from libaliro_ble.a (AliroStack::GenerateAdvertisingData +
+ * BleDynamicTag::Generate). AdvA orientation is the top bench-tunable. */
+static bool build_aliro_svc_data(uint8_t out[26])
+{
+	uint8_t id_addr_type =
+		(s_own_addr_type == BLE_OWN_ADDR_PUBLIC) ? BLE_ADDR_PUBLIC : BLE_ADDR_RANDOM;
+	uint8_t adva[6];
+
+	if (ble_hs_id_copy_addr(id_addr_type, adva, NULL) != 0) {
+		ESP_LOGW(TAG, "adv: no identity address for the dynamic tag");
+		return false;
+	}
+
+	uint8_t block[16] = {0}; /* first 6 bytes are the zero pad */
+	for (int i = 0; i < 6; i++) {
+		block[6 + i] = adva[5 - i]; /* reverse(AdvA) */
+	}
+	block[12] = block[13] = block[14] = block[15] = 0xFFu; /* BE32 expiry = no clock */
+
+	uint8_t enc[16];
+	mbedtls_aes_context aes;
+
+	mbedtls_aes_init(&aes);
+	int rc = mbedtls_aes_setkey_enc(&aes, s_adv_grk, 128);
+	if (rc == 0) {
+		rc = mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, block, enc);
+	}
+	mbedtls_aes_free(&aes);
+	if (rc != 0) {
+		ESP_LOGE(TAG, "adv: dynamic-tag AES rc=%d", rc);
+		return false;
+	}
+
+	uint8_t *p = out;
+
+	*p++ = 0xF2u; /* 0xFFF2 service UUID, little-endian */
+	*p++ = 0xFFu;
+	*p++ = 0x80u; /* flags: BLE+UWB supported, version 0, notif 0 */
+	*p++ = (uint8_t)s_adv_tx_power;
+	memcpy(p, s_adv_group_id, sizeof(s_adv_group_id));
+	p += sizeof(s_adv_group_id);
+	memcpy(p, s_adv_sub_id, sizeof(s_adv_sub_id));
+	p += sizeof(s_adv_sub_id);
+	*p++ = 0xFFu;
+	*p++ = 0xFFu;
+	*p++ = 0xFFu;
+	*p++ = 0xFFu; /* expiry BE32 = 0xFFFFFFFF */
+	*p++ = 0x00u; /* reserved */
+	memcpy(p, enc, 7); /* dynamic tag (first 7 bytes) */
+	return true;
+}
+
 static void aliro_advertise(void)
 {
 	struct ble_hs_adv_fields fields = {0};
-	const char *name = ble_svc_gap_device_name();
+	uint8_t svc_data[26];
 
 	fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-	fields.uuids16 = (ble_uuid16_t[]){BLE_UUID16_INIT(0xFFF2u)};
-	fields.num_uuids16 = 1;
-	fields.uuids16_is_complete = 1;
-	fields.name = (uint8_t *)name;
-	fields.name_len = (uint8_t)strlen(name);
-	fields.name_is_complete = 1;
+
+	if (s_adv_aliro && build_aliro_svc_data(svc_data)) {
+		/* Full Aliro service data — what the iPhone resolves to approach-connect. */
+		fields.svc_data_uuid16 = svc_data;
+		fields.svc_data_uuid16_len = sizeof(svc_data);
+	} else {
+		/* Fallback (unprovisioned / no GRK): bare service UUID + name (Phase-2). */
+		const char *name = ble_svc_gap_device_name();
+
+		fields.uuids16 = (ble_uuid16_t[]){BLE_UUID16_INIT(0xFFF2u)};
+		fields.num_uuids16 = 1;
+		fields.uuids16_is_complete = 1;
+		fields.name = (uint8_t *)name;
+		fields.name_len = (uint8_t)strlen(name);
+		fields.name_is_complete = 1;
+	}
 
 	int rc = ble_gap_adv_set_fields(&fields);
 	if (rc != 0) {
@@ -470,6 +553,16 @@ int aliro_ble_start_attached(void)
 		 (unsigned)ALIRO_L2CAP_SPSM);
 	aliro_advertise();
 	return 0;
+}
+
+void aliro_ble_set_adv_params(const uint8_t group_id8[8], const uint8_t sub_id2[2],
+			      const uint8_t grk[16], int8_t tx_power)
+{
+	memcpy(s_adv_group_id, group_id8, sizeof(s_adv_group_id));
+	memcpy(s_adv_sub_id, sub_id2, sizeof(s_adv_sub_id));
+	memcpy(s_adv_grk, grk, sizeof(s_adv_grk));
+	s_adv_tx_power = tx_power;
+	s_adv_aliro = true;
 }
 
 uint16_t aliro_ble_spsm(void)

@@ -27,6 +27,7 @@ extern "C" {
 #define ALIRO_READER_PRIV_LEN 32u
 #define ALIRO_CRED_PUB_LEN    65u /* uncompressed P-256 point: 0x04 | X | Y */
 #define ALIRO_TRUST_MAX       4u  /* trusted credential keys the store holds */
+#define ALIRO_GRK_LEN         16u /* group resolving key (Aliro BLE-UWB adv tag) */
 
 /*
  * The reader's provisioned identity. reader_id rides AUTH0 and both ECDSA
@@ -36,6 +37,7 @@ extern "C" {
 struct aliro_reader_identity {
 	uint8_t reader_id[ALIRO_READER_ID_LEN];
 	uint8_t sign_priv[ALIRO_READER_PRIV_LEN];
+	uint8_t grk[ALIRO_GRK_LEN]; /* group resolving key; all-zero if none */
 	bool    is_dev;
 };
 
@@ -50,11 +52,11 @@ struct aliro_trust_store {
 	uint8_t cred_pub[ALIRO_TRUST_MAX][ALIRO_CRED_PUB_LEN];
 };
 
-/* Serialised blob: magic(4) ver(1) flags(1) reader_id(32) sign_priv(32) count(1)
- * then count * cred_pub(65). */
+/* Serialised blob v2: magic(4) ver(1) flags(1) reader_id(32) sign_priv(32)
+ * grk(16) count(1) then count * cred_pub(65). (v1 had no grk; still parsed.) */
 #define ALIRO_PROV_BLOB_HDR 6u
 #define ALIRO_PROV_BLOB_MAX (ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN + \
-			     ALIRO_READER_PRIV_LEN + 1u + \
+			     ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN + 1u + \
 			     (size_t)ALIRO_TRUST_MAX * ALIRO_CRED_PUB_LEN)
 
 /* ---- portable core (aliro_prov.c) --------------------------------------- */

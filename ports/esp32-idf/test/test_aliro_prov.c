@@ -61,6 +61,9 @@ int main(void)
 	for (unsigned i = 0; i < ALIRO_READER_PRIV_LEN; i++) {
 		id.sign_priv[i] = (uint8_t)(0x50 + i);
 	}
+	for (unsigned i = 0; i < ALIRO_GRK_LEN; i++) {
+		id.grk[i] = (uint8_t)(0x30 + i);
+	}
 	id.is_dev = false;
 	memset(&ts, 0, sizeof(ts));
 	uint8_t k0[ALIRO_CRED_PUB_LEN], k1[ALIRO_CRED_PUB_LEN];
@@ -73,7 +76,8 @@ int main(void)
 
 	okc("ser.ok", aliro_prov_serialize(&id, &ts, blob, sizeof(blob), &n) == 0);
 	okc("ser.len", n == ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN +
-			   ALIRO_READER_PRIV_LEN + 1u + 2u * ALIRO_CRED_PUB_LEN);
+			   ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN + 1u +
+			   2u * ALIRO_CRED_PUB_LEN);
 	okc("ser.magic", blob[0] == 'A' && blob[1] == 'P' && blob[2] == 'R' &&
 			 blob[3] == 'V');
 
@@ -81,6 +85,7 @@ int main(void)
 	okc("de.is_dev", id2.is_dev == false);
 	okc("de.reader_id", memcmp(id2.reader_id, id.reader_id, ALIRO_READER_ID_LEN) == 0);
 	okc("de.sign_priv", memcmp(id2.sign_priv, id.sign_priv, ALIRO_READER_PRIV_LEN) == 0);
+	okc("de.grk", memcmp(id2.grk, id.grk, ALIRO_GRK_LEN) == 0);
 	okc("de.count", ts2.count == 2);
 	okc("de.k0", memcmp(ts2.cred_pub[0], k0, ALIRO_CRED_PUB_LEN) == 0);
 	okc("de.k1", memcmp(ts2.cred_pub[1], k1, ALIRO_CRED_PUB_LEN) == 0);
@@ -89,7 +94,7 @@ int main(void)
 	aliro_prov_dev_default(&id, &ts);
 	okc("ser.dev.ok", aliro_prov_serialize(&id, &ts, blob, sizeof(blob), &n) == 0);
 	okc("ser.dev.len", n == ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN +
-			       ALIRO_READER_PRIV_LEN + 1u);
+			       ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN + 1u);
 	okc("de.dev.ok", aliro_prov_deserialize(blob, n, &id2, &ts2) == 0);
 	okc("de.dev.flag", id2.is_dev == true);
 	okc("de.dev.count", ts2.count == 0);
@@ -113,11 +118,12 @@ int main(void)
 	okc("de.badmagic", aliro_prov_deserialize(bad, n, &id2, &ts2) == -1);
 
 	memcpy(bad, blob, n);
-	bad[4] = 0x02;
+	bad[4] = 0xFF; /* unknown version (0x01/0x02 are valid) */
 	okc("de.badver", aliro_prov_deserialize(bad, n, &id2, &ts2) == -1);
 
 	memcpy(bad, blob, n);
-	bad[ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN + ALIRO_READER_PRIV_LEN] = ALIRO_TRUST_MAX + 1;
+	bad[ALIRO_PROV_BLOB_HDR + ALIRO_READER_ID_LEN + ALIRO_READER_PRIV_LEN + ALIRO_GRK_LEN] =
+		ALIRO_TRUST_MAX + 1;
 	okc("de.badcount", aliro_prov_deserialize(bad, n, &id2, &ts2) == -1);
 
 	/* count says 1 but the buffer is truncated by a byte. */

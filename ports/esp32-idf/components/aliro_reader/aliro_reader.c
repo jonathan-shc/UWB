@@ -478,6 +478,25 @@ int aliro_reader_start_attached(void)
 	if (reader_engine_init() != 0) {
 		return -1;
 	}
+
+	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): the phone
+	 * resolves "its" reader by re-deriving the dynamic tag from the GroupResolvingKey.
+	 * groupId = reader_id[0..7], subId = reader_id[16..17] (the reader identity is
+	 * groupIdentifier(16) || groupSubIdentifier(16)). Only advertise the resolvable
+	 * service data when a real GRK is present (Matter-provisioned). */
+	bool have_grk = false;
+	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
+		if (s_id.grk[i] != 0u) {
+			have_grk = true;
+			break;
+		}
+	}
+	if (have_grk) {
+		const uint8_t sub2[2] = { s_id.reader_id[16], s_id.reader_id[17] };
+
+		aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
+	}
+
 	int rc = aliro_ble_start_attached();
 
 	ESP_LOGI(TAG, "aliro_reader_start_attached: %s (SPSM 0x%04x)", rc == 0 ? "up" : "FAILED",
@@ -570,7 +589,8 @@ int aliro_reader_trust_last(void)
  * then-store keeps NVS and the in-memory copy consistent under s_prov_lock. */
 
 int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN],
-				    const uint8_t sign_priv[ALIRO_READER_PRIV_LEN])
+				    const uint8_t sign_priv[ALIRO_READER_PRIV_LEN],
+				    const uint8_t grk[ALIRO_GRK_LEN])
 {
 	load_provisioning();
 
@@ -579,6 +599,7 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 
 	memcpy(id.reader_id, reader_id, ALIRO_READER_ID_LEN);
 	memcpy(id.sign_priv, sign_priv, ALIRO_READER_PRIV_LEN);
+	memcpy(id.grk, grk, ALIRO_GRK_LEN);
 	id.is_dev = false;
 
 	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
