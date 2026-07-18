@@ -43,10 +43,10 @@
 #define LOG_MODULE_DECLARE(name, ...)                                                              \
 	static const char *const WOZ_LOG_TAG __attribute__((unused)) = #name
 
-#define LOG_ERR(...) ESP_LOGE(WOZ_LOG_TAG, __VA_ARGS__)
-#define LOG_WRN(...) ESP_LOGW(WOZ_LOG_TAG, __VA_ARGS__)
-#define LOG_INF(...) ESP_LOGI(WOZ_LOG_TAG, __VA_ARGS__)
-#define LOG_DBG(...) ESP_LOGD(WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_ERR(...)    ESP_LOGE(WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_WRN(...)    ESP_LOGW(WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_INF(...)    ESP_LOGI(WOZ_LOG_TAG, __VA_ARGS__)
+#define LOG_DBG(...)    ESP_LOGD(WOZ_LOG_TAG, __VA_ARGS__)
 #define LOG_PRINTK(...) printf(__VA_ARGS__)
 
 #define LOG_HEXDUMP_ERR(p, l, s) ESP_LOG_BUFFER_HEX_LEVEL(WOZ_LOG_TAG, (p), (l), ESP_LOG_ERROR)
@@ -87,7 +87,7 @@
 
 /* printk did map to stdio in the host shim, and some diagnostics are asserted
  * on in test output, so keep woz_printf real here. */
-#define woz_printf(...) printf(__VA_ARGS__)
+#define woz_printf(...)      printf(__VA_ARGS__)
 #ifndef printk
 #define printk(...) printf(__VA_ARGS__) /* see WOZ_PRINTK_COMPAT below */
 #endif

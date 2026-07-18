@@ -708,8 +708,8 @@ int32_t __wrap_dwt_rxenable(int32_t mode)
 			__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND);
 #endif
 
-			/* Synchronous woz_printf (survives deferred-log starvation); rd==wr proves the
-			 * key reached the register, slot proves the index clock advances. */
+			/* Synchronous woz_printf (survives deferred-log starvation); rd==wr proves
+			 * the key reached the register, slot proves the index clock advances. */
 			if (g_rx_arms < CCC_RX_LOG_ARMS) {
 				DIAGK("ccc_rx arm#%u slot=%u key0 wr %08x rd %08x iv2=%08x\n",
 				      (unsigned)g_rx_arms, (unsigned)slot, k.key0,
@@ -1058,9 +1058,9 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		int tr = -1;
 
 		g_await_poll = false;
-		/* Time-critical FIRST: arm Response_0's delayed TX before the stsq read and woz_printf.
-		 * cper=0 => real POLL, so delayed-TX Response_0 (index+1); else return to the SP0
-		 * listen. */
+		/* Time-critical FIRST: arm Response_0's delayed TX before the stsq read and
+		 * woz_printf. cper=0 => real POLL, so delayed-TX Response_0 (index+1); else return
+		 * to the SP0 listen. */
 		if (cper == 0u && ip != 0u) {
 			g_poll_ip_for_final = ip; /* round anchor for the Final RX arm (TXDONE) */
 			g_t_poll_rx = ip40;       /* t2: responder POLL RX */

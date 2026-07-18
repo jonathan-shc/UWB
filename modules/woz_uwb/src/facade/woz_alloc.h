@@ -19,7 +19,8 @@ static inline void *qmalloc(size_t size)
 	return woz_malloc(size);
 }
 
-// Allocate and zero-initialize nb_items elements of item_size bytes each; wrapper around woz_calloc.
+// Allocate and zero-initialize nb_items elements of item_size bytes each; wrapper around
+// woz_calloc.
 static inline void *qcalloc(size_t nb_items, size_t item_size)
 {
 	return woz_calloc(nb_items, item_size);

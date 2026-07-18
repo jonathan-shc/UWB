@@ -9,7 +9,7 @@
 #define DIAGK(...)                                                                                 \
 	do {                                                                                       \
 		if (0) {                                                                           \
-			woz_printf(__VA_ARGS__);                                                       \
+			woz_printf(__VA_ARGS__);                                                   \
 		}                                                                                  \
 	} while (0)
 #else
