@@ -23,10 +23,5 @@ bench.env
 CLAUDE.md
 .claude/
 
-<<<<<<< HEAD
 # internal working notes / plans (not part of the project)
-||||||| parent of b1afa7f (gitignore(add): added internal directory)
-=======
-# internal
->>>>>>> b1afa7f (gitignore(add): added internal directory)
 internal/
