@@ -409,18 +409,10 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
 	transaction_feed(s, data, len);
 }
 
-int aliro_reader_start(void)
+/* The reader's BLE transport config: advertised versions/features + the
+ * transaction transport callbacks. Shared by the standalone + attached starts. */
+static struct aliro_ble_config make_ble_cfg(void)
 {
-	if (aliro_crypto_init() != 0) {
-		ESP_LOGE(TAG, "crypto init failed");
-		return -1;
-	}
-	load_provisioning();
-	if (aliro_ranging_init() != 0) {
-		ESP_LOGW(TAG, "UWB ranging adapter unavailable; auth will run but "
-			      "ranging setup won't start");
-	}
-
 	const struct aliro_ble_config cfg = {
 		.proto_versions = k_proto_versions,
 		.proto_versions_count = sizeof(k_proto_versions) / sizeof(k_proto_versions[0]),
@@ -437,10 +429,58 @@ int aliro_reader_start(void)
 				.on_disconnected = on_disconnected,
 			},
 	};
+	return cfg;
+}
 
+/* crypto + provisioning load + UWB ranging setup, shared by both start paths. */
+static int reader_engine_init(void)
+{
+	if (aliro_crypto_init() != 0) {
+		ESP_LOGE(TAG, "crypto init failed");
+		return -1;
+	}
+	load_provisioning();
+	if (aliro_ranging_init() != 0) {
+		ESP_LOGW(TAG, "UWB ranging adapter unavailable; auth will run but "
+			      "ranging setup won't start");
+	}
+	return 0;
+}
+
+int aliro_reader_start(void)
+{
+	if (reader_engine_init() != 0) {
+		return -1;
+	}
+	struct aliro_ble_config cfg = make_ble_cfg();
 	int rc = aliro_ble_start(&cfg);
 
 	ESP_LOGI(TAG, "aliro_reader_start: transport %s (SPSM 0x%04x)", rc == 0 ? "up" : "FAILED",
+		 aliro_ble_spsm());
+	return rc;
+}
+
+/* ---- attach mode: share a host another stack (e.g. Matter) owns ---------- */
+
+const void *aliro_reader_ble_prepare(void)
+{
+	struct aliro_ble_config cfg = make_ble_cfg();
+
+	if (aliro_ble_prepare(&cfg) != 0) {
+		ESP_LOGE(TAG, "aliro_ble_prepare failed");
+		return NULL;
+	}
+	return aliro_ble_service_def();
+}
+
+int aliro_reader_start_attached(void)
+{
+	if (reader_engine_init() != 0) {
+		return -1;
+	}
+	int rc = aliro_ble_start_attached();
+
+	ESP_LOGI(TAG, "aliro_reader_start_attached: %s (SPSM 0x%04x)", rc == 0 ? "up" : "FAILED",
 		 aliro_ble_spsm());
 	return rc;
 }

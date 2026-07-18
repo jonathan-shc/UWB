@@ -32,6 +32,9 @@
 #include <woz_uwb_facade.h>
 #include "door_lock_manager.h"
 #include <platform/PlatformManager.h>
+#include <vector>
+#include "host/ble_gatt.h"                 // struct ble_gatt_svc_def (NimBLE)
+#include <platform/ESP32/BLEManagerImpl.h> // BLEMgrImpl().ConfigureExtraServices()
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #endif
@@ -55,17 +58,59 @@ static const char *s_decryption_key = decryption_key_start;
 static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key_start;
 #endif // CONFIG_ENABLE_ENCRYPTED_OTA
 
-// NOTE: the BLE *handoff* (start the Aliro reader on kBLEDeinitialized, after
-// Matter reclaims BLE) has been removed — it crashed on silicon. Once Matter runs
-// esp_bt_mem_release(ESP_BT_MODE_BLE) the controller memory is gone, so the
-// reader's nimble_port_init() cannot re-init the controller (btdm_controller_init
-// -> LoadProhibited, reboot loop). The correct model is BLE *coexistence*: keep
-// BLE up (CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n) and run the reader in "attach
-// mode" on Matter's live NimBLE host (register its GATT service via
-// BLEMgrImpl().ConfigureExtraServices(), keep the L2CAP CoC, advertise once Matter
-// releases the advertiser). That reader wiring is the next step; until a Wallet
-// credential is actually provisioned there is nothing for it to authenticate, so
-// the reader is intentionally not started here yet.
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+// BLE coexistence (nRF-style local UWB unlock): the Aliro reader shares Matter's
+// NimBLE host — Matter keeps BLE up (CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n), its
+// GATT service is registered via BLEMgrImpl().ConfigureExtraServices() before
+// esp_matter::start (see app_main), and the reader's advertiser + L2CAP CoC come
+// up once the device is operational (Matter has released the single legacy
+// advertiser: after commissioning, or immediately when already paired). A trusted
+// UWB range then drives the Matter lock to Unlocked. This replaces the old handoff,
+// which crashed because NimBLE can't be re-inited after Matter reclaims BLE.
+#define ALIRO_UNLOCK_RANGE_CM 100 // bench-tunable
+
+static void aliro_reader_task(void *arg)
+{
+	// Give Matter's host time to finish syncing and stop advertising before we
+	// take over the (single, shared) legacy advertiser.
+	vTaskDelay(pdMS_TO_TICKS(1000));
+
+	int rc = aliro_reader_start_attached();
+	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
+		 rc == 0 ? "reader advertising on shared host" : "reader start FAILED");
+
+	bool armed = true;
+	while (true) {
+		int32_t cm;
+		if (woz_uwb_trusted_range_cm(&cm)) {
+			if (armed && cm >= 0 && cm <= ALIRO_UNLOCK_RANGE_CM) {
+				ESP_LOGI(TAG, "Aliro trusted range %d cm (<= %d): unlocking",
+					 (int)cm, ALIRO_UNLOCK_RANGE_CM);
+				chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+					BoltLockMgr().Unlock(door_lock_endpoint_id,
+							     chip::app::Clusters::DoorLock::
+								     OperationSourceEnum::kAliro);
+				});
+				armed = false; // debounce until the peer leaves range
+			}
+		} else {
+			armed = true; // no trusted range; re-arm
+		}
+		vTaskDelay(pdMS_TO_TICKS(200));
+	}
+}
+
+static void start_aliro_reader_once(void)
+{
+	static bool started = false;
+	if (started) {
+		return;
+	}
+	started = true;
+	xTaskCreate(aliro_reader_task, "aliro_reader", 8192, nullptr, 5, nullptr);
+	ESP_LOGI(TAG, "Aliro reader (attach mode) task started");
+}
+#endif // CONFIG_ENABLE_ALIRO_BLE_UWB
 
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
@@ -76,6 +121,11 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 
 	case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
 		ESP_LOGI(TAG, "Commissioning complete");
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+		// Matter stops advertising when commissioning completes; the reader can
+		// now take the advertiser and run the local BLE+UWB Aliro transaction.
+		start_aliro_reader_once();
+#endif
 		break;
 
 	case chip::DeviceLayer::DeviceEventType::kFailSafeTimerExpired:
@@ -236,6 +286,27 @@ extern "C" void app_main()
 	set_openthread_platform_config(&config);
 #endif
 
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+	/* Register the Aliro reader's GATT service on Matter's NimBLE host BEFORE the
+	 * Matter server builds its GATT table, so the reader's 0xFFF2 service coexists
+	 * with CHIPoBLE. Must be called before esp_matter::start (which runs InitServer). */
+	{
+		const struct ble_gatt_svc_def *aliro_svc =
+			static_cast<const struct ble_gatt_svc_def *>(aliro_reader_ble_prepare());
+		if (aliro_svc != nullptr) {
+			std::vector<struct ble_gatt_svc_def> svcs = {*aliro_svc};
+			CHIP_ERROR e =
+				chip::DeviceLayer::Internal::BLEMgrImpl().ConfigureExtraServices(
+					svcs, true);
+			ESP_LOGI(TAG, "Aliro GATT extra-service register: %" CHIP_ERROR_FORMAT,
+				 e.Format());
+		} else {
+			ESP_LOGE(TAG,
+				 "aliro_reader_ble_prepare failed; reader GATT not registered");
+		}
+	}
+#endif
+
 	/* Matter start */
 	err = esp_matter::start(app_event_cb);
 	ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
@@ -247,6 +318,15 @@ extern "C" void app_main()
 
 	/* do nothing now */
 	door_lock_init();
+
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+	/* Already commissioned (e.g. a reboot): Matter is not advertising over BLE, so
+	 * bring the reader up now. A fresh commission starts it on kCommissioningComplete. */
+	if (chip::Server::GetInstance().GetFabricTable().FabricCount() > 0) {
+		ESP_LOGI(TAG, "Already commissioned; starting Aliro reader on shared host");
+		start_aliro_reader_once();
+	}
+#endif
 
 #if CONFIG_ENABLE_ENCRYPTED_OTA
 	err = esp_matter_ota_requestor_encrypted_init(s_decryption_key, s_decryption_key_len);

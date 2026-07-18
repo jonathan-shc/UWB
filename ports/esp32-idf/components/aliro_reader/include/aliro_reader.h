@@ -21,6 +21,21 @@ extern "C" {
  *  Returns 0 on success, negative on failure. */
 int aliro_reader_start(void);
 
+/* ---- Attach mode: coexist with a host another stack owns (esp-matter) ----- *
+ * Two phases so the reader shares one BLE controller with Matter:
+ * aliro_reader_ble_prepare() runs BEFORE the host stack starts its GATT server
+ * and returns the Aliro GATT service definition to register via that stack's
+ * hook; aliro_reader_start_attached() runs once the host is up + the device is
+ * operational (the owner has released the advertiser). */
+
+/** Prepare the reader for attach mode + return the Aliro GATT service def to
+ *  register (cast to `const struct ble_gatt_svc_def *`). NULL on failure. */
+const void *aliro_reader_ble_prepare(void);
+
+/** Start the reader on the shared host (L2CAP CoC + advertising + engine).
+ *  Returns 0 on success, negative on failure. */
+int aliro_reader_start_attached(void);
+
 /* ---- Bench provisioning helpers (Phase 3.4) ---------------------------- *
  * Back the `aliro-prov` / `aliro-trust` console commands. Kept as plain calls
  * so the shell does not need the internal aliro_prov types. */

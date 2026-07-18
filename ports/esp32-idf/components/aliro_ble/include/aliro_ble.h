@@ -53,6 +53,26 @@ uint16_t aliro_ble_spsm(void);
 /** Send an SDU to the peer over its L2CAP channel (2.2+). Returns 0 on success. */
 int aliro_ble_send(uint16_t conn_handle, const uint8_t *data, size_t len);
 
+/* ---- Attach mode: share a NimBLE host another stack already owns ---------- *
+ * Instead of owning NimBLE (aliro_ble_start), the reader can attach to a host
+ * brought up by e.g. esp-matter, so both coexist on one controller. Three
+ * phases: prepare() captures the config; the owner registers our GATT service
+ * (aliro_ble_service_def()) through its extra-services hook BEFORE it starts its
+ * GATT server; start_attached() brings up the L2CAP CoC + advertising once the
+ * host is synced and the owner has released the advertiser (post-commissioning). */
+struct ble_gatt_svc_def; /* NimBLE type, opaque here */
+
+/** Capture config + build the READ payload; does NOT touch NimBLE. 0 on ok. */
+int aliro_ble_prepare(const struct aliro_ble_config *cfg);
+
+/** The Aliro GATT service definition, to hand to the host owner's
+ *  register-extra-services hook. Valid after aliro_ble_prepare(). */
+const struct ble_gatt_svc_def *aliro_ble_service_def(void);
+
+/** Bring up the reader on the already-synced shared host: L2CAP CoC +
+ *  advertising. Returns 0 on success. */
+int aliro_ble_start_attached(void);
+
 #ifdef __cplusplus
 }
 #endif
