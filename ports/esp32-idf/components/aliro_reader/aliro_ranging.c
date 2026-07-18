@@ -170,6 +170,29 @@ int aliro_ranging_init(void)
 		return -1;
 	}
 	ESP_LOGI(TAG, "UWB ranging adapter ready");
+
+	/* Prove + initialise the DW3000 here, in the clean reader-startup task, so the
+	 * heavy dwt_probe/dwt_initialise never runs from the BLE-host callback at M4.
+	 * That callback path (aliro_ranging_feed -> engine -> woz_uwb_start_aliro) has a
+	 * shallow stack and no prior bring-up, and dwt_probe failed there (-1). A one-shot
+	 * start+stop with a throwaway URSK leaves the radio probed (uwb_min's g_radio_ready
+	 * latches); the real session at M4 then re-uses it — ccc_prepoll_listen skips the
+	 * probe and only re-applies the negotiated channel. Non-fatal: if the radio is
+	 * absent, auth still runs and M4 will surface the failure. */
+	static const uint8_t k_probe_ursk[ALIRO_URSK_LEN] = { 0 };
+	const struct woz_uwb_aliro_cfg probe_cfg = {
+		.session_id = 0u,
+		.channel = 9u,
+		.sync_code_index = 9u,
+		.slot_per_round = 1u,
+		.ursk = k_probe_ursk,
+	};
+	if (woz_uwb_start_aliro(&probe_cfg) == 0) {
+		woz_uwb_stop(); /* release RX; the radio stays probed */
+		ESP_LOGI(TAG, "DW3000 radio probed at init (M4 will reuse it)");
+	} else {
+		ESP_LOGW(TAG, "DW3000 probe at init failed; M4 handoff may not range");
+	}
 	return 0;
 }
 

@@ -32,6 +32,9 @@ static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_rxbuf[DW_XFER_MAX];
 
 int dw3000_spi_init(void)
 {
+	if (s_dev_fast != NULL) {
+		return 0; /* already up: re-adding devices would leak the old handles */
+	}
 	if (s_lock == NULL) {
 		s_lock = xSemaphoreCreateMutex();
 	}

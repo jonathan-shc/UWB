@@ -46,7 +46,7 @@ VID_SEGGER    := 4966
 # Resolve $$port to a SAFE ESP port, or fail loudly. Refuses SEGGER ports.
 define RESOLVE_PORT
 port='$(PORT)'; \
-table=$$(ioreg -l -w0 2>/dev/null | awk '/"idVendor"/{v=$$0;sub(/.*= /,"",v);vend=v} /"IOCalloutDevice"/&&/usbmodem/{c=$$0;sub(/.*= "/,"",c);sub(/".*/,"",c);print vend"\t"c}'); \
+table=$$(ioreg -l -w0 2>/dev/null | LC_ALL=C awk '/"idVendor"/{v=$$0;sub(/.*= /,"",v);vend=v} /"IOCalloutDevice"/&&/usbmodem/{c=$$0;sub(/.*= "/,"",c);sub(/".*/,"",c);print vend"\t"c}'); \
 if [ -n "$$port" ]; then \
 	vend=$$(printf '%s\n' "$$table" | awk -F'\t' -v p="$$port" '$$2==p{print $$1}'); \
 	if [ "$$vend" = "$(VID_SEGGER)" ]; then echo "  refusing $$port: SEGGER/J-Link (nRF) port — protected rig" >&2; exit 1; fi; \
@@ -177,7 +177,7 @@ term:
 ##@ Housekeeping
 ## ports: list attached usbmodem ports, labelled by board
 ports:
-	@ioreg -l -w0 2>/dev/null | awk \
+	@ioreg -l -w0 2>/dev/null | LC_ALL=C awk \
 	  '/"idVendor"/{v=$$0;sub(/.*= /,"",v);vend=v} \
 	   /"IOCalloutDevice"/&&/usbmodem/{c=$$0;sub(/.*= "/,"",c);sub(/".*/,"",c); \
 	     lbl="unknown ("vend")"; \
