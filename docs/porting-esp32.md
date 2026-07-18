@@ -81,13 +81,15 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
 
 - OS seam: extend `modules/woz_uwb/src/facade/woz_alloc.h` (already wraps `k_malloc` and monotonic
   microseconds) into a `woz_os` seam with a FreeRTOS backend. Real call sites are few:
-  `uwb_min.c` (`k_uptime_get` busy-wait deadlines ~183-302, `k_msleep` 31/117/357) and
-  `fira_session.c` (`k_uptime_get` 70/84). `k_work`/`k_timer` uses are diagnostics/self-test/log
+  `uwb_min.c` (`k_uptime_get` busy-wait deadlines ~188-307, `k_msleep` 31/122/362) and
+  `fira_session.c` (`k_uptime_get` 71/125). `k_work`/`k_timer` uses are diagnostics/self-test/log
   only (`uwb_rxdiag.c`, `uwb_selftest.c`, `woz_logfmt.c`) and stub or defer.
 - DW3000 platform shim, rewrite on ESP-IDF SPI-master + GPIO: `deps/dw3000/platform/dw3000_spi.c`
   (241), `dw3000_hw.c` (298), `deca_port.c` (60). Leave `deca_compat.c` (1352, vendor) logic intact.
-- Link seam: the 6 `-Wl,--wrap=dwt_*` flags (`modules/woz_uwb/CMakeLists.txt`) via
-  `target_link_options`. `xtensa-esp32s3-elf-ld` is GNU binutils; verify `--wrap` once.
+- Link seam: the 5 `-Wl,--wrap=dwt_*` flags (`modules/woz_uwb/CMakeLists.txt`) via
+  `target_link_options`. Only `--wrap=dwt_rxenable` is load-bearing (`ccc_shim_rx.c` programs the
+  CCC key/IV on every RX-arm); the rest are diagnostics or have no live caller.
+  `xtensa-esp32s3-elf-ld` is GNU binutils; verify `--wrap` once.
 - Crypto seam: `ccc_crypto_mbedtls.c` (already selected by the existing scaffold's `prj.conf`).
 - Placement: pin engine + DW3000 SPI to core 1, BLE/Wi-Fi on core 0. Hot buffers in internal SRAM,
   not PSRAM (jitter).
