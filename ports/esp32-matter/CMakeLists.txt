@@ -19,6 +19,10 @@ set(EXTRA_COMPONENT_DIRS
     "${ESP_MATTER_PATH}/examples/common"
     "${MATTER_SDK_PATH}/config/esp32/components"
     "${ESP_MATTER_PATH}/components"
+    # Aliro reader stack shared with the esp32-idf port: aliro_ble (NimBLE
+    # transport), aliro_reader (credential-auth + provisioning), aliro_crypto,
+    # and woz_uwb (DW3000 UWB ranging engine).
+    "${CMAKE_CURRENT_SOURCE_DIR}/../esp32-idf/components"
     ${extra_components_dirs_append})
 
 project(door_lock)

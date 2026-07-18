@@ -34,6 +34,28 @@ void aliro_reader_prov_print(void);
  *  trusted), negative on a store error. */
 int aliro_reader_trust_last(void);
 
+/* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
+ * Apple Home provisions the reader over Matter (Door Lock SetAliroReaderConfig +
+ * SetCredential). These let the Matter delegate persist that identity + trust
+ * into the same NVS store the reader loads at start(), so a handoff-started
+ * reader authenticates the Wallet credential Apple just installed. Kept as plain
+ * calls (no aliro_prov types) so the C++ delegate needs only this header. */
+
+/** Store the reader identity provisioned over Matter and persist it to NVS:
+ *  reader_id = groupIdentifier(16) || groupSubIdentifier(16),
+ *  sign_priv = signingKey(32); clears the dev flag. Existing trust anchors are
+ *  preserved. Returns 0 on success, negative on an NVS error. */
+int aliro_reader_provision_identity(const uint8_t reader_id[32], const uint8_t sign_priv[32]);
+
+/** Add a trusted credential public key (uncompressed P-256, 65 bytes) presented
+ *  over Matter SetCredential and persist. Returns 0 (added), 1 (already
+ *  present), negative (store full / not a P-256 point / NVS error). */
+int aliro_reader_provision_add_trust(const uint8_t cred_pub[65]);
+
+/** Revert to the dev identity + empty trust store (Matter ClearAliroReaderConfig)
+ *  and persist. Returns 0 on success, negative on an NVS error. */
+int aliro_reader_provision_clear(void);
+
 #ifdef __cplusplus
 }
 #endif

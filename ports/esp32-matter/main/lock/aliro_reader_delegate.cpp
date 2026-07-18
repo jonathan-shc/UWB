@@ -26,6 +26,10 @@
 
 #include <string.h>
 
+// Bridge into the reader component's NVS-backed provisioning store (aliro_prov).
+// The header carries its own extern "C" guard.
+#include <aliro_reader.h>
+
 using namespace chip;
 using namespace chip::app::Clusters::DoorLock;
 
@@ -174,9 +178,23 @@ CHIP_ERROR AliroReaderDelegate::SetAliroReaderConfig(const ByteSpan &signingKey,
 	}
 
 	mConfigured = true;
+
+	// Persist the provisioned identity into the reader's NVS store so a
+	// handoff-started reader authenticates the credential Apple just installed:
+	// reader_id = groupIdentifier || groupSubIdentifier, sign_priv = signingKey.
+	// (groupResolvingKey is captured above for the BLE approach-resolution
+	// refinement; it is not yet carried into aliro_prov.)
+	EnsureSubIdentifier();
+	uint8_t readerId[kAliroReaderGroupIdentifierSize + kAliroReaderGroupSubIdentifierSize];
+	memcpy(readerId, mGroupIdentifier, sizeof(mGroupIdentifier));
+	memcpy(readerId + sizeof(mGroupIdentifier), mGroupSubIdentifier,
+	       sizeof(mGroupSubIdentifier));
+	int rc = aliro_reader_provision_identity(readerId, mSigningKey);
+
 	ChipLogProgress(Zcl,
-			"Aliro reader configured — identity provisioned (groupResolvingKey=%d)",
-			static_cast<int>(groupResolvingKey.HasValue()));
+			"Aliro reader configured — identity provisioned (groupResolvingKey=%d, "
+			"aliro_prov rc=%d)",
+			static_cast<int>(groupResolvingKey.HasValue()), rc);
 	return CHIP_NO_ERROR;
 }
 
@@ -187,6 +205,8 @@ CHIP_ERROR AliroReaderDelegate::ClearAliroReaderConfig()
 	memset(mGroupIdentifier, 0, sizeof(mGroupIdentifier));
 	memset(mGroupResolvingKey, 0, sizeof(mGroupResolvingKey));
 	mConfigured = false;
-	ChipLogProgress(Zcl, "Aliro reader config cleared");
+
+	int rc = aliro_reader_provision_clear();
+	ChipLogProgress(Zcl, "Aliro reader config cleared (aliro_prov rc=%d)", rc);
 	return CHIP_NO_ERROR;
 }

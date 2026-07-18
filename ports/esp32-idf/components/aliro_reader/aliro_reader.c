@@ -36,7 +36,7 @@ static const char *TAG = "aliro_reader";
 
 /* PROVISIONAL advertised BLE-UWB protocol version. Real value is the provisioned
  * Matter attribute (Phase 4); 0x0100 is the baseline the arbiter treats specially. */
-static const uint16_t k_proto_versions[] = { 0x0100u };
+static const uint16_t k_proto_versions[] = {0x0100u};
 #define ALIRO_VERSION 0x0100u
 
 /* Reader identity + credential trust store, loaded once at start from the
@@ -57,22 +57,28 @@ static bool s_have_last_cred;
 static SemaphoreHandle_t s_prov_lock;
 
 enum txn_phase {
-	PH_IDLE = 0,     /* connected; awaiting the peer's first message */
-	PH_SENT_AUTH0,   /* AUTH0 sent; awaiting AUTH0Response */
-	PH_SENT_AUTH1,   /* AUTH1 sent; awaiting AUTH1Response */
-	PH_ESTABLISHED,  /* URSK derived; ranging setup (M1-M4) driven by aliro_ranging */
+	PH_IDLE = 0,    /* connected; awaiting the peer's first message */
+	PH_SENT_AUTH0,  /* AUTH0 sent; awaiting AUTH0Response */
+	PH_SENT_AUTH1,  /* AUTH1 sent; awaiting AUTH1Response */
+	PH_ESTABLISHED, /* URSK derived; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
 };
 
 static const char *phase_str(enum txn_phase p)
 {
 	switch (p) {
-	case PH_IDLE:        return "IDLE";
-	case PH_SENT_AUTH0:  return "SENT_AUTH0";
-	case PH_SENT_AUTH1:  return "SENT_AUTH1";
-	case PH_ESTABLISHED: return "ESTABLISHED";
-	case PH_FAILED:      return "FAILED";
-	default:             return "?";
+	case PH_IDLE:
+		return "IDLE";
+	case PH_SENT_AUTH0:
+		return "SENT_AUTH0";
+	case PH_SENT_AUTH1:
+		return "SENT_AUTH1";
+	case PH_ESTABLISHED:
+		return "ESTABLISHED";
+	case PH_FAILED:
+		return "FAILED";
+	default:
+		return "?";
 	}
 }
 
@@ -128,8 +134,10 @@ static void load_provisioning(void)
 	int rc = aliro_prov_load(&s_id, &s_trust);
 
 	if (s_id.is_dev) {
-		ESP_LOGW(TAG, "using DEV reader identity (Phase 4 supplies the real "
-			      "one); %u trust anchor(s)", s_trust.count);
+		ESP_LOGW(TAG,
+			 "using DEV reader identity (Phase 4 supplies the real "
+			 "one); %u trust anchor(s)",
+			 s_trust.count);
 	} else {
 		ESP_LOGI(TAG, "provisioned reader identity loaded; %u trust anchor(s)",
 			 s_trust.count);
@@ -144,14 +152,14 @@ static int send_framed(uint16_t conn, uint8_t opcode, const uint8_t *payload, si
 	size_t flen;
 
 	if (aliro_ble_frame(0x00, opcode, payload, len, frame, sizeof(frame), &flen) != 0) {
-		ESP_LOGE(TAG, "[conn %u] frame build failed (op 0x%02x len %u)", conn,
-			 opcode, (unsigned)len);
+		ESP_LOGE(TAG, "[conn %u] frame build failed (op 0x%02x len %u)", conn, opcode,
+			 (unsigned)len);
 		return -1;
 	}
 	int rc = aliro_ble_send(conn, frame, flen);
 
-	ESP_LOGI(TAG, "[conn %u] TX op 0x%02x, %u payload bytes (send rc=%d)", conn,
-		 opcode, (unsigned)len, rc);
+	ESP_LOGI(TAG, "[conn %u] TX op 0x%02x, %u payload bytes (send rc=%d)", conn, opcode,
+		 (unsigned)len, rc);
 	return rc;
 }
 
@@ -170,8 +178,8 @@ static void start_auth(struct aliro_session *s)
 
 	/* ExpeditedPhaseType/UserAuthenticationPolicy: standard path, no extra
 	 * policy (enum values are provisioning/policy driven; 0x02/0x00 here). */
-	if (aliro_apdu_build_auth0(0x02u, 0x00u, ALIRO_VERSION, s->reader_eph_pub,
-				   s->txid, s_id.reader_id, apdu, sizeof(apdu), &n) != 0) {
+	if (aliro_apdu_build_auth0(0x02u, 0x00u, ALIRO_VERSION, s->reader_eph_pub, s->txid,
+				   s_id.reader_id, apdu, sizeof(apdu), &n) != 0) {
 		ESP_LOGE(TAG, "[conn %u] AUTH0 build failed", s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
@@ -204,9 +212,8 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 	uint8_t td[160], sig[ALIRO_P256_SIG], apdu[128];
 	size_t tn, n;
 
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_READER, s_id.reader_id,
-				      s->device_eph_pub + 1, s->reader_eph_pub + 1,
-				      s->txid, td, sizeof(td), &tn) != 0 ||
+	if (aliro_apdu_build_authdata(ALIRO_AUTH_READER, s_id.reader_id, s->device_eph_pub + 1,
+				      s->reader_eph_pub + 1, s->txid, td, sizeof(td), &tn) != 0 ||
 	    aliro_ecdsa_p256_sign(s_id.sign_priv, td, tn, sig) != 0) {
 		ESP_LOGE(TAG, "[conn %u] reader signature failed", s->conn_handle);
 		s->phase = PH_FAILED;
@@ -237,15 +244,16 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	uint8_t td[160];
 	size_t tn;
 
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, s_id.reader_id,
-				      s->device_eph_pub + 1, s->reader_eph_pub + 1,
-				      s->txid, td, sizeof(td), &tn) != 0) {
+	if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, s_id.reader_id, s->device_eph_pub + 1,
+				      s->reader_eph_pub + 1, s->txid, td, sizeof(td), &tn) != 0) {
 		s->phase = PH_FAILED;
 		return;
 	}
 	if (aliro_ecdsa_p256_verify(cred_pub, td, tn, r.device_sig) != 0) {
-		ESP_LOGW(TAG, "[conn %u] device signature INVALID (expected until a "
-			      "provisioned credential is present)", s->conn_handle);
+		ESP_LOGW(TAG,
+			 "[conn %u] device signature INVALID (expected until a "
+			 "provisioned credential is present)",
+			 s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
 	}
@@ -264,13 +272,13 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	if (tv == 0) {
 		ESP_LOGI(TAG, "[conn %u] credential key TRUSTED", s->conn_handle);
 	} else if (tv == 1 && s_id.is_dev) {
-		ESP_LOGW(TAG, "[conn %u] no trust anchors (DEV identity): accepting the "
-			      "presented credential; run `aliro-trust` to enforce",
+		ESP_LOGW(TAG,
+			 "[conn %u] no trust anchors (DEV identity): accepting the "
+			 "presented credential; run `aliro-trust` to enforce",
 			 s->conn_handle);
 	} else {
 		ESP_LOGW(TAG, "[conn %u] credential key NOT trusted (%s); rejecting",
-			 s->conn_handle,
-			 tv == 1 ? "no anchors provisioned" : "not in trust store");
+			 s->conn_handle, tv == 1 ? "no anchors provisioned" : "not in trust store");
 		s->phase = PH_FAILED;
 		return;
 	}
@@ -281,8 +289,8 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	size_t slen;
 
 	if (aliro_salt_build(ALIRO_SALT_SESSION, s->txid, s->device_eph_pub + 1,
-			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_VERSION, 0x02u,
-			     0x00u, NULL, salt, &slen) != 0 ||
+			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_VERSION, 0x02u, 0x00u,
+			     NULL, salt, &slen) != 0 ||
 	    aliro_crypto_derive_block(s->z, salt, slen, s->device_eph_pub + 1, block) != 0) {
 		ESP_LOGE(TAG, "[conn %u] key-block derivation failed", s->conn_handle);
 		s->phase = PH_FAILED;
@@ -325,8 +333,8 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	size_t pl_len;
 
 	if (aliro_ble_unframe(data, len, &type, &opcode, &pl, &pl_len) != 0) {
-		ESP_LOGW(TAG, "[conn %u] msg #%u (%u B): not a valid envelope",
-			 s->conn_handle, (unsigned)s->msgs_rx, (unsigned)len);
+		ESP_LOGW(TAG, "[conn %u] msg #%u (%u B): not a valid envelope", s->conn_handle,
+			 (unsigned)s->msgs_rx, (unsigned)len);
 		ESP_LOG_BUFFER_HEXDUMP(TAG, data, len, ESP_LOG_INFO);
 		pl = data;
 		pl_len = len;
@@ -343,8 +351,7 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 		 * rides the GATT characteristic; here we log it and drive AUTH0.
 		 * (Bench-tunable: some peers expect the reader to send AUTH0 on
 		 * channel-up rather than after this first message.) */
-		ESP_LOGI(TAG, "[conn %u] peer opened; starting access protocol",
-			 s->conn_handle);
+		ESP_LOGI(TAG, "[conn %u] peer opened; starting access protocol", s->conn_handle);
 		start_auth(s);
 		break;
 	case PH_SENT_AUTH0:
@@ -383,8 +390,8 @@ static void on_disconnected(uint16_t conn_handle)
 	struct aliro_session *s = session_find(conn_handle);
 
 	if (s != NULL) {
-		ESP_LOGI(TAG, "[conn %u] Aliro session destroyed (%u msgs, phase=%s)",
-			 conn_handle, (unsigned)s->msgs_rx, phase_str(s->phase));
+		ESP_LOGI(TAG, "[conn %u] Aliro session destroyed (%u msgs, phase=%s)", conn_handle,
+			 (unsigned)s->msgs_rx, phase_str(s->phase));
 		s->active = false;
 	}
 	aliro_ranging_stop(conn_handle);
@@ -395,8 +402,8 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
 	struct aliro_session *s = session_find(conn_handle);
 
 	if (s == NULL) {
-		ESP_LOGW(TAG, "[conn %u] data for unknown session (%u bytes)",
-			 conn_handle, (unsigned)len);
+		ESP_LOGW(TAG, "[conn %u] data for unknown session (%u bytes)", conn_handle,
+			 (unsigned)len);
 		return;
 	}
 	transaction_feed(s, data, len);
@@ -417,22 +424,24 @@ int aliro_reader_start(void)
 	const struct aliro_ble_config cfg = {
 		.proto_versions = k_proto_versions,
 		.proto_versions_count = sizeof(k_proto_versions) / sizeof(k_proto_versions[0]),
-		.features = {
-			.timesync_procedure_0 = true,
-			.timesync_procedure_1 = false,
-			.le_coded_phy = false,
-		},
-		.cb = {
-			.on_data = on_data,
-			.on_connected = on_connected,
-			.on_disconnected = on_disconnected,
-		},
+		.features =
+			{
+				.timesync_procedure_0 = true,
+				.timesync_procedure_1 = false,
+				.le_coded_phy = false,
+			},
+		.cb =
+			{
+				.on_data = on_data,
+				.on_connected = on_connected,
+				.on_disconnected = on_disconnected,
+			},
 	};
 
 	int rc = aliro_ble_start(&cfg);
 
-	ESP_LOGI(TAG, "aliro_reader_start: transport %s (SPSM 0x%04x)",
-		 rc == 0 ? "up" : "FAILED", aliro_ble_spsm());
+	ESP_LOGI(TAG, "aliro_reader_start: transport %s (SPSM 0x%04x)", rc == 0 ? "up" : "FAILED",
+		 aliro_ble_spsm());
 	return rc;
 }
 
@@ -511,5 +520,86 @@ int aliro_reader_trust_last(void)
 	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
 	s_trust = cand;
 	xSemaphoreGive(s_prov_lock);
+	return 0;
+}
+
+/* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
+ * These run on the Matter task during commissioning, before the reader is
+ * started (the reader starts only after the BLE handoff). They mutate the same
+ * s_id/s_trust the reader loads, and persist through aliro_prov, so a snapshot-
+ * then-store keeps NVS and the in-memory copy consistent under s_prov_lock. */
+
+int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN],
+				    const uint8_t sign_priv[ALIRO_READER_PRIV_LEN])
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	memcpy(id.reader_id, reader_id, ALIRO_READER_ID_LEN);
+	memcpy(id.sign_priv, sign_priv, ALIRO_READER_PRIV_LEN);
+	id.is_dev = false;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	ts = s_trust; /* keep any anchors already added */
+	xSemaphoreGive(s_prov_lock);
+
+	if (aliro_prov_store(&id, &ts) != 0) {
+		return -1; /* not committed; s_id unchanged */
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_id = id;
+	xSemaphoreGive(s_prov_lock);
+	ESP_LOGI(TAG, "Matter-provisioned reader identity stored");
+	return 0;
+}
+
+int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store cand;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	id = s_id;
+	cand = s_trust;
+	xSemaphoreGive(s_prov_lock);
+
+	int add = aliro_prov_trust_add(&cand, cred_pub);
+
+	if (add == 1) {
+		return 1; /* already trusted; nothing to persist */
+	}
+	if (add < 0) {
+		return -1; /* store full or not a P-256 point */
+	}
+	if (aliro_prov_store(&id, &cand) != 0) {
+		return -1; /* not committed; s_trust unchanged */
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_trust = cand;
+	xSemaphoreGive(s_prov_lock);
+	ESP_LOGI(TAG, "Matter-provisioned trust anchor stored (%u total)", cand.count);
+	return 0;
+}
+
+int aliro_reader_provision_clear(void)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	aliro_prov_dev_default(&id, &ts);
+	if (aliro_prov_store(&id, &ts) != 0) {
+		return -1;
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_id = id;
+	s_trust = ts;
+	xSemaphoreGive(s_prov_lock);
+	ESP_LOGI(TAG, "reader provisioning cleared (reverted to dev identity)");
 	return 0;
 }
