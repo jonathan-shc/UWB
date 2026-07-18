@@ -432,14 +432,17 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	memcpy(payload + exn, tag, ALIRO_GCM_TAG_LEN);
 	send_ap_command(s->conn_handle, ALIRO_INS_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
 
-	/* Auth done: hand the derived URSK to the ranging module, which emits M1 and
-	 * negotiates the ranging parameters with the peer (M1-M4). */
+	/* Auth + secure channel + URSK are done. DIAGNOSTIC BUILD: hold the
+	 * reader-initiated M1 and instead decrypt/observe whatever the phone sends
+	 * next, to pin the real ranging-setup flow. Rationale: the engine speaks the
+	 * spec proto-1 M1-M4 handshake, but the nyrek live-iPhone capture shows the
+	 * device drives ranging via proto-3 (encrypted config) + proto-2
+	 * (InitiateRangingSession); our own capture had the phone GeneralError right
+	 * after our M1. Re-enable aliro_ranging_start once the flow is confirmed. */
 	s->phase = PH_ESTABLISHED;
-	ESP_LOGI(TAG, "[conn %u] URSK derived; starting ranging setup", s->conn_handle);
+	ESP_LOGI(TAG, "[conn %u] URSK derived; observing phone ranging flow (M1 held)",
+		 s->conn_handle);
 	ESP_LOG_BUFFER_HEXDUMP(TAG, s->ursk, ALIRO_URSK_LEN, ESP_LOG_INFO);
-	if (aliro_ranging_start(s->conn_handle, s->ursk) != 0) {
-		ESP_LOGW(TAG, "[conn %u] ranging setup did not start", s->conn_handle);
-	}
 }
 
 /* Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
@@ -522,11 +525,42 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	case PH_SENT_AUTH1:
 		on_auth1_response(s, pl, pl_len);
 		break;
-	case PH_ESTABLISHED:
-		/* Post-auth ranging-setup (M1-M4): route the raw SDU (its own 4-byte
-		 * Aliro header included, not the unframed auth payload) to the engine. */
-		aliro_ranging_feed(s->conn_handle, data, len);
+	case PH_ESTABLISHED: {
+		/* DIAGNOSTIC: post-EXCHANGE SDUs ride the secure channel. Decrypt the
+		 * payload as <ciphertext || 16-byte GCM tag> and dump the plaintext to pin
+		 * the phone's real ranging-setup messages. proto-0 access responses carry a
+		 * trailing SW1SW2, so also try 2 fewer ct bytes; a plaintext (unencrypted)
+		 * message falls through to the raw dump. secchan_open leaves the dec counter
+		 * untouched on failure, so trying both framings is counter-safe. */
+		uint8_t pt[256];
+		bool shown = false;
+
+		for (size_t swpad = 0; swpad <= 2u && !shown; swpad += 2u) {
+			if (pl_len < ALIRO_GCM_TAG_LEN + swpad) {
+				continue;
+			}
+			size_t ctl = pl_len - ALIRO_GCM_TAG_LEN - swpad;
+
+			if (ctl > sizeof(pt)) {
+				continue;
+			}
+			if (aliro_secchan_open(&s->sc, NULL, 0, pl, ctl, pl + ctl, pt) == 0) {
+				ESP_LOGI(TAG,
+					 "[conn %u] EST SDU DECRYPTED (proto=0x%02x id=0x%02x, %u B, sw_pad=%u):",
+					 s->conn_handle, type, opcode, (unsigned)ctl,
+					 (unsigned)swpad);
+				ESP_LOG_BUFFER_HEXDUMP(TAG, pt, ctl, ESP_LOG_INFO);
+				shown = true;
+			}
+		}
+		if (!shown) {
+			ESP_LOGW(TAG,
+				 "[conn %u] EST SDU decrypt failed (proto=0x%02x id=0x%02x, %u B); raw:",
+				 s->conn_handle, type, opcode, (unsigned)pl_len);
+			ESP_LOG_BUFFER_HEXDUMP(TAG, pl, pl_len, ESP_LOG_INFO);
+		}
 		break;
+	}
 	default:
 		ESP_LOGW(TAG, "[conn %u] message in phase %s ignored", s->conn_handle,
 			 phase_str(s->phase));
