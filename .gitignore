@@ -24,3 +24,5 @@ bench.env
 CLAUDE.md
 .claude/
 
+# internal working notes / plans (not part of the project)
+internal/
