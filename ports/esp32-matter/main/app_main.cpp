@@ -14,11 +14,11 @@
 #endif
 
 #include <esp_matter.h>
-#include <esp_matter_console.h>
 #include <esp_matter_ota.h>
 
 #include <common_macros.h>
 #include <app_priv.h>
+#include "app_shell.h"
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
 #include <platform/ESP32/OpenthreadLauncher.h>
 #endif
@@ -55,52 +55,17 @@ static const char *s_decryption_key = decryption_key_start;
 static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key_start;
 #endif // CONFIG_ENABLE_ENCRYPTED_OTA
 
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
-// After Matter finishes commissioning it deinitializes its BLE stack and reclaims
-// the memory (kBLEDeinitialized). That is the handoff point: NimBLE is now free,
-// so the Aliro reader takes it over, advertises, and runs the BLE credential-auth
-// + UWB ranging against the Wallet credential provisioned during commissioning.
-// A trusted range within the unlock distance drives the Matter lock to Unlocked.
-#define ALIRO_UNLOCK_RANGE_CM 100 // bench-tunable
-
-static void aliro_reader_task(void *arg)
-{
-	int rc = aliro_reader_start();
-	ESP_LOGI(TAG, "aliro_reader_start() = %d (%s)", rc,
-		 rc == 0 ? "Aliro reader up on freed BLE" : "reader bring-up FAILED");
-
-	bool armed = true;
-	while (true) {
-		int32_t cm;
-		if (woz_uwb_trusted_range_cm(&cm)) {
-			if (armed && cm >= 0 && cm <= ALIRO_UNLOCK_RANGE_CM) {
-				ESP_LOGI(TAG, "Aliro trusted range %d cm (<= %d): unlocking",
-					 (int)cm, ALIRO_UNLOCK_RANGE_CM);
-				chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
-					BoltLockMgr().Unlock(door_lock_endpoint_id,
-							     chip::app::Clusters::DoorLock::
-								     OperationSourceEnum::kAliro);
-				});
-				armed = false; // debounce until the peer leaves range
-			}
-		} else {
-			armed = true; // no trusted range; re-arm
-		}
-		vTaskDelay(pdMS_TO_TICKS(200));
-	}
-}
-
-static void start_aliro_reader_once(void)
-{
-	static bool started = false;
-	if (started) {
-		return;
-	}
-	started = true;
-	xTaskCreate(aliro_reader_task, "aliro_reader", 8192, nullptr, 5, nullptr);
-	ESP_LOGI(TAG, "Aliro reader handoff task started");
-}
-#endif // CONFIG_ENABLE_ALIRO_BLE_UWB
+// NOTE: the BLE *handoff* (start the Aliro reader on kBLEDeinitialized, after
+// Matter reclaims BLE) has been removed — it crashed on silicon. Once Matter runs
+// esp_bt_mem_release(ESP_BT_MODE_BLE) the controller memory is gone, so the
+// reader's nimble_port_init() cannot re-init the controller (btdm_controller_init
+// -> LoadProhibited, reboot loop). The correct model is BLE *coexistence*: keep
+// BLE up (CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n) and run the reader in "attach
+// mode" on Matter's live NimBLE host (register its GATT service via
+// BLEMgrImpl().ConfigureExtraServices(), keep the L2CAP CoC, advertise once Matter
+// releases the advertiser). That reader wiring is the next step; until a Wallet
+// credential is actually provisioned there is nothing for it to authenticate, so
+// the reader is intentionally not started here yet.
 
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
@@ -173,9 +138,6 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 
 	case chip::DeviceLayer::DeviceEventType::kBLEDeinitialized:
 		ESP_LOGI(TAG, "BLE deinitialized and memory reclaimed");
-#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
-		start_aliro_reader_once();
-#endif
 		break;
 
 	default:
@@ -293,13 +255,8 @@ extern "C" void app_main()
 		ESP_LOGE(TAG, "Failed to initialized the encrypted OTA, err: %d", err));
 #endif // CONFIG_ENABLE_ENCRYPTED_OTA
 
-#if CONFIG_ENABLE_CHIP_SHELL
-	esp_matter::console::diagnostics_register_commands();
-	esp_matter::console::wifi_register_commands();
-	esp_matter::console::factoryreset_register_commands();
-#if CONFIG_OPENTHREAD_CLI
-	esp_matter::console::otcli_register_commands();
-#endif
-	esp_matter::console::init();
-#endif
+	/* Interactive console. This replaces esp_matter::console::init(), whose CHIP
+	 * shell has no line editing and loses your input whenever a log line lands.
+	 * Only one of the two may run: both read the same console UART. */
+	app_shell_start();
 }
