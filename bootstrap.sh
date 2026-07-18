@@ -55,9 +55,9 @@ apply_to() {   # $1 = repo, remaining args = patch files
     || { echo "ERROR: $repo not pristine — refusing to patch"; exit 1; }
   git -C "$repo" apply --whitespace=nowarn "$@"
 }
-apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" "$P/ha-lockoperation-event.patch"
+apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" "$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch"
 apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
-echo "    ✓ pristine upstream + 11 patches (add-on ×9, nrf, matter)"
+echo "    ✓ pristine upstream + 12 patches (add-on ×10, nrf, matter)"
 
 echo "==> ready. Build with:  $TREE/build.sh build"
