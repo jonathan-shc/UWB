@@ -11,6 +11,7 @@
 #include "esp_err.h"
 
 #include "woz_uwb_facade.h"
+#include "aliro_reader.h"
 #include "app_shell.h"
 
 static const char *TAG = "shell";
@@ -136,6 +137,29 @@ static int cmd_aliro_stop(int argc, char **argv)
 	return 0;
 }
 
+static int cmd_aliro_prov(int argc, char **argv)
+{
+	(void)argc; (void)argv;
+	aliro_reader_prov_print();
+	return 0;
+}
+
+static int cmd_aliro_trust(int argc, char **argv)
+{
+	(void)argc; (void)argv;
+	int rc = aliro_reader_trust_last();
+
+	if (rc == 0) {
+		printf("aliro-trust: added last-presented credential + saved to NVS\n");
+	} else if (rc == 1) {
+		printf("aliro-trust: nothing to add (no credential presented, or "
+		       "already trusted)\n");
+	} else {
+		printf("aliro-trust: FAILED (trust store full or NVS error)\n");
+	}
+	return 0;
+}
+
 void app_shell_start(void)
 {
 	esp_console_repl_t *repl = NULL;
@@ -157,6 +181,8 @@ void app_shell_start(void)
 		{ .command = "range",       .help = "print the latest distance",            .func = cmd_range },
 		{ .command = "aliro-start", .help = "start the demo DS-TWR responder",       .func = cmd_aliro_start },
 		{ .command = "aliro-stop",  .help = "stop the demo responder",               .func = cmd_aliro_stop },
+		{ .command = "aliro-prov",  .help = "show reader identity + credential trust store", .func = cmd_aliro_prov },
+		{ .command = "aliro-trust", .help = "trust the last-presented credential (persist to NVS)", .func = cmd_aliro_trust },
 	};
 	for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
 		ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));

@@ -95,11 +95,30 @@ handshake completes — however correct the code.
   derived URSK (`woz_uwb_bind_ursk`) and starts the responder
   (`woz_uwb_start_aliro`); ranging parameters are canned until the M1-M4
   negotiation is parsed (a later increment).
-- **3.4** (with Phase 4) provision the reader identity/keys + issuer trust so a real
-  phone can auth. `aliro_reader` uses a clearly-marked dev identity until then.
+- **3.4 — IMPLEMENTED (builds; host-KAT'd).** The provisioning seam
+  (`ports/esp32-idf/components/aliro_reader/aliro_prov.{c,h}` + `aliro_prov_nvs.c`):
+  the reader identity (a stable reader identifier + P-256 signing key) and a
+  credential **trust store**, NVS-backed with a clearly-marked, fixed **dev
+  identity** fallback so the transaction is drivable at bench before Phase-4 Matter
+  provisioning writes a real identity. Split like `aliro_crypto`: the dev default +
+  blob (de)serialisation + trust logic are portable and host-KAT'd
+  (`test/test_aliro_prov.c` in `run.sh`); the NVS load/store is target-only. The
+  reader now loads identity+trust at start (replacing the per-boot random dev key,
+  which changed the reader identity every reboot), signs with the provisioned key,
+  and gates on a trust check after verifying the device signature: a raw-key
+  allowlist (the interim seam where real issuer-chain validation plugs in), with a
+  dev-open policy (accept + loud warning) only while the dev identity has no anchors.
+  Two bench console commands drive it: `aliro-prov` (show identity + trust store +
+  last-presented credential) and `aliro-trust` (persist the last-presented
+  credential key as trusted). Phase-4 Matter `SetAliroReaderConfig` writes the same
+  NVS blob to supply a real identity + issuer trust.
 
-**Verification reality:** the wire codec and the key schedule are host-KAT verified
-now; the whole firmware builds and links. The assembled transaction cannot complete
-end-to-end until the reader is provisioned (Phase 4) and a real credential is present,
-and byte-exact interop of the salt transcript is confirmed at bench with a device.
-The diagnostic logging at each step is there to make that bench bring-up tractable.
+**Verification reality:** the wire codec, the key schedule, and the provisioning
+seam (identity + trust store) are host-KAT verified now; the whole firmware builds
+and links (`verify_port.sh`). The reader now has a stable identity and a credential
+trust gate, but the assembled transaction still cannot complete end-to-end until a
+real credential for *this* reader is present in the phone's wallet, which needs
+Phase-4 Matter provisioning (the reader runs on the dev identity, and dev-open trust,
+until then); and byte-exact interop of the salt transcript is still to be confirmed
+at bench with a device. The diagnostic logging at each step is there to make that
+bench bring-up tractable.

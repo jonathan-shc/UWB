@@ -21,6 +21,19 @@ extern "C" {
  *  Returns 0 on success, negative on failure. */
 int aliro_reader_start(void);
 
+/* ---- Bench provisioning helpers (Phase 3.4) ---------------------------- *
+ * Back the `aliro-prov` / `aliro-trust` console commands. Kept as plain calls
+ * so the shell does not need the internal aliro_prov types. */
+
+/** Print the reader identity (dev vs provisioned, reader_id), the trust store,
+ *  and the most-recently-presented credential key. */
+void aliro_reader_prov_print(void);
+
+/** Trust the most-recently-presented credential public key and persist it to
+ *  NVS. Returns 0 (added + saved), 1 (nothing presented yet, or already
+ *  trusted), negative on a store error. */
+int aliro_reader_trust_last(void);
+
 #ifdef __cplusplus
 }
 #endif

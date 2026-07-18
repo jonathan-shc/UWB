@@ -42,5 +42,14 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$ABIN"
 
 echo
+echo "== host: aliro_prov identity/trust KAT =="
+PBIN="$(mktemp -t aliro_prov_kat.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$READER" \
+   "$HERE/test_aliro_prov.c" "$READER/aliro_prov.c" -o "$PBIN"
+"$PBIN"
+rm -f "$PBIN"
+
+echo
 echo "== target: port build + link-seam guard =="
 bash "$HERE/verify_port.sh"
