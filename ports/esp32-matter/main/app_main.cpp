@@ -25,6 +25,7 @@
 
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
+#include <setup_payload/OnboardingCodesUtil.h>
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
@@ -276,6 +277,11 @@ extern "C" void app_main()
 	/* Matter start */
 	err = esp_matter::start(app_event_cb);
 	ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
+
+	/* Print the commissioning QR-code URL + manual pairing code at boot so it is
+	 * always in the log (Apple Home / chip-tool). BLE is the initial transport. */
+	PrintOnboardingCodes(
+		chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
 
 	/* do nothing now */
 	door_lock_init();
