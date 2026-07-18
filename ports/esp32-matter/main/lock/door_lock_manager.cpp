@@ -11,6 +11,10 @@
 #include <cstring>
 #include <esp_log.h>
 
+/* Defined in app_driver.cpp. Declared here rather than including app_priv.h,
+ * whose esp_matter includes make this file's TAG ambiguous. */
+void app_driver_led_lock_state(bool locked, bool aliro);
+
 static const char *TAG = "doorlock_manager";
 
 BoltLockManager BoltLockManager::sLock;
@@ -177,11 +181,13 @@ bool BoltLockManager::ReadConfigValues()
 void BoltLockManager::Lock(EndpointId endpointId, OperationSourceEnum source)
 {
     DoorLockServer::Instance().SetLockState(endpointId, DlLockState::kLocked, source);
+    app_driver_led_lock_state(true, false);
 }
 
 void BoltLockManager::Unlock(EndpointId endpointId, OperationSourceEnum source)
 {
     DoorLockServer::Instance().SetLockState(endpointId, DlLockState::kUnlocked, source);
+    app_driver_led_lock_state(false, source == OperationSourceEnum::kAliro);
 }
 
 bool BoltLockManager::GetUser(EndpointId endpointId, uint16_t userIndex, EmberAfPluginDoorLockUserInfo  &user)

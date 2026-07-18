@@ -26,6 +26,20 @@ typedef void *app_driver_handle_t;
  */
 app_driver_handle_t app_driver_button_init();
 
+/** Initialize the onboard WS2812 used as the bolt-state indicator.
+ *
+ * @return ESP_OK on success, error otherwise (the indicator then stays dark).
+ */
+esp_err_t app_driver_led_init();
+
+/** Drive the bolt-state indicator.
+ *
+ * @param[in] locked true to extinguish the LED, false to light it.
+ * @param[in] aliro true when the UWB approach path drove the unlock (lights
+ *                  blue instead of green). Ignored when `locked` is true.
+ */
+void app_driver_led_lock_state(bool locked, bool aliro);
+
 /** Driver Update
  *
  * This API should be called to update the driver for the attribute being updated.

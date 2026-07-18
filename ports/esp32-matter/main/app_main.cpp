@@ -232,6 +232,10 @@ extern "C" void app_main()
 	/* Initialize the ESP NVS layer */
 	nvs_flash_init();
 
+	/* Bolt-state indicator. Before Matter start, so the first LockState update
+	 * that lands already has somewhere to go. */
+	app_driver_led_init();
+
 #if CONFIG_PM_ENABLE
 	esp_pm_config_t pm_config = {.max_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
 				     .min_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ,
