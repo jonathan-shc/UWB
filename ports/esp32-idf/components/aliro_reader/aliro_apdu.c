@@ -146,7 +146,12 @@ int aliro_apdu_build_auth0(uint8_t exp_phase, uint8_t user_policy, uint16_t vers
 	struct aliro_tlv_w w;
 
 	aliro_tlv_w_init(&w, out, cap);
-	aliro_tlv_put_u8(&w, ALIRO_TAG_EXP_PHASE, exp_phase);
+	/* Standard path encodes ExpeditedPhaseType 0 as a zero-length item (41 00). */
+	if (exp_phase == 0u) {
+		aliro_tlv_put_empty(&w, ALIRO_TAG_EXP_PHASE);
+	} else {
+		aliro_tlv_put_u8(&w, ALIRO_TAG_EXP_PHASE, exp_phase);
+	}
 	aliro_tlv_put_u8(&w, ALIRO_TAG_USER_POL, user_policy);
 	aliro_tlv_put_u16(&w, ALIRO_TAG_VERSION, version);
 	aliro_tlv_put(&w, ALIRO_TAG_READER_EPH, reader_eph_pub, 65);
@@ -201,7 +206,40 @@ int aliro_apdu_build_exchange(int have_status, uint16_t reader_status,
 	return aliro_tlv_w_finish(&w, out_len);
 }
 
+int aliro_apdu_wrap(uint8_t ins, const uint8_t *tlv, size_t tlv_len,
+		    uint8_t *out, size_t cap, size_t *out_len)
+{
+	/* ISO7816 case-4 short form: CLA INS P1 P2 Lc <data> Le. Lc is one byte, so
+	 * the command data must fit in 255; Le = 0x00 requests up to 256 back. */
+	if (tlv == NULL || tlv_len == 0 || tlv_len > 0xffu || cap < 6u + tlv_len) {
+		return -1;
+	}
+	out[0] = 0x80u;             /* CLA: proprietary */
+	out[1] = ins;              /* INS: AUTH0 / AUTH1 / EXCHANGE */
+	out[2] = 0x00u;            /* P1 */
+	out[3] = 0x00u;            /* P2 */
+	out[4] = (uint8_t)tlv_len; /* Lc */
+	memcpy(out + 5, tlv, tlv_len);
+	out[5 + tlv_len] = 0x00u;  /* Le (0 => 256) */
+	*out_len = 6u + tlv_len;
+	return 0;
+}
+
 /* ---- response parsers ---- */
+
+/* Drop the trailing ISO7816 status word (SW1 SW2) from an APDU response body.
+ * Returns the SW via *sw (0x9000 = OK) and shortens *len, or -1 if too short. */
+int aliro_apdu_strip_sw(const uint8_t *buf, size_t *len, uint16_t *sw)
+{
+	if (buf == NULL || len == NULL || *len < 2) {
+		return -1;
+	}
+	*len -= 2;
+	if (sw != NULL) {
+		*sw = (uint16_t)(((uint16_t)buf[*len] << 8) | buf[*len + 1]);
+	}
+	return 0;
+}
 
 int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len,
 				    struct aliro_auth0_response *r)

@@ -112,11 +112,40 @@ int main(void)
 	aliro_apdu_build_exchange(1, 0x0005, 1, out, sizeof(out), &n);
 	veq("status+ready.bytes", out, n, "970200059800");
 
+	printf("\n== AUTH0 standard path: empty phase + APDU wrap + SW strip ==\n");
+	okc("build.phase0", aliro_apdu_build_auth0(0x00, 0x01, 0x0100, pub, txid, rid, out,
+						   sizeof(out), &n) == 0);
+	okc("phase.empty", out[0] == 0x41 && out[1] == 0x00); /* zero-length 41 00 */
+	okc("user_pol.01", out[2] == 0x42 && out[3] == 0x01 && out[4] == 0x01);
+	okc("len==128", n == 128); /* one byte shorter than the non-empty-phase path */
+	{
+		uint8_t apdu[300];
+		size_t alen;
+
+		okc("wrap.ok", aliro_apdu_wrap(ALIRO_INS_AUTH0, out, n, apdu, sizeof(apdu),
+					       &alen) == 0);
+		okc("wrap.hdr", apdu[0] == 0x80 && apdu[1] == 0x80 && apdu[2] == 0x00 &&
+					apdu[3] == 0x00 && apdu[4] == (uint8_t)n);
+		okc("wrap.le0", apdu[5 + n] == 0x00);   /* Le */
+		okc("wrap.len", alen == n + 6);         /* CLA INS P1 P2 Lc <n> Le */
+	}
+	{
+		uint8_t rb[4] = { 0x86, 0x00, 0x90, 0x00 }; /* <tlv> SW=9000 */
+		size_t rl = sizeof(rb);
+		uint16_t sw = 0;
+
+		okc("strip.sw9000", aliro_apdu_strip_sw(rb, &rl, &sw) == 0 && rl == 2 &&
+					    sw == 0x9000);
+		size_t one = 1;
+
+		okc("strip.tooshort", aliro_apdu_strip_sw(rb, &one, &sw) < 0);
+	}
+
 	printf("\n== L2CAP envelope ==\n");
 	uint8_t pl[3] = { 0xAA, 0xBB, 0xCC };
 
-	aliro_ble_frame(0x00, ALIRO_OP_AUTH0, pl, 3, out, sizeof(out), &n);
-	/* type 0x00, opcode 0x80, len BE 0x0003, payload aabbcc */
+	aliro_ble_frame(0x00, ALIRO_INS_AUTH0, pl, 3, out, sizeof(out), &n);
+	/* type 0x00, opcode byte 0x80, len BE 0x0003, payload aabbcc */
 	veq("frame.exact", out, n, "00800003aabbcc");
 	uint8_t ty, op;
 	const uint8_t *pp;

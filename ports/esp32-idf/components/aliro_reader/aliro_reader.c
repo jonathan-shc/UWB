@@ -146,20 +146,34 @@ static void load_provisioning(void)
 	s_loaded = true;
 }
 
-static int send_framed(uint16_t conn, uint8_t opcode, const uint8_t *payload, size_t len)
+/* Frame + send an Access-Protocol command: wrap the command TLV in an ISO7816
+ * APDU (ins selects AUTH0/AUTH1/EXCHANGE), then a BLE Access frame
+ * (type=ACCESS, opcode=AP_OP_COMMAND). The command byte lives in the APDU INS,
+ * NOT the BLE opcode — the phone rejects a raw TLV under opcode=INS. */
+static int send_ap_command(uint16_t conn, uint8_t ins, const uint8_t *tlv, size_t len)
 {
+	uint8_t apdu[600];
+	size_t alen;
+
+	if (aliro_apdu_wrap(ins, tlv, len, apdu, sizeof(apdu), &alen) != 0) {
+		ESP_LOGE(TAG, "[conn %u] APDU wrap failed (ins 0x%02x len %u)", conn, ins,
+			 (unsigned)len);
+		return -1;
+	}
+
 	uint8_t frame[600];
 	size_t flen;
 
-	if (aliro_ble_frame(0x00, opcode, payload, len, frame, sizeof(frame), &flen) != 0) {
-		ESP_LOGE(TAG, "[conn %u] frame build failed (op 0x%02x len %u)", conn, opcode,
-			 (unsigned)len);
+	if (aliro_ble_frame(ALIRO_PROTO_ACCESS, ALIRO_AP_OP_COMMAND, apdu, alen, frame,
+			    sizeof(frame), &flen) != 0) {
+		ESP_LOGE(TAG, "[conn %u] frame build failed (ins 0x%02x len %u)", conn, ins,
+			 (unsigned)alen);
 		return -1;
 	}
 	int rc = aliro_ble_send(conn, frame, flen);
 
-	ESP_LOGI(TAG, "[conn %u] TX op 0x%02x, %u payload bytes (send rc=%d)", conn, opcode,
-		 (unsigned)len, rc);
+	ESP_LOGI(TAG, "[conn %u] TX ins 0x%02x, %u APDU bytes (send rc=%d)", conn, ins,
+		 (unsigned)alen, rc);
 	return rc;
 }
 
@@ -176,22 +190,35 @@ static void start_auth(struct aliro_session *s)
 	uint8_t apdu[160];
 	size_t n;
 
-	/* ExpeditedPhaseType/UserAuthenticationPolicy: standard path, no extra
-	 * policy (enum values are provisioning/policy driven; 0x02/0x00 here). */
-	if (aliro_apdu_build_auth0(0x02u, 0x00u, ALIRO_VERSION, s->reader_eph_pub, s->txid,
+	/* Standard-path AUTH0: ExpeditedPhaseType 0 (encoded as an empty 41 00) and
+	 * UserAuthenticationPolicy 0x01 — values confirmed from the reference
+	 * AUTH0Command::Serialize. These same two values feed the session-key salt below. */
+	if (aliro_apdu_build_auth0(0x00u, 0x01u, ALIRO_VERSION, s->reader_eph_pub, s->txid,
 				   s_id.reader_id, apdu, sizeof(apdu), &n) != 0) {
 		ESP_LOGE(TAG, "[conn %u] AUTH0 build failed", s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
 	}
-	send_framed(s->conn_handle, ALIRO_OP_AUTH0, apdu, n);
+	send_ap_command(s->conn_handle, ALIRO_INS_AUTH0, apdu, n);
 	s->phase = PH_SENT_AUTH0;
 }
 
 static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t len)
 {
 	struct aliro_auth0_response r;
+	uint16_t sw;
 
+	/* APDU response = <response TLV> SW1 SW2; drop the status word before parsing. */
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AUTH0Response too short (%u B)", s->conn_handle,
+			 (unsigned)len);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (sw != 0x9000u) {
+		ESP_LOGW(TAG, "[conn %u] AUTH0Response SW=0x%04x (expected 0x9000)", s->conn_handle,
+			 sw);
+	}
 	if (aliro_apdu_parse_auth0_response(pl, len, &r) != 0) {
 		ESP_LOGE(TAG, "[conn %u] AUTH0Response parse failed", s->conn_handle);
 		s->phase = PH_FAILED;
@@ -223,14 +250,26 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 		s->phase = PH_FAILED;
 		return;
 	}
-	send_framed(s->conn_handle, ALIRO_OP_AUTH1, apdu, n);
+	send_ap_command(s->conn_handle, ALIRO_INS_AUTH1, apdu, n);
 	s->phase = PH_SENT_AUTH1;
 }
 
 static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t len)
 {
 	struct aliro_auth1_response r;
+	uint16_t sw;
 
+	/* APDU response = <response TLV> SW1 SW2; drop the status word before parsing. */
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response too short (%u B)", s->conn_handle,
+			 (unsigned)len);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (sw != 0x9000u) {
+		ESP_LOGW(TAG, "[conn %u] AUTH1Response SW=0x%04x (expected 0x9000)", s->conn_handle,
+			 sw);
+	}
 	if (aliro_apdu_parse_auth1_response(pl, len, &r) != 0) {
 		ESP_LOGE(TAG, "[conn %u] AUTH1Response parse failed", s->conn_handle);
 		s->phase = PH_FAILED;
@@ -289,7 +328,7 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	size_t slen;
 
 	if (aliro_salt_build(ALIRO_SALT_SESSION, s->txid, s->device_eph_pub + 1,
-			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_VERSION, 0x02u, 0x00u,
+			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_VERSION, 0x00u, 0x01u,
 			     NULL, salt, &slen) != 0 ||
 	    aliro_crypto_derive_block(s->z, salt, slen, s->device_eph_pub + 1, block) != 0) {
 		ESP_LOGE(TAG, "[conn %u] key-block derivation failed", s->conn_handle);
@@ -311,7 +350,7 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	}
 	memcpy(payload, ct, exn);
 	memcpy(payload + exn, tag, ALIRO_GCM_TAG_LEN);
-	send_framed(s->conn_handle, ALIRO_OP_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
+	send_ap_command(s->conn_handle, ALIRO_INS_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
 
 	/* Auth done: hand the derived URSK to the ranging module, which emits M1 and
 	 * negotiates the ranging parameters with the peer (M1-M4). */
@@ -344,6 +383,18 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	ESP_LOGI(TAG, "[conn %u] msg #%u: type=0x%02x op=0x%02x, %u payload B, phase=%s",
 		 s->conn_handle, (unsigned)s->msgs_rx, type, opcode, (unsigned)pl_len,
 		 phase_str(s->phase));
+
+	/* A Notification Event mid-auth is the device rejecting us: GeneralError is
+	 * encoded [01 01 <code>]. Surface <code> — it is the exact reason the phone
+	 * bailed, far more legible than a downstream parse failure. */
+	if (type == ALIRO_PROTO_NOTIFICATION && opcode == ALIRO_NOTIF_EVENT) {
+		uint8_t code = (pl_len >= 3u) ? pl[2] : 0xffu;
+
+		ESP_LOGW(TAG, "[conn %u] device GeneralError 0x%02x in phase %s", s->conn_handle,
+			 code, phase_str(s->phase));
+		s->phase = PH_FAILED;
+		return;
+	}
 
 	switch (s->phase) {
 	case PH_IDLE:
