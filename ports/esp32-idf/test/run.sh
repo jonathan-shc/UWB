@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Test entry point for the ESP32 port. Three layers, all hardware-free:
-#   - test_compat_shim:  fast host unit test of the pure compat headers.
+#   - test_port_headers: fast host unit test of the pure port headers.
 #   - test_aliro_crypto: host KAT of the Aliro key-schedule core (SHA-256/KDF),
 #                        compiled from the same source as the target.
 #   - verify_port.sh:    on-target build + --wrap seam + exclusion guard (needs
@@ -12,12 +12,12 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-echo "== host: compat shim unit test =="
-BIN="$(mktemp -t woz_compat_shim.XXXXXX)"
+echo "== host: port headers unit test =="
+BIN="$(mktemp -t woz_port_headers.XXXXXX)"
 trap 'rm -f "$BIN" "${CBIN:-}"' EXIT
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$HERE/../components/woz_uwb/compat" \
-   "$HERE/test_compat_shim.c" -o "$BIN"
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   "$HERE/test_port_headers.c" -o "$BIN"
 "$BIN"
 
 echo

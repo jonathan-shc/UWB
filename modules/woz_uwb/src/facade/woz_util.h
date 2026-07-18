@@ -1,10 +1,22 @@
-/* ESP-IDF compat for <zephyr/sys/util.h> — container/compare macros plus
- * IS_ENABLED (the on-silicon build compiles dw3000_device.c, which uses it;
- * the host shim did not need it because it stubs the driver). */
-#ifndef WOZ_ESP_COMPAT_UTIL_H
-#define WOZ_ESP_COMPAT_UTIL_H
+/*
+ * Copyright (c) 2026 asxeem
+ * SPDX-License-Identifier: ISC
+ * woz_util.h - container and compare macros.
+ *
+ * Pure code, same rationale as woz_bytes.h: none of this is platform-specific,
+ * so it does not belong behind a <zephyr/sys/util.h> compat header.
+ *
+ * Every macro is #ifndef-guarded, so on Zephyr the real header wins if it was
+ * already included and these are inert.
+ */
+#ifndef WOZ_UTIL_H
+#define WOZ_UTIL_H
 
 #include <stddef.h>
+
+#if defined(__ZEPHYR__)
+#include <zephyr/sys/util.h>
+#endif
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
@@ -28,14 +40,13 @@
 #define ROUND_UP(x, align) (DIV_ROUND_UP((x), (align)) * (align))
 #endif
 #ifndef CONTAINER_OF
-#define CONTAINER_OF(ptr, type, field) \
-	((type *)(((char *)(ptr)) - offsetof(type, field)))
+#define CONTAINER_OF(ptr, type, field) ((type *)(((char *)(ptr)) - offsetof(type, field)))
 #endif
 #ifndef ARG_UNUSED
 #define ARG_UNUSED(x) ((void)(x))
 #endif
 
-/* Zephyr IS_ENABLED: 1 when the arg is defined to 1, 0 when undefined. */
+/* Zephyr's IS_ENABLED: 1 when the arg is defined to 1, 0 when undefined. */
 #ifndef IS_ENABLED
 #define IS_ENABLED(config_macro) Z_IS_ENABLED1(config_macro)
 #define Z_IS_ENABLED1(config_macro) Z_IS_ENABLED2(_XXXX##config_macro)
@@ -44,4 +55,4 @@
 #define Z_IS_ENABLED3(ignore_this, val, ...) val
 #endif
 
-#endif /* WOZ_ESP_COMPAT_UTIL_H */
+#endif /* WOZ_UTIL_H */

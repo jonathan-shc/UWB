@@ -1,7 +1,9 @@
 # Woz UWB (Aliro DS-TWR responder) engine as an ESP-IDF component.
 # Additive: reuses modules/woz_uwb/src + deps/dw3000 from the repo unchanged.
-# The <zephyr/*> includes resolve to compat/ (FreeRTOS/esp_timer-backed); the
-# DW3000 platform SPI/GPIO layer is the ESP-IDF backend in port/.
+# The engine is platform-neutral: it takes its OS surface from woz_port.h and
+# its logging from woz_log.h (both in src/facade), which select the ESP-IDF
+# backend on ESP_PLATFORM. No Zephyr compat layer is involved. The DW3000
+# platform SPI/GPIO layer is the ESP-IDF backend in port/.
 # Source set mirrors modules/woz_uwb/CMakeLists.txt + deps/dw3000/CMakeLists.txt
 # for CONFIG_WOZ_UWB + RESPONDER + ALIRO + CRYPTO_MBEDTLS (no PRETTY/SHELL/SELFTEST).
 
@@ -49,7 +51,6 @@ idf_component_register(
     INCLUDE_DIRS
         "${WOZ}/facade"        # woz_uwb_facade.h — public API for the app
     PRIV_INCLUDE_DIRS
-        "compat"               # fake <zephyr/*> — must resolve first
         "port"                 # board_pins.h
         "${WOZ}/driver" "${WOZ}/fira" "${WOZ}/ccc" "${WOZ}/facade" "${WOZ}/shell"
         "${WOZ}/aliro" "${WOZ}/aliro/include"

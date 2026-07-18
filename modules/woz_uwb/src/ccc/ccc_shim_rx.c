@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <errno.h>
 
-#include <zephyr/kernel.h>
-#include <zephyr/sys/byteorder.h>
+#include "woz_port.h"
+#include "woz_bytes.h"
 
 #include <deca_device_api.h>
 
@@ -20,7 +20,7 @@
 #include "uwb_rxdiag.h"         /* uwb_rxdiag_stream_get — the `aliro log` runtime toggle */
 
 #if defined(CONFIG_WOZ_PRETTY_SHELL)
-#include <zephyr/logging/log.h>
+#include "woz_log.h"
 /* Pretty mode: one curated line per ranging block replaces the per-frame trace. */
 LOG_MODULE_REGISTER(woz_rng, LOG_LEVEL_INF);
 #endif
@@ -708,7 +708,7 @@ int32_t __wrap_dwt_rxenable(int32_t mode)
 			__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND);
 #endif
 
-			/* Synchronous printk (survives deferred-log starvation); rd==wr proves the
+			/* Synchronous woz_printf (survives deferred-log starvation); rd==wr proves the
 			 * key reached the register, slot proves the index clock advances. */
 			if (g_rx_arms < CCC_RX_LOG_ARMS) {
 				DIAGK("ccc_rx arm#%u slot=%u key0 wr %08x rd %08x iv2=%08x\n",
@@ -775,7 +775,7 @@ static int32_t gated_rxenable(int32_t mode)
 static int arm_poll_sp3(uint32_t prepoll_ip)
 {
 	static uint32_t dbg_n;
-	uint32_t t0 = k_cycle_get_32();
+	uint32_t t0 = woz_cycle_get_32();
 	const uint8_t *pd, *pv;
 	unsigned warm;
 	dwt_sts_cp_key_t k;
@@ -809,7 +809,7 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 	/* Probe (first 8 arms): armlat = arm compute in cycles; warm = fast path taken; ctr must
 	 * equal iv0, a match proving the load is clean. */
 	if (dbg_n < 8u) {
-		uint32_t cyc = k_cycle_get_32() - t0;
+		uint32_t cyc = woz_cycle_get_32() - t0;
 		uint32_t ctr = dwt_readctrdbg();
 		uint32_t cc = dwt_read_reg(CHAN_CTRL_REG);
 		unsigned rxcode = (unsigned)((cc >> 8) & 0x1Fu);
@@ -1058,7 +1058,7 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		int tr = -1;
 
 		g_await_poll = false;
-		/* Time-critical FIRST: arm Response_0's delayed TX before the stsq read and printk.
+		/* Time-critical FIRST: arm Response_0's delayed TX before the stsq read and woz_printf.
 		 * cper=0 => real POLL, so delayed-TX Response_0 (index+1); else return to the SP0
 		 * listen. */
 		if (cper == 0u && ip != 0u) {
@@ -1190,7 +1190,7 @@ int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)
 /* Stop the permanent Pre-POLL listener: close the listen-gate (every self-rearm
  * site checks it via gated_rxenable), then force the radio out of RX/TX.  The
  * DW3000 callbacks run on the dedicated coop (-11) isr workqueue with
- * busy-polled SPI and synchronous printk, so a callback never yields
+ * busy-polled SPI and synchronous woz_printf, so a callback never yields
  * mid-flight: one in flight when a preemptive-thread caller gets here has
  * already run to completion (its rearm landed BEFORE our forcetrxoff), and any
  * later callback sees the gate closed.  A residual rearm window exists only if

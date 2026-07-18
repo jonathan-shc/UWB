@@ -10,19 +10,20 @@ and a peer that drives the DS-TWR exchange (an Aliro Wallet, or a second board).
 
 ## What this is (and how it stays additive)
 
-This tree reuses `modules/woz_uwb/src` and `deps/dw3000` from the repo **unchanged**.
-Nothing outside `ports/esp32-idf/` is edited, so it never conflicts with the other
-worktrees. Two seams make that possible:
+This tree reuses `modules/woz_uwb/src` and `deps/dw3000` from the repo unchanged.
+Only one seam is target-specific now:
 
-- `components/woz_uwb/compat/zephyr/*` — a small fake-`<zephyr/*>` compatibility
-  layer (`kernel.h`, `logging/log.h`, `sys/{printk,util,byteorder}.h`) backed by
-  FreeRTOS + `esp_timer` + `esp_log`. It resolves first on the include path, so the
-  shared engine `.c` files compile byte-for-byte. It is the on-silicon twin of the
-  host-test shim in `tests/host/shim/zephyr/`.
 - `components/woz_uwb/port/` — the ESP-IDF DW3000 platform backend
   (`dw3000_spi.c`, `dw3000_hw.c`) replacing the Zephyr `deps/dw3000/platform/`
   `dw3000_spi.c`/`dw3000_hw.c` (SPI-master + GPIO/IRQ), plus `board_pins.h` and a
   tiny wrap/diag stub (`woz_wrap_stubs.c`).
+
+There is **no Zephyr compatibility layer**. The engine takes its whole OS surface
+from `modules/woz_uwb/src/facade/woz_port.h` (eight functions: heap, monotonic
+clock, two sleeps, cycle counter) and its logging from `woz_log.h`, both of which
+select an ESP-IDF backend on `ESP_PLATFORM`. The earlier `compat/zephyr/*` shim,
+194 lines of fake `<zephyr/*>` headers, was deleted once those two headers
+existed. See [`docs/porting.md`](../../docs/porting.md).
 
 The CCC STS substitution seam (`-Wl,--wrap=dwt_configurestsiv/dwt_rxenable/
 dwt_configurestsmode`) links and is wired on `xtensa-esp32s3-elf-ld`.

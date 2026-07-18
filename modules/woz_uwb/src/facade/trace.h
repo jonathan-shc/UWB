@@ -8,7 +8,7 @@
 
 #if defined(CONFIG_WOZ_E2E_TRACE)
 
-#include <zephyr/logging/log.h>
+#include "woz_log.h"
 
 /** @brief Buffer length for a 16-char hex prefix (8 bytes) + NUL terminator. */
 #define WOZ_TRACE_HEX8_LEN 17
@@ -33,7 +33,7 @@ static inline const char *woz_trace_hex8(char buf[WOZ_TRACE_HEX8_LEN], const uin
 
 #else /* !CONFIG_WOZ_E2E_TRACE */
 
-#include <zephyr/sys/printk.h>
+#include "woz_log.h"
 
 #define WOZ_TRACE_HEX8_LEN 17
 
@@ -41,7 +41,7 @@ static inline const char *woz_trace_hex8(char buf[WOZ_TRACE_HEX8_LEN], const uin
 #define WOZ_TRACE(stage, fmt, ...)                                                                 \
 	do {                                                                                       \
 		if (0) {                                                                           \
-			printk("[WOZ_TRACE] src=lock stage=" stage " " fmt, ##__VA_ARGS__);        \
+			woz_printf("[WOZ_TRACE] src=lock stage=" stage " " fmt, ##__VA_ARGS__);        \
 		}                                                                                  \
 	} while (0)
 
