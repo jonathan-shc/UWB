@@ -48,6 +48,7 @@ idf_component_register(
     SRCS ${WOZ_SRCS}
     INCLUDE_DIRS
         "${WOZ}/facade"        # woz_uwb_facade.h — public API for the app
+        "${WOZ}/aliro/include" # aliro_uwb_adapter/ + cherry/ — reader ranging-setup API
     PRIV_INCLUDE_DIRS
         "compat"               # fake <zephyr/*> — must resolve first
         "port"                 # board_pins.h

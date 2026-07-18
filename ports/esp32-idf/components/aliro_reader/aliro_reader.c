@@ -4,8 +4,10 @@
  *
  * aliro_reader — the Aliro reader credential-auth transaction (Phase 3.2/3.3) on
  * top of the aliro_ble L2CAP transport. Drives AUTH0 -> AUTH1 -> EXCHANGE, runs
- * the ECDH + key schedule (aliro_crypto) to derive the URSK, then hands it to the
- * UWB engine (woz_uwb_start_aliro). Wire codec = aliro_apdu; crypto = aliro_crypto.
+ * the ECDH + key schedule (aliro_crypto) to derive the URSK, then hands the URSK
+ * to aliro_ranging, which negotiates the ranging parameters with the peer
+ * (M1-M4) and starts the UWB responder. Wire codec = aliro_apdu; crypto =
+ * aliro_crypto; ranging setup = aliro_ranging.
  *
  * Heavy diagnostic logging by design: this path can only complete end-to-end
  * once the reader is provisioned and a real credential is present. The reader
@@ -27,7 +29,7 @@
 #include "aliro_crypto.h"
 #include "aliro_prim.h"
 #include "aliro_prov.h"
-#include "woz_uwb_facade.h"
+#include "aliro_ranging.h"
 #include "aliro_reader.h"
 
 static const char *TAG = "aliro_reader";
@@ -54,24 +56,11 @@ static bool s_have_last_cred;
  * need no lock. Created in load_provisioning() (runs single-threaded at boot). */
 static SemaphoreHandle_t s_prov_lock;
 
-/* Canned ranging parameters for the 3.3 handoff. The real parameters are
- * negotiated in the M1-M4 exchange (post-auth, over BleSK) which is a later
- * increment; until then the derived URSK is bound to these demo params. */
-static const struct {
-	uint32_t session_id;
-	uint8_t channel;
-	uint8_t sync_code_index;
-	uint16_t slot_duration_rstu;
-	uint32_t block_duration_ms;
-	uint8_t slot_per_round;
-	uint32_t sts_index0;
-} k_ranging = { 0x02b02fd4u, 9u, 9u, 2400u, 192u, 12u, 0x1196e79du };
-
 enum txn_phase {
 	PH_IDLE = 0,     /* connected; awaiting the peer's first message */
 	PH_SENT_AUTH0,   /* AUTH0 sent; awaiting AUTH0Response */
 	PH_SENT_AUTH1,   /* AUTH1 sent; awaiting AUTH1Response */
-	PH_ESTABLISHED,  /* URSK derived, UWB armed */
+	PH_ESTABLISHED,  /* URSK derived; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
 };
 
@@ -164,35 +153,6 @@ static int send_framed(uint16_t conn, uint8_t opcode, const uint8_t *payload, si
 	ESP_LOGI(TAG, "[conn %u] TX op 0x%02x, %u payload bytes (send rc=%d)", conn,
 		 opcode, (unsigned)len, rc);
 	return rc;
-}
-
-/* Phase 3.3: bind the derived URSK and start the UWB responder. */
-static void arm_uwb_from_credential(struct aliro_session *s)
-{
-	ESP_LOGI(TAG, "[conn %u] URSK derived; arming UWB responder", s->conn_handle);
-	ESP_LOG_BUFFER_HEXDUMP(TAG, s->ursk, ALIRO_URSK_LEN, ESP_LOG_INFO);
-
-	struct woz_uwb_aliro_cfg cfg = {
-		.session_id = k_ranging.session_id,
-		.channel = k_ranging.channel,
-		.sync_code_index = k_ranging.sync_code_index,
-		.slot_duration_rstu = k_ranging.slot_duration_rstu,
-		.block_duration_ms = k_ranging.block_duration_ms,
-		.slot_per_round = k_ranging.slot_per_round,
-		.sts_index0 = k_ranging.sts_index0,
-		.uwb_time_us = 0u,
-		.ursk = s->ursk,
-		.ranging_config = NULL,
-		.rc_len = 0,
-	};
-
-	/* Re-point the engine at the credential-derived URSK. Ranging params are
-	 * canned until the M1-M4 negotiation is parsed. */
-	woz_uwb_stop();
-	int rc = woz_uwb_start_aliro(&cfg);
-
-	ESP_LOGI(TAG, "[conn %u] woz_uwb_start_aliro(derived URSK) = %d %s",
-		 s->conn_handle, rc, rc == 0 ? "(ranging armed)" : "(FAILED)");
 }
 
 /* Kick the reader-driven access protocol: ephemeral keys + txid -> AUTH0. */
@@ -345,8 +305,14 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	memcpy(payload + exn, tag, ALIRO_GCM_TAG_LEN);
 	send_framed(s->conn_handle, ALIRO_OP_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
 
+	/* Auth done: hand the derived URSK to the ranging module, which emits M1 and
+	 * negotiates the ranging parameters with the peer (M1-M4). */
 	s->phase = PH_ESTABLISHED;
-	arm_uwb_from_credential(s);
+	ESP_LOGI(TAG, "[conn %u] URSK derived; starting ranging setup", s->conn_handle);
+	ESP_LOG_BUFFER_HEXDUMP(TAG, s->ursk, ALIRO_URSK_LEN, ESP_LOG_INFO);
+	if (aliro_ranging_start(s->conn_handle, s->ursk) != 0) {
+		ESP_LOGW(TAG, "[conn %u] ranging setup did not start", s->conn_handle);
+	}
 }
 
 /* Consume one inbound Aliro transaction SDU. */
@@ -388,8 +354,9 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 		on_auth1_response(s, pl, pl_len);
 		break;
 	case PH_ESTABLISHED:
-		ESP_LOGI(TAG, "[conn %u] post-auth message (ranging control) — not "
-			      "yet handled", s->conn_handle);
+		/* Post-auth ranging-setup (M1-M4): route the raw SDU (its own 4-byte
+		 * Aliro header included, not the unframed auth payload) to the engine. */
+		aliro_ranging_feed(s->conn_handle, data, len);
 		break;
 	default:
 		ESP_LOGW(TAG, "[conn %u] message in phase %s ignored", s->conn_handle,
@@ -420,6 +387,7 @@ static void on_disconnected(uint16_t conn_handle)
 			 conn_handle, (unsigned)s->msgs_rx, phase_str(s->phase));
 		s->active = false;
 	}
+	aliro_ranging_stop(conn_handle);
 }
 
 static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
@@ -441,6 +409,10 @@ int aliro_reader_start(void)
 		return -1;
 	}
 	load_provisioning();
+	if (aliro_ranging_init() != 0) {
+		ESP_LOGW(TAG, "UWB ranging adapter unavailable; auth will run but "
+			      "ranging setup won't start");
+	}
 
 	const struct aliro_ble_config cfg = {
 		.proto_versions = k_proto_versions,

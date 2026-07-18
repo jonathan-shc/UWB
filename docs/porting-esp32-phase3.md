@@ -91,10 +91,10 @@ handshake completes — however correct the code.
   `aliro_reader` now drives the transaction (AUTH0 → AUTH1 → EXCHANGE), running
   ECDH + the key schedule to derive the URSK, replying via `aliro_ble_send`, with
   heavy diagnostic logging.
-- **3.3 — IMPLEMENTED (builds).** On a completed handshake the reader binds the
-  derived URSK (`woz_uwb_bind_ursk`) and starts the responder
-  (`woz_uwb_start_aliro`); ranging parameters are canned until the M1-M4
-  negotiation is parsed (a later increment).
+- **3.3 — IMPLEMENTED (builds), superseded by 3.5.** On a completed handshake the
+  reader originally started the responder with **canned** ranging parameters
+  (`woz_uwb_start_aliro`). 3.5 replaces that canned hand-off with the real M1-M4
+  negotiation, so the params are now negotiated with the peer rather than fixed.
 - **3.4 — IMPLEMENTED (builds; host-KAT'd).** The provisioning seam
   (`ports/esp32-idf/components/aliro_reader/aliro_prov.{c,h}` + `aliro_prov_nvs.c`):
   the reader identity (a stable reader identifier + P-256 signing key) and a
@@ -112,13 +112,32 @@ handshake completes — however correct the code.
   last-presented credential) and `aliro-trust` (persist the last-presented
   credential key as trusted). Phase-4 Matter `SetAliroReaderConfig` writes the same
   NVS blob to supply a real identity + issuer trust.
+- **3.5 — IMPLEMENTED (builds + links; bench-gated).** The post-auth Aliro UWB
+  ranging-setup (**M1-M4**), wiring the reader to the engine's reader adapter/session
+  (`modules/woz_uwb/src/aliro` `aliro_uwb_adapter` + `aliro_uwb_session`), which were
+  compiled into the ESP32 image but had **no caller**. New
+  `ports/esp32-idf/components/aliro_reader/aliro_ranging.{c,h}`: on a completed
+  credential-auth it creates a reader session bound to the derived URSK, emits **M1**
+  over the L2CAP channel, routes inbound **M2/M4** into `aliro_uwb_session_message_handle`,
+  and lets the engine negotiate the parameters and start the DW3000 responder itself
+  (`cherry_ccc_shim` maps the CCC session-start onto `woz_uwb_start_aliro`, so the
+  reader no longer calls it directly and the canned `k_ranging` table is gone). The
+  engine's transmit callback frames straight to `aliro_ble_send`; the whole lifecycle
+  (create/feed/teardown + the transmit/event callbacks) is synchronous on the BLE-host
+  task, and the DW3000 is single-session. The `woz_uwb` component now exposes
+  `aliro/include` (the `aliro_uwb_adapter/` + `cherry/` headers) publicly for the reader.
+  This is a real engine-integration, not host-testable: it compiles and links now, and
+  only fully verifies against a phone at bench.
 
 **Verification reality:** the wire codec, the key schedule, and the provisioning
 seam (identity + trust store) are host-KAT verified now; the whole firmware builds
-and links (`verify_port.sh`). The reader now has a stable identity and a credential
-trust gate, but the assembled transaction still cannot complete end-to-end until a
-real credential for *this* reader is present in the phone's wallet, which needs
-Phase-4 Matter provisioning (the reader runs on the dev identity, and dev-open trust,
-until then); and byte-exact interop of the salt transcript is still to be confirmed
-at bench with a device. The diagnostic logging at each step is there to make that
-bench bring-up tractable.
+and links (`verify_port.sh`), M1-M4 wiring included. The reader now has a stable
+identity, a credential trust gate, and a real (negotiated, not canned) ranging-setup
+path. What is still bench-gated: the M1-M4 exchange has never run on ESP32 silicon
+(the adapter path was previously unwired), so it compiles and links but its
+end-to-end behaviour against a real phone is unverified; the assembled transaction
+also still cannot complete until a real credential for *this* reader is present in
+the phone's wallet, which needs Phase-4 Matter provisioning (the reader runs on the
+dev identity, and dev-open trust, until then); and byte-exact interop of the salt
+transcript is still to be confirmed at bench. The diagnostic logging at each step is
+there to make that bench bring-up tractable.
