@@ -142,15 +142,19 @@ static uint64_t g_t_final_rx;
  * Response have overwritten t2/t3, so recomputing there mixes this round's t6 with the next round's
  * t3 and corrupts round2 (observed as km-scale distances). g_final_round_valid gates the compute
  * (consume-once): a Final_Data with no fresh Final capture is dropped, not turned into garbage. */
+#if defined(ESP_PLATFORM)
 static uint32_t g_final_reply1;
 static uint32_t g_final_round2;
 static bool g_final_round_valid;
+#endif
 
 /** @brief Cache of the STS key (dURSK) currently loaded in the STS_KEY registers, so the per-arm
  * sts_key_load() skips the ~258 us of redundant key writes when the per-cycle-constant dURSK is
  * unchanged. Defined here (ahead of ccc_shim_rx_log_reset) so a session start can invalidate it. */
+#if defined(ESP_PLATFORM)
 static uint8_t g_sts_key_cache[CCC_DURSK_LEN];
 static bool g_sts_key_cached;
+#endif
 
 #if defined(ESP_PLATFORM)
 /** @brief ESP32: set when the POLL handler armed the Final RFRAME RX synchronously (busy-wait
@@ -219,9 +223,11 @@ void ccc_shim_rx_log_reset(void)
 	g_poll_ip_for_final = 0u;
 	g_final_sts_verdict = -1; /* fail-closed until a Final RFRAME is measured */
 	g_final_sts_index = 0;
+#if defined(ESP_PLATFORM)
 	g_final_round_valid = false;
 	g_sts_key_cached =
 		false; /* new session re-configures the radio -> STS_KEY regs re-cleared */
+#endif
 #if defined(ESP_PLATFORM)
 	g_final_armed_sync = false;
 #endif
@@ -497,15 +503,24 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 		// CCC DS-TWR (double-sided two-way ranging) message carrying poll/response/final
 		// timing and STS data.
 		struct ccc_ds_twr tw;
+#if defined(ESP_PLATFORM)
+		/* ESP32: the Final_Data lands only after the NEXT round's POLL/Response have
+		 * overwritten the live t2/t3 (slow SPI + jittery dispatch), so recomputing here
+		 * mixes this round's t6 with the next round's t3 (km-scale garbage). Consume the
+		 * same-round snapshot taken at Final capture; g_final_round_valid gates it
+		 * consume-once (a Final_Data with no fresh Final is dropped). */
 		uint32_t t_reply1 = g_final_reply1;
 		uint32_t t_round2 = g_final_round2;
+		bool have_round = g_final_round_valid;
+#else
+		/* Non-ESP (nRF): the Final_Data is processed before the next round overwrites the
+		 * live timestamps, so recompute directly from the globals (original path). */
+		uint32_t t_reply1 = (uint32_t)(g_t_resp_tx - g_t_poll_rx);
+		uint32_t t_round2 = (uint32_t)(g_t_final_rx - g_t_resp_tx);
+		bool have_round = true;
+#endif
 
-		/* Only range if this Final_Data pairs with a fresh, same-round Final capture.
-		 * Without it the intervals are stale/cross-round (t6 and t3 from different rounds)
-		 * -> garbage; drop the block instead. Consume-once so the next block must
-		 * re-capture a Final. */
-		if (g_final_round_valid &&
-		    ccc_responder_ds_twr(&fd, 0u, t_reply1, t_round2, &tw) == 0) {
+		if (have_round && ccc_responder_ds_twr(&fd, 0u, t_reply1, t_round2, &tw) == 0) {
 			/* Signed ToF: near zero the numerator goes slightly negative (uint32 would
 			 * wrap), so compute it signed for bring-up. 1 tick ~ 15.65 ps, ~4.6917
 			 * mm/tick. */
@@ -549,7 +564,9 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			 * fresh verdict + interval snapshot, else the gate fails closed. */
 			g_final_sts_verdict = -1;
 			g_final_sts_index = 0;
+#if defined(ESP_PLATFORM)
 			g_final_round_valid = false;
+#endif
 		}
 	}
 }
@@ -628,8 +645,8 @@ static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 }
 
 /* The STS key (dURSK) is per ranging CYCLE — POLL, Response, Final and every block in the cycle
- * share it — but each arm re-wrote all four STS_KEY registers: ~258 us of SPI on the critical path
- * (STSPLIT key=), ~40% of the arm latency that misses the ~1836 us slot deadline. Cache the loaded
+ * share it — but each arm re-wrote all four STS_KEY registers: ~258 us of SPI on the critical path,
+ * ~40% of the arm latency that misses the ~1836 us slot deadline. Cache the loaded
  * dURSK and skip dwt_configurestskey when unchanged; the STS_KEY registers persist across the
  * per-frame IV/loadiv/mode reprogramming within a session. ccc_shim_rx_log_reset() clears the cache
  * (a new session's dwt_configure re-clears the registers). Only the ~16-byte IV write remains per
@@ -638,6 +655,7 @@ static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 static void sts_key_load(const uint8_t dursk[CCC_DURSK_LEN])
 {
 	dwt_sts_cp_key_t k;
+#if defined(ESP_PLATFORM)
 	size_t i;
 
 	if (g_sts_key_cached) {
@@ -647,12 +665,15 @@ static void sts_key_load(const uint8_t dursk[CCC_DURSK_LEN])
 			return; /* STS_KEY registers already hold this dURSK */
 		}
 	}
+#endif
 	pack_key(&k, dursk);
 	dwt_configurestskey(&k);
+#if defined(ESP_PLATFORM)
 	for (i = 0u; i < CCC_DURSK_LEN; i++) {
 		g_sts_key_cache[i] = dursk[i];
 	}
 	g_sts_key_cached = true;
+#endif
 }
 
 /** BENCH PROBE (CCC_RX_PACK_SELFTEST) — dump the STS register lanes a known V lands in, to pin the
@@ -765,8 +786,10 @@ int32_t __wrap_dwt_rxenable(int32_t mode)
 			pack_key(&k, dursk);
 			pack_iv(&v, sts_v);
 			dwt_configurestskey(&k); /* unwrapped -> direct */
+#if defined(ESP_PLATFORM)
 			/* wrote STS_KEY out-of-band; drop the arm cache */
 			g_sts_key_cached = false;
+#endif
 			__real_dwt_configurestsiv(&v); /* bypass the TX IV wrap */
 			dwt_configurestsloadiv();      /* reset the HW STS counter to our IV */
 #if CCC_RX_FORCE_SP3
@@ -856,10 +879,7 @@ static int32_t gated_rxenable(int32_t mode)
  * POLL that follows the Pre-POLL. */
 static int arm_poll_sp3(uint32_t prepoll_ip)
 {
-	static uint32_t dbg_n;
-	uint32_t t0 = k_cycle_get_32();
 	const uint8_t *pd, *pv;
-	unsigned warm;
 	dwt_sts_cp_iv_t v;
 
 	/* The STS for the predicted index was pre-derived in the idle (g_warm_*); pack it with no
@@ -867,7 +887,6 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 	if (!g_warm_valid) {
 		return -EIO;
 	}
-	warm = 1u;
 	pd = g_warm_dursk;
 	pv = g_warm_sts_v;
 	/* Commit the Response_0 (idx+1) AND Final (idx+2) STS NOW, before this block's decode
@@ -881,40 +900,10 @@ static int arm_poll_sp3(uint32_t prepoll_ip)
 		g_armed_final_sts_v[i] = g_warm_final_sts_v[i];
 	}
 	pack_iv(&v, pv);
-	uint32_t c_pack = k_cycle_get_32();
 	sts_key_load(pd); /* cached: writes the 4 STS_KEY regs only on a dURSK change */
-	uint32_t c_key = k_cycle_get_32();
 	__real_dwt_configurestsiv(&v); /* bypass the TX IV wrap */
-	uint32_t c_iv = k_cycle_get_32();
 	dwt_configurestsloadiv(); /* reset HW STS counter to our IV */
-	uint32_t c_load = k_cycle_get_32();
 	__real_dwt_configurestsmode((uint8_t)DWT_STS_MODE_ND); /* SP0 -> SP3/ND for the POLL */
-	uint32_t c_mode = k_cycle_get_32();
-
-	/* Probe (first 8 arms): armlat = arm compute in cycles; warm = fast path taken; ctr must
-	 * equal iv0, a match proving the load is clean. SPLIT breaks armlat into the four STS SPI
-	 * ops (key=16 B, iv=16 B, loadiv=1, mode=1) so a bit-time-bound cost (key/iv >>
-	 * loadiv/mode) is distinguishable from per-transaction overhead (all four ~equal). */
-	if (dbg_n < 8u) {
-		uint32_t cyc = k_cycle_get_32() - t0;
-		uint32_t ctr = dwt_readctrdbg();
-		uint32_t cc = dwt_read_reg(CHAN_CTRL_REG);
-		unsigned rxcode = (unsigned)((cc >> 8) & 0x1Fu);
-		unsigned sfd = (unsigned)((cc >> 1) & 0x3u);
-		unsigned spc = (unsigned)((dwt_read_reg(SYS_CFG_REG) >> 12) & 0x3u);
-		unsigned slen = (unsigned)(dwt_read_reg(STS_CFG0_REG) & 0xFFu);
-
-		/* Prove the ACTIVE SP3 PHY at the arm: rxcode=9, sfd=0 (4a), spc=3 (SP3/ND), slen=7
-		 * (STS64); a mismatch floors stsq regardless of key. */
-		DIAGK("STSDBG idx=%08x warm=%u armlat=%uc rxcode=%u sfd=%u spc=%u slen=%u ctr=%08x "
-		      "iv0exp=%02x%02x%02x%02x vidx=%02x%02x%02x%02x\n",
-		      (unsigned)g_warm_index, warm, (unsigned)cyc, rxcode, sfd, spc, slen,
-		      (unsigned)ctr, pv[12], pv[13], pv[14], pv[15], pv[8], pv[9], pv[10], pv[11]);
-		DIAGK("STSPLIT key=%uc iv=%uc load=%uc mode=%uc (cpu cycles; /160 = us @160MHz)\n",
-		      (unsigned)(c_key - c_pack), (unsigned)(c_iv - c_key),
-		      (unsigned)(c_load - c_iv), (unsigned)(c_mode - c_load));
-		dbg_n++;
-	}
 
 	g_prepoll_ip = prepoll_ip; /* anchor for the POLL-result gap (`d=`) log */
 	/* Pin the window to the POLL slot (Pre-POLL + 1 slot).  The arm is sub-µs
@@ -1124,12 +1113,15 @@ static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 		g_await_final = false;
 		if (ip != 0u) {
 			g_t_final_rx = ip40; /* t6: responder Final RX */
+#if defined(ESP_PLATFORM)
 			/* Snapshot the responder-side DS-TWR intervals NOW, while t2/t3/t6 are all
 			 * from this round; the Final_Data decode (which lands after the next round
-			 * has overwritten the live timestamp globals) consumes these. */
+			 * has overwritten the live timestamp globals) consumes these. On nRF the
+			 * decode recomputes from the live globals directly (no snapshot needed). */
 			g_final_reply1 = (uint32_t)(g_t_resp_tx - g_t_poll_rx);
 			g_final_round2 = (uint32_t)(g_t_final_rx - g_t_resp_tx);
 			g_final_round_valid = true;
+#endif
 			qret = dwt_readstsquality(&stsq, 0);
 			/* Range-integrity gate (layer 2): stash this Final RFRAME's STS
 			 * verdict for the Final_Data decode that computes the distance. */
