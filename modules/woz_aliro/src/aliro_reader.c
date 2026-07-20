@@ -135,6 +135,11 @@ static const char *phase_str(enum txn_phase p)
 
 #define ALIRO_MAX_SESSIONS 2
 
+/* One credential-auth transaction, keyed by BLE connection handle. Holds the
+ * reader's ephemeral keypair and the transcript inputs (txid, device pubkey, Z)
+ * that derive the two secure channels and the URSK, so everything a transaction
+ * needs between AUTH0 and ranging setup lives here. Cleared on disconnect;
+ * ALIRO_MAX_SESSIONS of them are statically allocated. */
 static struct aliro_session {
 	bool active;
 	uint16_t conn_handle;
