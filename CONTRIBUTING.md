@@ -38,6 +38,19 @@ ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing,
   which board and phone it was validated on and what was not; see
   [`docs/hardware-validation.md`](docs/hardware-validation.md).
 
+## Documentation
+
+`docs/` is committed, so reading and editing it needs nothing installed. Two rules:
+
+- **Pages stamped `<!-- generated documentation -->` are written from the source.** Edit
+  the doc comment on the declaration, not the page. That covers `docs/README.md`,
+  `docs/ARCHITECTURE.md` and everything under `docs/architecture/`. The remaining pages
+  are hand-written and yours to edit directly.
+- **`make docs` renders the site into `site/`** and needs `doxygen` and `graphviz`. It
+  reports that the page generator is not configured and builds the API reference over the
+  committed tree; that is the expected result and not a failure. Regenerating the
+  stamped pages is a maintainer step, described in [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Licensing
 
 Project-original code is ISC (see [LICENSE](LICENSE)); the tree is mixed-license, with
