@@ -5,12 +5,18 @@ best-effort; small, focused changes land fastest.
 
 ## Building and testing
 
-Prerequisites and build steps are in the [README](README.md#getting-started). The short
-version: `make bootstrap` once, then `make build`. Host-side tests need no toolchain or
-hardware: `make test` runs the KAT suite, `make coverage` the coverage report.
+Prerequisites and build steps are in the [README](README.md#quick-start). The short
+version for the nRF5340 DK target: `make bootstrap` once, then `make build`. Host-side
+tests need no toolchain or hardware: `make test` runs the KAT suite, `make coverage` the
+coverage report.
+
+For the ESP32-S3 ports, build from the port directory (`ports/esp32-idf` or
+`ports/esp32-matter`) with ESP-IDF on your `PATH`; see [`ports/README.md`](ports/README.md).
+Their host tests run without ESP-IDF: `ports/esp32-idf/test/run.sh`.
 
 Every PR must pass the CI gates that run automatically: host tests, coverage floor,
-ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing.
+ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing, plus
+`ports/esp32-idf/test/run.sh` if you touched a port (CI does not yet gate on it).
 
 ## Ground rules
 
@@ -22,9 +28,14 @@ ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing.
   code unrelated to your change.
 - **Tests come with the change.** New parsing, session, or crypto code in
   `modules/woz_uwb/` needs host KAT coverage in `tests/host/` (CI enforces a coverage
-  floor).
+  floor); the same rule applies to `ports/esp32-idf/components/` and
+  `ports/esp32-idf/test/`.
+- **Keep the shared engine target-neutral.** `modules/woz_uwb/` is compiled by both the
+  nRF5340 and the ESP32-S3 builds. A tweak that only suits one target belongs behind
+  `#if defined(ESP_PLATFORM)`, and `make test` must still pass (the host shim compiles
+  the file without it).
 - **Hardware claims need hardware.** If a change affects on-air behavior, note in the PR
-  what was validated on a DK + iPhone and what was not; see
+  which board and phone it was validated on and what was not; see
   [`docs/hardware-validation.md`](docs/hardware-validation.md).
 
 ## Licensing

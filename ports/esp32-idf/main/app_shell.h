@@ -32,7 +32,7 @@ void app_responder_stop(void);
 /** True while the demo responder is up. */
 bool app_responder_up(void);
 
-/** Register commands and start the USB-Serial-JTAG console REPL (own task). */
+/** Register commands and start the UART console REPL (own task). */
 void app_shell_start(void);
 
 #ifdef __cplusplus

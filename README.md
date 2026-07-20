@@ -6,6 +6,7 @@
 </p>
 
 <p align="center">
+  <a href="#targets">Targets</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#hardware">Hardware</a> ·
   <a href="#how-it-works">How it works</a> ·
@@ -25,8 +26,8 @@
 <p align="center">
   <img src="https://img.shields.io/github/languages/top/asxeem/openaliro?style=flat-square" alt="top language" />
   <img src="https://img.shields.io/badge/board-nRF5340%20DK-00a9ce?style=flat-square" alt="board: nRF5340 DK" />
+  <img src="https://img.shields.io/badge/board-ESP32--S3-e7352c?style=flat-square" alt="board: ESP32-S3" />
   <img src="https://img.shields.io/badge/UWB-Qorvo%20DW3110-1e88e5?style=flat-square" alt="UWB: Qorvo DW3110" />
-  <img src="https://img.shields.io/badge/NCS-v3.3.0-0f62fe?style=flat-square" alt="NCS v3.3.0" />
   <img src="https://img.shields.io/badge/license-source--available-lightgrey?style=flat-square" alt="license: source-available" />
 </p>
 
@@ -51,8 +52,25 @@ NFC tap unlocks it as well. No app, no button.
   signal cannot replay an unlock.
 - **No UWB coprocessor**: the entire secure ranging stack runs in firmware on a bare
   Qorvo DW3110.
+- **Two SoCs**: the same ranging engine runs on Nordic and on Espressif silicon.
+
+## Targets
+
+Both targets unlock on approach against a live iPhone, and both have been validated on
+hardware. They share the UWB engine in `modules/woz_uwb` byte-for-byte.
+
+| Target | What it is | Where |
+|---|---|---|
+| **nRF5340 DK** | The primary build. Approach unlock plus the NFC tap path, on top of the Nordic door-lock add-on. | this directory |
+| **ESP32-S3** | A Matter door lock built from a reader stack written from scratch: BLE transport, credential authentication, and ranging-key derivation. Approach unlock only, no NFC tap. | [`ports/esp32-matter/`](ports/esp32-matter/) |
+
+The ESP32 port is not a recompile. The reference design delegates credential
+authentication and ranging-key derivation to a closed vendor library that ships only as
+an ARM binary, so nothing links it on Xtensa. That whole layer is reimplemented here.
 
 ## Quick start
+
+**nRF5340 DK:**
 
 ```bash
 nrfutil sdk-manager toolchain install --ncs-version v3.3.0   # once per machine
@@ -68,7 +86,20 @@ Also available: `make test` (host test suite, no toolchain or hardware required)
 `make term`, and `make clean`. Run `make` alone for the full grouped list. Options pass
 as variables: `make build PRETTY=1 CHIP=dw3720` (also `PRISTINE=1`, `SELFTEST=1`).
 
+**ESP32-S3** (needs ESP-IDF and esp-matter on the machine):
+
+```bash
+cd ports/esp32-matter
+make set-target    # once per checkout
+make go            # build + flash + monitor
+```
+
+See [`ports/README.md`](ports/README.md) for the port index, and
+[`ports/esp32-idf/BRINGUP.md`](ports/esp32-idf/BRINGUP.md) to wire the radio up.
+
 ## Hardware
+
+**nRF5340 DK:**
 
 | Part | Role |
 |---|---|
@@ -78,6 +109,17 @@ as variables: `make build PRETTY=1 CHIP=dw3720` (also `PRISTINE=1`, `SELFTEST=1`
 
 Pin assignments live in
 [`integration/overlays/dw3000-nfc.overlay`](integration/overlays/dw3000-nfc.overlay).
+
+**ESP32-S3:**
+
+| Part | Role |
+|---|---|
+| ESP32-S3 dev board | Host SoC: BLE + Matter over Wi-Fi and the ranging engine |
+| DWM3000EVB (DW3110) | UWB radio on SPI2, eleven jumpers |
+
+Pin assignments live in
+[`ports/esp32-idf/components/woz_uwb/port/board_pins.h`](ports/esp32-idf/components/woz_uwb/port/board_pins.h);
+the wiring table is in [`ports/esp32-idf/BRINGUP.md`](ports/esp32-idf/BRINGUP.md).
 
 ## How it works
 
@@ -92,10 +134,10 @@ flowchart LR
   phone -- "BLE: auth + key agreement" --> soc
   phone -- "UWB: secure ranging" --> uwb
   phone -- "NFC: ECP tap" --> nfc
-  subgraph lock ["Lock · nRF5340 DK"]
-    soc["nRF5340 app core<br/>BLE · Matter · ranging engine"]
+  subgraph lock ["Lock · nRF5340 DK or ESP32-S3"]
+    soc["Host SoC<br/>BLE · Matter · reader"]
     uwb["DW3110<br/>MAC · PHY · STS in firmware"]
-    nfc["ST25R300<br/>NFC reader"]
+    nfc["ST25R300<br/>NFC reader (nRF only)"]
     soc --> uwb
     soc --> nfc
   end
@@ -103,30 +145,36 @@ flowchart LR
 
 ## Status
 
-| Capability | State |
-|---|---|
-| NFC ECP tap unlock | Working |
-| BLE auth + key agreement | Working |
-| On-air ranging setup | Working |
-| Secure UWB ranging (distance) | Working, validated on hardware |
-| Distance-gated unlock / relock | Working |
+| Capability | nRF5340 DK | ESP32-S3 |
+|---|---|---|
+| Matter commissioning + key provisioned to Wallet | Working | Working |
+| BLE auth + ranging-key agreement | Working (via the add-on's vendor library) | Working (reimplemented) |
+| On-air ranging setup (M1-M4) | Working | Working |
+| Secure UWB ranging (distance) | Working | Working |
+| Distance-gated unlock / relock | Working | Working |
+| NFC ECP tap unlock | Working | Not implemented |
 
-The full image builds, links, and fits, and approach unlock has been driven end to end on
-an nRF5340 DK with a live iPhone. Releases are gated on the manual
-[hardware validation checklist](docs/hardware-validation.md). An experimental ESP32-S3
-port of the UWB engine lives in [`ports/`](ports/).
+Both targets have been driven end to end against a live iPhone: the Wallet unlock
+animation plays on approach and the bolt relocks on departure. Releases are gated on the
+manual [hardware validation checklist](docs/hardware-validation.md).
 
 ## Documentation
 
-- [`docs/README.md`](docs/README.md): generated code map of the repository, with
-  per-module API references in [`docs/architecture/`](docs/architecture/).
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the pieces fit together.
-- [`docs/protocol-notes.md`](docs/protocol-notes.md): firmware time-sync and
-  credential-validity behavior observed on real hardware.
 - [`docs/protocol-research.md`](docs/protocol-research.md): reverse-engineering report on
   the BLE + UWB proximity-unlock protocol.
+- [`docs/protocol-notes.md`](docs/protocol-notes.md): firmware time-sync and
+  credential-validity behavior observed on real hardware.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): common build, flash, unlock, and
-  wiring issues.
+  wiring issues, both targets.
+- [`ports/README.md`](ports/README.md): the ESP32-S3 port, and
+  [`ports/docs/esp-32-gotchas.md`](ports/docs/esp-32-gotchas.md), a long log of every
+  non-obvious trap that bring-up hit, with symptom and fix. It is the most useful thing
+  here if you are building your own reader.
+- [`docs/porting-esp32.md`](docs/porting-esp32.md): how the port was planned and how it
+  actually went.
+- [`docs/README.md`](docs/README.md): generated code map of the repository, with
+  per-module API references in [`docs/architecture/`](docs/architecture/), and
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit together.
 
 Project practices: [`CONTRIBUTING.md`](CONTRIBUTING.md) ·
 [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md) ·
@@ -140,9 +188,16 @@ Project practices: [`CONTRIBUTING.md`](CONTRIBUTING.md) ·
 Most UWB projects rely on a turnkey ranging module that hides the radio behind a friendly
 API. This one does not. It runs on a bare Qorvo DW3110 (a DWM3000EVB) with no UWB
 coprocessor, so the entire secure ranging stack, the MAC, the PHY framing, and the STS
-(scrambled timestamp sequence) are implemented in firmware on the nRF5340 app core,
-directly over the [`deps/dw3000`](deps/dw3000) driver. Getting a phone to trust the
-distance it measures means getting every byte of that right.
+(scrambled timestamp sequence) are implemented in firmware on the host SoC, directly over
+the [`deps/dw3000`](deps/dw3000) driver. Getting a phone to trust the distance it
+measures means getting every byte of that right.
+
+On ESP32 there is a second hard part. The reference design hands credential
+authentication and ranging-key derivation to a closed vendor library, so on Xtensa that
+layer had to be reimplemented: the key schedule, the two secure channels, the wire codec,
+and the reader identity. And the DS-TWR responder has to arm each frame inside a 2 ms
+slot on a target with slower SPI and jitterier callback dispatch than the nRF, which is
+its own separate fight.
 
 ### Architecture
 
@@ -151,14 +206,18 @@ A layered stack; each layer is optional and depends only on the one below it:
 - **`modules/woz_uwb/`**: the UWB engine (`src/`, split into
   `driver/ fira/ ccc/ aliro/ facade/ shell/`): the CCC key ladder, MAC, STS, and DS-TWR
   responder, driving `deps/dw3000` directly. The M1-M4 ranging-setup codec is in
-  `src/aliro/`, and the Nordic add-on calls in through `facade/woz_uwb_facade.c`.
+  `src/aliro/`, and callers come in through `facade/woz_uwb_facade.c`.
 - **`modules/woz_aliro_ecp/`**: NFC ECP emitter for the Express Mode (no Face ID) tap.
 - **`deps/dw3000/`**: Bruno Randolf's DW3000 decadriver (ISC).
+- **`ports/`**: the ESP32-S3 target. It compiles the two directories above unchanged
+  behind a Zephyr-compat layer, adds an ESP-IDF DW3000 backend, and supplies its own
+  reader stack in place of the Nordic add-on.
 
-The Nordic add-on owns BLE / Matter and hands the engine a plaintext ranging key; the
-engine handles UWB from there. Integration onto the fetched add-on is layered and never
-edited in place: patches in `integration/patches/`, configuration in
-`integration/overlays/`, modules in `modules/` + `deps/`.
+On nRF the Nordic add-on owns BLE and Matter and hands the engine a plaintext ranging
+key; on ESP32 the port's own reader derives that key and hands it over at the same seam.
+Integration onto the fetched add-on is layered and never edited in place: patches in
+`integration/patches/`, configuration in `integration/overlays/`, modules in `modules/` +
+`deps/`.
 
 </details>
 
@@ -166,6 +225,7 @@ edited in place: patches in `integration/patches/`, configuration in
 
 - **Nordic Semiconductor** for the nRF Connect SDK and the door-lock add-on this firmware
   extends.
+- **Espressif** for ESP-IDF and esp-matter, which the ESP32-S3 port is built on.
 - **Bruno Randolf** for the ISC-licensed [`dw3000` decadriver](deps/dw3000) that drives
   the radio.
 - [@kormax](https://github.com/kormax/) for ideas on ECP and UWB.
@@ -174,9 +234,9 @@ edited in place: patches in `integration/patches/`, configuration in
 
 ## License
 
-The project's own code (`modules/woz_uwb/`, `modules/woz_aliro_ecp/` except as noted
-below, build scripts, docs) is ISC; see [`LICENSE`](LICENSE). The tree as a whole is
-mixed-license, not uniformly ISC:
+The project's own code (`modules/woz_uwb/`, `ports/`, `modules/woz_aliro_ecp/` except as
+noted below, build scripts, docs) is ISC; see [`LICENSE`](LICENSE). The tree as a whole
+is mixed-license, not uniformly ISC:
 
 - [`deps/dw3000/`](deps/dw3000) is the Qorvo/Decawave driver under `LicenseRef-QORVO-2`
   (usable only with a Qorvo IC, no reverse engineering).

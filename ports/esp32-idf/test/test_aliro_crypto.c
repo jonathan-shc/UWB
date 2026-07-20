@@ -191,7 +191,7 @@ int main(void)
 	aliro_crypto_gcm_nonce(0, 0x01020304u, nb);
 	chk("nonce/enc-ctr", nb, 12, "000000000000000001020304");
 
-	printf("\n== secure channel (reader view: seal S0/d0, open S1/d1) ==\n");
+	printf("\n== secure channel (reader view: counters start at 1, §8.3.1.13) ==\n");
 	uint8_t s0[32], s1[32];
 
 	for (int i = 0; i < 32; i++) {
@@ -201,35 +201,38 @@ int main(void)
 	struct aliro_secchan sc;
 
 	aliro_secchan_init(&sc, s0, s1);
+	/* Both directional counters initialise to 1 (Aliro §8.3.1.13), not 0. */
+	T_EQ("init.enc-ctr", sc.enc_ctr, 1);
+	T_EQ("init.dec-ctr", sc.dec_ctr, 1);
 	uint8_t rmsg[19];
 
 	memcpy(rmsg, "reader->phone hello", 19);
 	uint8_t sct[19], stag[16];
 
 	T_OK("seal.ok", aliro_secchan_seal(&sc, NULL, 0, rmsg, 19, sct, stag) == 0);
-	T_EQ("seal.ctr-advanced", sc.enc_ctr, 1);
-	/* phone would open with S0 + nonce(0,0); verify independently */
+	T_EQ("seal.ctr-advanced", sc.enc_ctr, 2);
+	/* phone would open the first reader command with S0 + nonce(0,1); verify. */
 	uint8_t n0[12], sout[19];
 
-	aliro_crypto_gcm_nonce(0, 0, n0);
+	aliro_crypto_gcm_nonce(0, 1, n0);
 	T_OK("seal.peer-opens",
 	     aliro_aes256_gcm_decrypt(s0, n0, 12, NULL, 0, sct, 19, stag, 16, sout) == 0 &&
 		     memcmp(sout, rmsg, 19) == 0);
-	/* reader opens a phone-sealed msg on direction 1 (S1, nonce(1,0)) */
+	/* reader opens the first phone response on direction 1 (S1, nonce(1,1)) */
 	uint8_t pmsg[17];
 
 	memcpy(pmsg, "phone->reader ack", 17);
 	uint8_t pct[17], ptag[16], n1[12];
 
-	aliro_crypto_gcm_nonce(1, 0, n1);
+	aliro_crypto_gcm_nonce(1, 1, n1);
 	aliro_aes256_gcm_encrypt(s1, n1, 12, NULL, 0, pmsg, 17, pct, ptag, 16);
 	uint8_t popen[17];
 
 	T_OK("open.ok", aliro_secchan_open(&sc, NULL, 0, pct, 17, ptag, popen) == 0 &&
 				memcmp(popen, pmsg, 17) == 0);
-	T_EQ("open.ctr-advanced", sc.dec_ctr, 1);
+	T_EQ("open.ctr-advanced", sc.dec_ctr, 2);
 	ptag[0] ^= 1;
-	sc.dec_ctr = 0;
+	sc.dec_ctr = 1;
 	T_OK("open.tamper-rejected",
 	     aliro_secchan_open(&sc, NULL, 0, pct, 17, ptag, popen) < 0);
 
@@ -265,10 +268,10 @@ int main(void)
 		rid[i] = (uint8_t)(0x11 * (i & 0x0f));
 	}
 	T_OK("salt.build",
-	     aliro_salt_build(ALIRO_SALT_SESSION, txid, pubx, pubx, rid, 0x0100, 0x02,
-			      0x00, NULL, saltbuf, &saltlen) == 0);
-	/* type1 salt: 32+12+32+2+2+32+16+2 = 130 bytes (no s3opt). */
-	T_EQ("salt.len", saltlen, 130);
+	     aliro_salt_build(ALIRO_SALT_SESSION, txid, pubx, pubx, rid, ALIRO_IFACE_BLE,
+			      0x0100, 0x02, 0x00, NULL, NULL, 0, saltbuf, &saltlen) == 0);
+	/* type1 salt: 32+12+32+1(iface)+2+2+32+16+2 = 131 bytes (no a5, no s3opt). */
+	T_EQ("salt.len", saltlen, 131);
 
 	uint8_t blk160[160], urskc[32];
 
@@ -285,7 +288,7 @@ int main(void)
 	/* Behavior-lock golden (tied to the provisional salt layout): any change
 	 * to the schedule or salt flips this. Not an interop vector. */
 	t_vec("ursk.golden", urskc, 32,
-	      "86e71857763bbac92a1500f651cdde27aaf509ad0d7e0ed65fd75f1e676b2254");
+	      "cf2687a33badda21bd48d6550c81da0be06cb6ace98df3a81ea6fb0902ad21d2");
 
 	uint8_t ek[32], dk[32], us[32];
 

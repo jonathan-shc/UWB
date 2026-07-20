@@ -1,3 +1,4 @@
+// ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, aliro-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -7,13 +8,41 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_console.h"
-#include "esp_log.h"
+#include "linenoise/linenoise.h"
 #include "esp_err.h"
+#include "esp_app_desc.h"
+#include "esp_idf_version.h"
 
 #include "woz_uwb_facade.h"
+#include "aliro_reader.h"
 #include "app_shell.h"
 
-static const char *TAG = "shell";
+/* ---- look & feel -------------------------------------------------------- *
+ * All color goes through col(): a terminal that failed the escape-sequence
+ * probe (linenoise dumb mode) gets plain text instead of escape garbage. */
+#define C_TITLE "\x1b[1;36m" /* bold cyan */
+#define C_DIM   "\x1b[90m"   /* grey */
+#define C_OK    "\x1b[32m"   /* green */
+#define C_BAD   "\x1b[31m"   /* red */
+#define C_RST   "\x1b[0m"
+
+// Returns the given ANSI color code, or an empty string when linenoise is in dumb-terminal mode.
+static const char *col(const char *c)
+{
+	return linenoiseIsDumbMode() ? "" : c;
+}
+
+// Prints the shell's startup banner: app name, version, IDF version, and a one-line usage hint.
+static void print_banner(void)
+{
+	const esp_app_desc_t *app = esp_app_get_description();
+
+	printf("\n%s%s%s %s%s · esp-idf %s%s\n", col(C_TITLE), app->project_name, col(C_RST),
+	       col(C_DIM), app->version, esp_get_idf_version(), col(C_RST));
+	printf("%sAliro reader bench · 'help' lists commands · ctrl-] leaves the "
+	       "monitor%s\n\n",
+	       col(C_DIM), col(C_RST));
+}
 
 /* Dummy 32-byte URSK for a peerless bring-up smoke test (mirrors uwb_selftest.c).
  * Moved here from main.c so both the boot-time start and the `aliro-start`
@@ -24,6 +53,7 @@ static const uint8_t demo_ursk[32] = {
 	0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00,
 };
 
+// Demo Aliro UWB responder configuration used by the shell's aliro-start command.
 static const struct woz_uwb_aliro_cfg demo_cfg = {
 	.session_id = 0x02b02fd4u,
 	.channel = 9u,
@@ -41,6 +71,7 @@ static const struct woz_uwb_aliro_cfg demo_cfg = {
 static SemaphoreHandle_t s_lock;
 static bool s_up;
 
+// Lazily creates the s_lock mutex on first call; subsequent calls are a no-op. Not thread-safe against concurrent first calls.
 static void lock_init(void)
 {
 	if (s_lock == NULL) {
@@ -86,11 +117,14 @@ bool app_responder_up(void)
  * thread-safe facade accessors or the mutex-guarded lifecycle helpers, so they
  * never touch the DW3000 bus concurrently with the responder. */
 
+// Shell command handler: prints the demo responder's up/down status and the last measured and last trusted UWB ranges in cm, or "none" if unavailable. Always returns 0.
 static int cmd_status(int argc, char **argv)
 {
-	(void)argc; (void)argv;
+	(void)argc;
+	(void)argv;
 	int32_t cm;
-	printf("responder : %s\n", app_responder_up() ? "up" : "down");
+	bool up = app_responder_up();
+	printf("responder : %s%s%s\n", col(up ? C_OK : C_BAD), up ? "up" : "down", col(C_RST));
 	if (woz_uwb_last_range_cm(&cm)) {
 		printf("last range: %d cm\n", (int)cm);
 	} else {
@@ -104,9 +138,11 @@ static int cmd_status(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: prints the last measured UWB range in cm via woz_uwb_last_range_cm, or "no range yet" if none is available. Always returns 0.
 static int cmd_range(int argc, char **argv)
 {
-	(void)argc; (void)argv;
+	(void)argc;
+	(void)argv;
 	int32_t cm;
 	if (woz_uwb_last_range_cm(&cm)) {
 		printf("range: %d cm\n", (int)cm);
@@ -116,9 +152,11 @@ static int cmd_range(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: starts the Aliro UWB responder via app_responder_start. Prints "busy" if a responder is already running (rc == 1), otherwise reports ok/FAILED with the return code. Always returns 0 to the shell.
 static int cmd_aliro_start(int argc, char **argv)
 {
-	(void)argc; (void)argv;
+	(void)argc;
+	(void)argv;
 	int rc = app_responder_start();
 	if (rc == 1) {
 		printf("busy: responder already running\n");
@@ -128,11 +166,49 @@ static int cmd_aliro_start(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: stops the Aliro UWB responder via app_responder_stop and prints confirmation. Always returns 0.
 static int cmd_aliro_stop(int argc, char **argv)
 {
-	(void)argc; (void)argv;
+	(void)argc;
+	(void)argv;
 	app_responder_stop();
 	printf("aliro-stop: ok\n");
+	return 0;
+}
+
+// Shell command handler: prints the current Aliro reader provisioning state. Always returns 0.
+static int cmd_aliro_prov(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+	aliro_reader_prov_print();
+	return 0;
+}
+
+// Shell command handler: clears the terminal screen via linenoiseClearScreen. Always returns 0.
+static int cmd_clear(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+	linenoiseClearScreen();
+	return 0;
+}
+
+// Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via aliro_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
+static int cmd_aliro_trust(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+	int rc = aliro_reader_trust_last();
+
+	if (rc == 0) {
+		printf("aliro-trust: added last-presented credential + saved to NVS\n");
+	} else if (rc == 1) {
+		printf("aliro-trust: nothing to add (no credential presented, or "
+		       "already trusted)\n");
+	} else {
+		printf("aliro-trust: FAILED (trust store full or NVS error)\n");
+	}
 	return 0;
 }
 
@@ -152,17 +228,39 @@ void app_shell_start(void)
 
 	ESP_ERROR_CHECK(esp_console_new_repl_uart(&dev_cfg, &repl_cfg, &repl));
 
+	/* esp_console defaults to multiline mode + a hints callback; either one
+	 * forces linenoise to redraw prompt+line on every keystroke, which visibly
+	 * flickers the cursor over the UART. With both off, typing echoes only the
+	 * typed character (tab completion still works). */
+	linenoiseSetMultiLine(0);
+	linenoiseSetHintsCallback(NULL);
+
 	const esp_console_cmd_t cmds[] = {
-		{ .command = "status",      .help = "responder state + last/trusted range", .func = cmd_status },
-		{ .command = "range",       .help = "print the latest distance",            .func = cmd_range },
-		{ .command = "aliro-start", .help = "start the demo DS-TWR responder",       .func = cmd_aliro_start },
-		{ .command = "aliro-stop",  .help = "stop the demo responder",               .func = cmd_aliro_stop },
+		{.command = "status",
+		 .help = "responder state + last/trusted range",
+		 .func = cmd_status},
+		{.command = "range", .help = "print the latest distance", .func = cmd_range},
+		{.command = "aliro-start",
+		 .help = "start the demo DS-TWR responder",
+		 .func = cmd_aliro_start},
+		{.command = "aliro-stop",
+		 .help = "stop the demo responder",
+		 .func = cmd_aliro_stop},
+		{.command = "aliro-prov",
+		 .help = "show reader identity + credential trust store",
+		 .func = cmd_aliro_prov},
+		{.command = "aliro-trust",
+		 .help = "trust the last-presented credential (persist to NVS)",
+		 .func = cmd_aliro_trust},
+		{.command = "clear", .help = "clear the screen (also: ctrl-L)", .func = cmd_clear},
 	};
 	for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
 		ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));
 	}
 	ESP_ERROR_CHECK(esp_console_register_help_command());
 
+	/* Probe ran inside esp_console_new_repl_uart, so dumb-mode is settled and
+	 * the banner lands right above the first prompt. */
+	print_banner();
 	ESP_ERROR_CHECK(esp_console_start_repl(repl));
-	ESP_LOGI(TAG, "console up on the UART (type 'help')");
 }

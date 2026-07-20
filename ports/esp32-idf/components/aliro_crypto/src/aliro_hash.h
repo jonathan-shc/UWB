@@ -1,3 +1,6 @@
+// Streaming SHA-256 (FIPS 180-4) implementation used by the Aliro crypto layer.
+// Declares struct aliro_sha256, the incremental hash context used across init/update/finish
+// calls.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

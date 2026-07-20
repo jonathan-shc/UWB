@@ -20,6 +20,17 @@
 
 static const char *TAG = "woz_esp32s3";
 
+// Application entry point: brings up the DW3000 responder, the Aliro BLE reader,
+// and the interactive shell, then polls for ranging results.
+// Silences the CCC shim's per-frame STS trace (WARN level only) because logging
+// on the delayed-TX reply path can blow the reply window; other subsystems keep
+// their normal log level. app_responder_start() performs the full DW3000
+// bring-up chain (woz_uwb_start_aliro -> ccc_prepoll_listen ->
+// uwb_min_radio_init). aliro_reader_start() brings up the BLE transport and
+// session/transaction layer independently of the demo responder; the
+// URSK-driven UWB start happens inside the reader once the Phase-3 handshake is
+// implemented. Never returns: loops forever logging the last UWB range every
+// 500 ms when available.
 void app_main(void)
 {
 	/* Mute the CCC shim's first-8-frames STS trace: it fires on the per-frame

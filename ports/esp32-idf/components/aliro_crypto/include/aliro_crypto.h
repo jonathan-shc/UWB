@@ -1,3 +1,5 @@
+// Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
+// seal/open framing shared by the reader and device sides of an Aliro session.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -33,6 +35,11 @@ extern "C" {
 #define ALIRO_EC_PUBX_LEN     32u   /* an EC point's X coordinate */
 #define ALIRO_GCM_NONCE_LEN   12u
 #define ALIRO_GCM_TAG_LEN     16u
+
+/* interface_byte for the salt transcript (Aliro §8.3.1.13): the transport the
+ * transaction runs on. BLE for the reader's live path; NFC for the §14 example. */
+#define ALIRO_IFACE_NFC       0x5Eu
+#define ALIRO_IFACE_BLE       0xC3u
 
 /* Initialise the crypto backend (idempotent). 0 on success, negative on fail. */
 int aliro_crypto_init(void);
@@ -112,14 +119,48 @@ int aliro_secchan_open(struct aliro_secchan *sc, const uint8_t *aad,
 		       const uint8_t tag[ALIRO_GCM_TAG_LEN], uint8_t *pt);
 
 /*
+ * ---- Aliro message security (§11.8): ranging/notification SDUs -----------
+ *
+ * Proto-1/2/3 SDUs (UWB Ranging Service M1-M4, Notification, Supplementary) ride
+ * a SEPARATE AES-256-GCM channel from the AP secure channel: BleSKReader/
+ * BleSKDevice keys (HKDF off BleSK = block offset 96), fresh per-direction
+ * counters starting at 1, and the 4-byte header (with the PLAINTEXT payload
+ * length) as AAD. Wire form: [proto][id][len_be16][encrypted_payload||16B tag],
+ * where len_be16 = plaintext length + 16. Reuse struct aliro_secchan for it
+ * (enc=BleSKReader, dec=BleSKDevice; aliro_secchan_init sets both counters to 1).
+ */
+#define ALIRO_BLESK_OFFSET 96u /* BleSK = block[96 .. 127] (§8.3.1.12/.13) */
+
+/* Derive BleSKReader + BleSKDevice from the 160-byte block per §11.8.1:
+ * HKDF-SHA256(ikm=BleSK, info="BleSKReader"/"BleSKDevice", L=32,
+ * salt = reader_supported_versions || user_device_selected_version). 0 on ok. */
+int aliro_crypto_derive_ble_keys(const uint8_t block[ALIRO_KEY_BLOCK_LEN],
+				 const uint8_t *salt, size_t salt_len,
+				 uint8_t ble_reader[ALIRO_SESSION_KEY_LEN],
+				 uint8_t ble_device[ALIRO_SESSION_KEY_LEN]);
+
+/* Seal an engine plaintext message [proto][id][len_plain_be16][payload] into the
+ * on-wire [proto][id][(len_plain+16)_be16][ct||tag], sealed under sc with the
+ * 4-byte plaintext-length header as AAD (§11.8.2). *wire_len set on 0-return. */
+int aliro_msg_seal(struct aliro_secchan *sc, const uint8_t *plain, size_t plain_len,
+		   uint8_t *wire, size_t wire_cap, size_t *wire_len);
+
+/* Inverse of aliro_msg_seal: open a wire SDU into the engine plaintext form,
+ * verifying the tag. Returns <0 on a tag mismatch (drop the connection then). */
+int aliro_msg_open(struct aliro_secchan *sc, const uint8_t *wire, size_t wire_len,
+		   uint8_t *plain, size_t plain_cap, size_t *plain_len);
+
+/*
  * ---- CreateSalt transcript builder --------------------------------------
  *
- * Reproduces the recovered append order for the stage-2 HKDF salt. The domain
- * label and the fixed 0x5c02 constant are exact; the assignment of the 32-byte
- * spans and the widths of the negotiated-version fields are still being pinned
- * (they are populated by the transaction state machine, Phase 3.2), so treat
- * this as the interop seam to confirm at bench. Returns 0 on success, and the
- * assembled length in *out_len.
+ * Builds the stage-2 HKDF salt byte-exact to Aliro §8.3.1.13 (salt_volatile for
+ * the SESSION/standard type):
+ *   span_s1(reader_group_identifier_key.x, 32) || label(12) || reader_id(32) ||
+ *   interface_byte(1) || 0x5C || 0x02 || protocol_version(2) ||
+ *   reader_value(reader ephemeral pub X, 32) || txid(16) ||
+ *   flag(exp_phase_type||user_auth_policy, 2) || a5_tlv(0xA5 proprietary info).
+ * For the fast/persistent types a trailing s3opt (Access Credential public key X)
+ * follows the a5_tlv. Returns 0 on success and the assembled length in *out_len.
  */
 enum aliro_salt_type {
 	ALIRO_SALT_CRYPTOGRAM = 0, /* label "VolatileFast" */
@@ -127,14 +168,16 @@ enum aliro_salt_type {
 	ALIRO_SALT_KPERSISTENT = 2 /* label "Persistent**" */
 };
 
-#define ALIRO_SALT_MAX 192u
+#define ALIRO_SALT_MAX 256u
 
 int aliro_salt_build(enum aliro_salt_type type, const uint8_t txid[ALIRO_TXID_LEN],
 		     const uint8_t span_s1[ALIRO_EC_PUBX_LEN],
 		     const uint8_t reader_value[ALIRO_EC_PUBX_LEN],
-		     const uint8_t reader_id[32], uint16_t proto_version,
-		     uint8_t exp_phase_type, uint8_t user_auth_policy,
+		     const uint8_t reader_id[32], uint8_t interface_byte,
+		     uint16_t proto_version, uint8_t exp_phase_type,
+		     uint8_t user_auth_policy,
 		     const uint8_t s3opt[ALIRO_EC_PUBX_LEN] /* NULL for type 1 */,
+		     const uint8_t *a5_tlv, size_t a5_tlv_len,
 		     uint8_t *out, size_t *out_len);
 
 #ifdef __cplusplus

@@ -1,3 +1,4 @@
+// Self-contained SHA-256, HMAC-SHA256, HKDF, and ANSI-X9.63 KDF implementation for the ESP32-IDF Aliro crypto port, with no external crypto library dependency.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -8,6 +9,7 @@
 
 #include <string.h>
 
+// Rotate a 32-bit word right by n bits.
 static uint32_t ror32(uint32_t x, unsigned n)
 {
 	return (x >> n) | (x << (32 - n));
@@ -27,6 +29,9 @@ static const uint32_t K[64] = {
 	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 };
 
+// Compresses one 64-byte message block into the running SHA-256 state h, per FIPS 180-4.
+// h: 8-word running hash state, updated in place.
+// p: 64-byte input block.
 static void sha256_block(uint32_t h[8], const uint8_t p[64])
 {
 	uint32_t w[64];
@@ -73,6 +78,8 @@ static void sha256_block(uint32_t h[8], const uint8_t p[64])
 	h[7] += hh;
 }
 
+// Initialize a streaming SHA-256 context with the FIPS 180-4 initial hash values.
+// Resets total byte count and internal buffer length to zero; must be called before feeding data.
 void aliro_sha256_init(struct aliro_sha256 *s)
 {
 	s->h[0] = 0x6a09e667;
@@ -87,6 +94,10 @@ void aliro_sha256_init(struct aliro_sha256 *s)
 	s->buflen = 0;
 }
 
+// Feeds len bytes of data into a streaming SHA-256 context, buffering a partial block and compressing full 64-byte blocks as they accumulate.
+// s: context to update; total byte count and internal buffer are updated in place.
+// data: bytes to hash; may be split across multiple calls.
+// len: number of bytes in data.
 void aliro_sha256_update(struct aliro_sha256 *s, const void *data, size_t len)
 {
 	const uint8_t *p = (const uint8_t *)data;
@@ -118,6 +129,9 @@ void aliro_sha256_update(struct aliro_sha256 *s, const void *data, size_t len)
 	}
 }
 
+// Finalizes a streaming SHA-256 computation, applying FIPS 180-4 padding and the big-endian bit-length suffix, and writes the 32-byte digest to out.
+// s: context to finalize; consumed by this call, must not be reused afterward without re-initializing.
+// out: 32-byte buffer that receives the digest.
 void aliro_sha256_final(struct aliro_sha256 *s, uint8_t out[ALIRO_SHA256_LEN])
 {
 	uint64_t bits = s->total * 8;
@@ -192,6 +206,13 @@ void aliro_hkdf_extract(const uint8_t *salt, size_t salt_len, const uint8_t *ikm
 	aliro_hmac_sha256(salt, salt_len, ikm, ikm_len, prk);
 }
 
+// HKDF-SHA256 expand step (RFC 5869): derives out_len bytes of output keying material from a pseudorandom key and context info.
+// prk: 32-byte pseudorandom key, typically from aliro_hkdf_extract.
+// info: context/application-specific info bytes, may be NULL if info_len is 0.
+// info_len: length of info in bytes.
+// out: buffer that receives out_len bytes of derived key material.
+// out_len: number of bytes to produce; must not exceed 255 * 32 bytes (255 * ALIRO_SHA256_LEN).
+// Returns 0 on success, or -1 if out_len exceeds the RFC 5869 maximum.
 int aliro_hkdf_expand(const uint8_t prk[ALIRO_SHA256_LEN], const uint8_t *info,
 		      size_t info_len, uint8_t *out, size_t out_len)
 {
@@ -239,6 +260,16 @@ int aliro_hkdf_expand(const uint8_t prk[ALIRO_SHA256_LEN], const uint8_t *info,
 	return 0;
 }
 
+// HKDF-SHA256 (RFC 5869): extracts a pseudorandom key from salt and input keying material, then expands it to out_len bytes of output.
+// salt: salt bytes for the extract step.
+// salt_len: length of salt in bytes.
+// ikm: input keying material.
+// ikm_len: length of ikm in bytes.
+// info: context/application-specific info bytes for the expand step.
+// info_len: length of info in bytes.
+// out: buffer that receives out_len bytes of derived key material.
+// out_len: number of bytes to produce; must not exceed 255 * 32 bytes, per aliro_hkdf_expand.
+// Returns 0 on success, or -1 if out_len exceeds the RFC 5869 maximum.
 int aliro_hkdf(const uint8_t *salt, size_t salt_len, const uint8_t *ikm,
 	       size_t ikm_len, const uint8_t *info, size_t info_len, uint8_t *out,
 	       size_t out_len)

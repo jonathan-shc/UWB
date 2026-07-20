@@ -1,11 +1,37 @@
-# openaliro on ESP32-S3: porting roadmap
+# openaliro on ESP32-S3: porting roadmap and retrospective
 
-Status: planning, grounded in the working Nordic add-on source (studied read-only from the
-bootstrapped `ncs-door-lock-and-access-control` checkout). No ESP32 code committed yet. This is the
-agreed architecture and de-risking order.
+**Status: shipped and hardware-validated.** Phases 1 through 4 are done; approach unlock
+runs end to end on an ESP32-S3 against a live iPhone. Phase 5 (the NFC tap path) was not
+attempted. The code lives in [`ports/esp32-idf`](../ports/esp32-idf) and
+[`ports/esp32-matter`](../ports/esp32-matter).
 
-Target hardware on hand: ESP32-S3-WROOM (N16R8, 16 MB flash / 8 MB octal PSRAM, Wi-Fi + BLE,
-no 802.15.4). Still to source: a DWM3000EVB (UWB) and an ST25R-class NFC reader.
+This document keeps the original plan, written before any ESP32 code existed, and marks
+what the plan got right and wrong. The plan's own estimates are left unedited so the
+comparison is honest. For the bring-up detail that the plan could not have predicted, see
+[`ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md).
+
+Target hardware: ESP32-S3-WROOM (N16R8, 16 MB flash / 8 MB octal PSRAM, Wi-Fi + BLE, no
+802.15.4) plus a DWM3000EVB for UWB. No NFC reader was sourced.
+
+## 0. What the plan got wrong
+
+Worth stating up front, because it is the useful part of a retrospective:
+
+- **The BLE transport was not the dominant rewrite.** The plan called ~650 lines of
+  NimBLE GATT + L2CAP the concentrated new work. It was the easy part. The real work was
+  the layer the plan assumed it could keep: the credential authentication and ranging-key
+  derivation, which the reference delegates to a closed ARM-only library that cannot link
+  on Xtensa. That had to be reimplemented from the wire up — key schedule, two separate
+  GCM channels, wire codec, reader identity.
+- **The plan had no line item for real-time behavior.** The DS-TWR responder was treated
+  as "already done, just recompile it." The logic was indeed already correct — the nRF
+  proves it — but the ESP32 has slower SPI and jitterier callback dispatch, and arming
+  each frame inside a 2 ms slot took a separate campaign: DMA-disabled SPI, an STS key
+  cache, and throttling a per-round log that was starving the ISR task.
+- **The reference source did not have to be a Nordic-licensed study target.** The
+  provenance discipline was kept, but the decisive facts came from disassembling the
+  vendor binary and cross-checking readable reference source, not from reading the
+  add-on's C++.
 
 ## 1. Summary
 
@@ -29,6 +55,9 @@ be clean-room reimplemented (reimplement behavior, do not copy files), matching 
 discipline already used in this project.
 
 ## 2. Port map (grounded in the add-on source)
+
+> Historical. The tier assignments below held up for Matter, crypto primitives, and
+> storage. They missed the closed-library boundary described in §0.
 
 The engine seam is confirmed. Nordic's Aliro reader talks to UWB only through the `UltraWideBand`
 C++ interface (`subsys/aliro/uwb/.../uwb.h`), and this repo's engine already implements it (the
@@ -64,15 +93,20 @@ so the door_lock_delegate + Aliro cluster (Tier A) carries over. ESP-IDF also gi
 Espressif now also ships first-party Aliro (esp-aliro, NFC today; BLE + UWB roadmapped), which only
 strengthens ESP-IDF over Zephyr.
 
-### Toolchain (verified July 2026)
+The decision held. Everything the plan expected from ESP-IDF was there: NimBLE's L2CAP
+CoC carried the transaction, mbedTLS-PSA covered the crypto, NVS covered storage, and
+core-pinning mattered for the ranging task.
 
-- Install **ESP-IDF v5.5.4**, not the newest. esp-matter recommends v5.5.4; ESP-IDF v6.0 exists but
-  would break esp-matter. Pinning v5.5.4 lets Phase 1 (plain ESP-IDF, version-flexible) and the
-  later Matter/Aliro phases (esp-matter, version-strict) share one toolchain, installed once.
-- Stage the install: for Phase 1, plain ESP-IDF v5.5.4 with the `esp32s3` target is enough (a few
-  GB). Add esp-matter + esp-aliro on top of the same v5.5.4 later, for Phases 4-5 (much larger;
-  connectedhomeip is heavy). Confirm esp-aliro's own ESP-IDF pin + license from its repo before
-  Phase 5; it is expected to align with esp-matter (verify).
+### Toolchain
+
+- Use the ESP-IDF version esp-matter recommends, and install esp-matter on top of that
+  same tree. The two ports share one toolchain. **Nothing in this repository pins a
+  version**: the Makefiles pin only paths (`IDF_EXPORT`, `ESP_MATTER_PATH`) and check
+  that the export scripts exist. CI never builds either port, so no toolchain is pinned
+  there either. Treat the pair of installs as an external prerequisite you manage.
+- Stage the install if disk is tight: plain ESP-IDF with the `esp32s3` target is enough
+  for `ports/esp32-idf` (a few GB). `ports/esp32-matter` additionally needs esp-matter,
+  which is much larger because connectedhomeip is heavy.
 
 ## 4. Engine port surface (Phase 1, concrete)
 
@@ -81,55 +115,62 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
 
 - OS seam: extend `modules/woz_uwb/src/facade/woz_alloc.h` (already wraps `k_malloc` and monotonic
   microseconds) into a `woz_os` seam with a FreeRTOS backend. Real call sites are few:
-  `uwb_min.c` (`k_uptime_get` busy-wait deadlines ~183-302, `k_msleep` 31/117/357) and
-  `fira_session.c` (`k_uptime_get` 70/84). `k_work`/`k_timer` uses are diagnostics/self-test/log
+  `uwb_min.c` (`k_uptime_get` busy-wait deadlines ~188-307, `k_msleep` 31/122/362) and
+  `fira_session.c` (`k_uptime_get` 71/125). `k_work`/`k_timer` uses are diagnostics/self-test/log
   only (`uwb_rxdiag.c`, `uwb_selftest.c`, `woz_logfmt.c`) and stub or defer.
 - DW3000 platform shim, rewrite on ESP-IDF SPI-master + GPIO: `deps/dw3000/platform/dw3000_spi.c`
   (241), `dw3000_hw.c` (298), `deca_port.c` (60). Leave `deca_compat.c` (1352, vendor) logic intact.
-- Link seam: the 6 `-Wl,--wrap=dwt_*` flags (`modules/woz_uwb/CMakeLists.txt`) via
-  `target_link_options`. `xtensa-esp32s3-elf-ld` is GNU binutils; verify `--wrap` once.
+- Link seam: the 5 `-Wl,--wrap=dwt_*` flags (`modules/woz_uwb/CMakeLists.txt`) via
+  `target_link_options`. Only `--wrap=dwt_rxenable` is load-bearing (`ccc_shim_rx.c` programs the
+  CCC key/IV on every RX-arm); the rest are diagnostics or have no live caller.
+  `xtensa-esp32s3-elf-ld` is GNU binutils; verify `--wrap` once.
 - Crypto seam: `ccc_crypto_mbedtls.c` (already selected by the existing scaffold's `prj.conf`).
 - Placement: pin engine + DW3000 SPI to core 1, BLE/Wi-Fi on core 0. Hot buffers in internal SRAM,
   not PSRAM (jitter).
 
-## 5. Phased plan
+## 5. Phased plan, and how each phase went
 
-- Phase 1 (unblocked, no reader dependency): engine to ESP-IDF (section 4), canned URSK, range vs a
-  second board. Then hold an idle NimBLE connection on core 0 and re-measure ranging on core 1 to
-  confirm coexistence early. Proves the crown jewel on your board.
-- Phase 2 (BLE transport, the real rewrite): reimplement gatt_server + l2cap_server on NimBLE
-  (GATT + L2CAP CoC) as the Aliro transaction channel. Drive it with captured/spec message flows.
-- Phase 3 (reader logic + storage): port aliro_service, access_manager, disambiguation,
-  reader_storage, crypto_utils (PSA), workqueue/time on ESP-IDF. On auth completion the derived
-  URSK enters the engine through the existing `UltraWideBand` / `woz_uwb_start_aliro()` seam.
-- Phase 4 (Matter provisioning): esp-matter door lock over Wi-Fi + the Aliro cluster +
-  door_lock_delegate, so a fresh ESP32 lock self-commissions into Apple Home and self-provisions
-  into Wallet (Tier A, common SDK).
-- Phase 5 (NFC tap): integrate esp-aliro (first-party Aliro-over-NFC) rather than reimplementing
-  RFAL. Reader hardware follows esp-aliro's example (verify which IC it uses before buying).
-
-Phases 2-4 can proceed in parallel with each other once Phase 1 is up, since the BLE transport,
-reader logic, and Matter layer are separable.
+| Phase | Plan | Outcome |
+|---|---|---|
+| 1 — engine on ESP-IDF | Compile the engine behind an OS seam, write a DW3000 backend, range against a second board with a canned URSK. | **Done.** The compat layer let `modules/woz_uwb/src` and `deps/dw3000` compile unchanged, and `--wrap` behaved as on any GNU ld. The one surprise was hardware, not software: an EVB power-select jumper hid the radio for days. |
+| 2 — BLE transport | Reimplement GATT + L2CAP CoC on NimBLE. Estimated the dominant rewrite. | **Done, and easier than planned.** `ports/esp32-idf/components/aliro_ble`. Advertising, the SPSM/version characteristics, and the CoC came up quickly. |
+| 3 — reader logic and the ranging key | Port the reference's reader logic and storage; the derived key enters the engine at the existing seam. | **Done, and far larger than planned.** The reference does not derive the key in portable code at all — a closed ARM-only library does. This phase became a from-scratch reimplementation of the credential authentication, key schedule, secure channels, and wire codec, plus a provisioning seam. See [`porting-esp32-phase3.md`](porting-esp32-phase3.md). |
+| 4 — Matter provisioning | esp-matter door lock over Wi-Fi with the Aliro cluster and delegate, so the lock self-commissions and provisions a key into the wallet. | **Done.** `ports/esp32-matter`. The Tier-A bet paid off: the cluster and delegate came across with modest change. The reader attaches to esp-matter's NimBLE host rather than starting its own. |
+| 4.5 — real-time ranging | Not in the plan. | **Done, and unplanned.** Making the DS-TWR responder hold a 2 ms slot on ESP32 was its own campaign. Nothing here was a logic bug; the shared engine was already correct. |
+| 5 — NFC tap | Integrate a first-party Aliro-over-NFC stack rather than reimplementing RFAL. | **Not attempted.** No NFC reader was sourced. The ESP32 target is approach-unlock only. |
 
 ## 6. Hardware bill of materials
 
-- ESP32-S3-WROOM N16R8 dev board (on hand).
-- DWM3000EVB (DW3110) for UWB on FSPI (SPI2). Reuse the pin choices in `ports/esp32s3/dw3000.overlay`.
-- ST25R-class NFC reader (ST25R3916 / ST25R300). Assumption: PN532-class parts are too limited for
-  Apple Express / ECP timing; the reference uses ST25R. Verify against the chosen part.
-- Note: Matter-over-Wi-Fi on S3 is not low-power like the nRF Thread sleepy-end-device. Fine for a
-  mains-powered reader, wrong for a battery lock.
+- ESP32-S3-WROOM N16R8 dev board.
+- DWM3000EVB (DW3110) for UWB on SPI2, eleven jumpers. Current pin map:
+  [`ports/esp32-idf/components/woz_uwb/port/board_pins.h`](../ports/esp32-idf/components/woz_uwb/port/board_pins.h),
+  wiring table in [`ports/esp32-idf/BRINGUP.md`](../ports/esp32-idf/BRINGUP.md).
+- No NFC reader. Phase 5 was not attempted; if you pick this up, note that PN532-class
+  parts are assumed too limited for Express / ECP timing and the reference uses ST25R.
+- Matter over Wi-Fi on the S3 is not low-power like the nRF Thread sleepy end device.
+  Fine for a mains-powered reader, wrong for a battery lock.
 
-## 7. Risks and assumptions
+## 7. Risks and assumptions, resolved
 
-- Verified: the Aliro Door Lock cluster is in connectedhomeip (the `SetAliroReaderConfig` /
-  `ClearAliroReaderConfig` commands and the ALIRO feature flag), so esp-matter has it and Tier A
-  carries over. Provisioning "from any wallet" via any Matter controller is the documented design.
-- Assumption (Likely, verify): NimBLE's L2CAP CoC + GATT cover what the Aliro BLE transaction needs.
-- Assumption (Likely, verify): ESP-IDF mbedTLS PSA covers the crypto_utils PSA usage (ECDH, key
-  import/export/derive) that the reader needs.
-- Assumption: `--wrap` on `xtensa-esp32s3-elf-ld` behaves as on any GNU ld.
-- Coexistence (one S3 doing BLE + UWB) holds: the nRF already runs engine + BLE host on one core,
-  and UWB is a separate radio, so only CPU/SPI/IRQ time is shared. Confirmed by the Phase 1 spike.
-- Licensing: the Nordic reference is study-only (Nordic-device restriction). Effort must be
-  clean-room reimplementation, which is slower than lifting but is the only publishable path.
+- **Confirmed.** The Aliro Door Lock cluster is in connectedhomeip
+  (`SetAliroReaderConfig` / `ClearAliroReaderConfig` and the feature flag), so esp-matter
+  has it and the Tier-A carry-over worked as predicted.
+- **Confirmed.** NimBLE's L2CAP CoC and GATT cover what the transaction needs, given a
+  larger host task stack: the 4096-byte default overflows during software P-256.
+- **Confirmed.** ESP-IDF's mbedTLS-PSA covers the ECDH, ECDSA, and AES-GCM the reader
+  needs.
+- **Confirmed.** `--wrap` on `xtensa-esp32s3-elf-ld` behaves as on any GNU ld;
+  `verify_port.sh` guards the seam on every build.
+- **Confirmed, with a caveat.** BLE and UWB coexist on one S3, but not for free: the
+  ranging task is pinned to core 1 and the console to core 0, and the transaction runs
+  synchronously on the BLE host task because driving it from elsewhere races the host.
+- **Held.** The clean-room discipline was kept. Facts came from disassembling the vendor
+  binary and from readable reference sources; no restricted source was copied.
+
+## 8. If you are doing this yourself
+
+Read [`ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md) first. It is the
+document this plan should have been able to write in advance and could not: forty-odd
+specific traps, each with what it looks like on a console and what actually fixed it.
+Three cost more than a day each — an EVB power jumper, a ranging session id that is
+derived rather than chosen, and a per-round log line that starved the DW3000 ISR task.

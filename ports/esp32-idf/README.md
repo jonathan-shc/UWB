@@ -1,22 +1,29 @@
-# Woz UWB engine on ESP32-S3 (ESP-IDF port)
+# Aliro reader on ESP32-S3 (ESP-IDF)
 
-Phase 1 of the ESP32 port (see `docs/porting-esp32.md`): the openaliro UWB ranging
-engine + the DW3000 decadriver, building and linking on ESP-IDF for the ESP32-S3,
-with a canned-URSK CCC DS-TWR responder bring-up app.
+The full Aliro reader stack — BLE transport, credential authentication, ranging setup,
+and the UWB engine — built as ESP-IDF components, with a small bench app on top. The
+Matter door lock in [`../esp32-matter`](../esp32-matter) reuses these components
+verbatim; this tree is where they live and where you drive them without Matter in the
+way.
 
-Status: **builds clean for `esp32s3`** (`idf.py build` produces `woz_uwb_esp32s3.bin`).
-Not yet run on silicon: a live range needs a DWM3000EVB wired up (still to source)
-and a peer that drives the DS-TWR exchange (an Aliro Wallet, or a second board).
+**Status: hardware-validated.** The full chain has run on an ESP32-S3 + DWM3000EVB
+against a live iPhone: credential auth, M1-M4 ranging setup, and live DS-TWR distance,
+ending in an approach unlock.
 
-## What this is (and how it stays additive)
+## Components
 
-This tree reuses `modules/woz_uwb/src` and `deps/dw3000` from the repo unchanged.
-Only one seam is target-specific now:
+| Component | What it is |
+|---|---|
+| `aliro_ble` | NimBLE transport: `0xFFF2` advertisement, the SPSM/version GATT characteristics, and the L2CAP CoC that carries the transaction. Works standalone or attached to an existing NimBLE host. See its [`SPEC.md`](components/aliro_ble/SPEC.md). |
+| `aliro_crypto` | The key schedule and secure channels: SHA-256 / HMAC / HKDF / X9.63 in portable C, with an mbedTLS-PSA backend for AES-256-GCM and P-256. |
+| `aliro_reader` | The transaction itself: AUTH0 → AUTH1 → EXCHANGE over APDUs, then the M1-M4 ranging setup, plus the reader identity and credential trust store in NVS. |
+| `woz_uwb` | The shared engine. `modules/woz_uwb/src` and `deps/dw3000` are compiled straight from the repo against the `woz_port.h` platform contract, with an ESP-IDF DW3000 backend underneath. |
 
-- `components/woz_uwb/port/` — the ESP-IDF DW3000 platform backend
-  (`dw3000_spi.c`, `dw3000_hw.c`) replacing the Zephyr `deps/dw3000/platform/`
-  `dw3000_spi.c`/`dw3000_hw.c` (SPI-master + GPIO/IRQ), plus `board_pins.h` and a
-  tiny wrap/diag stub (`woz_wrap_stubs.c`).
+Only one seam is target-specific:
+
+- **`components/woz_uwb/port/`** — the ESP-IDF DW3000 platform backend (`dw3000_spi.c`,
+  `dw3000_hw.c`) replacing the Zephyr `deps/dw3000/platform/` one (SPI-master + GPIO/IRQ),
+  plus `board_pins.h` and a tiny wrap/diag stub (`woz_wrap_stubs.c`).
 
 There is **no Zephyr compatibility layer**. The engine takes its whole OS surface
 from `modules/woz_uwb/src/facade/woz_port.h` (eight functions: heap, monotonic
@@ -25,40 +32,84 @@ select an ESP-IDF backend on `ESP_PLATFORM`. The earlier `compat/zephyr/*` shim,
 194 lines of fake `<zephyr/*>` headers, was deleted once those two headers
 existed. See [`docs/porting.md`](../../docs/porting.md).
 
-The CCC STS substitution seam (`-Wl,--wrap=dwt_configurestsiv/dwt_rxenable/
-dwt_configurestsmode`) links and is wired on `xtensa-esp32s3-elf-ld`.
+The CCC STS substitution links the same way it does on Nordic: `--wrap=dwt_rxenable`
+(the load-bearing one, where `ccc_shim_rx.c` programs the CCC key and IV on every RX-arm)
+alongside `dwt_configurestsiv`, `dwt_configurestsmode`, and `dwt_setcallbacks`.
+`verify_port.sh` guards that the seam survives a build.
 
-## Source set
+Two ESP-specific pieces are worth knowing about. SPI runs with **DMA disabled**: a boot
+benchmark measured about 84 µs per transaction with DMA, most of it descriptor setup and
+cache sync, which dwarfs the bit time for the small register writes on the arm critical
+path. And the DW3000 IRQ hands off to a dedicated high-priority task pinned to core 1
+that calls `dwt_isr()`, because that call does SPI and cannot run in ISR context.
 
-Mirrors `modules/woz_uwb/CMakeLists.txt` + `deps/dw3000/CMakeLists.txt` for
-`CONFIG_WOZ_UWB` + `RESPONDER` + `ALIRO` + `CRYPTO_MBEDTLS`. Excluded (all
-diagnostic/host-specific): `uwb_rxdiag.c`, `uwb_selftest.c`, `woz_logfmt.c`,
-`woz_logquiet.c`, `aliro_shell.c`, `dw3000_spi_trace.c`, `ccc_crypto_psa.c`
-(Nordic PSA backend — mbedTLS is used here).
+## Wiring
 
-## Wiring (DWM3000EVB -> ESP32-S3, edit in `components/woz_uwb/port/board_pins.h`)
+Source of truth is `components/woz_uwb/port/board_pins.h`; the physical
+DWM3000EVB-to-header mapping is in [`BRINGUP.md`](BRINGUP.md).
 
-    SPI2/FSPI:  SCLK 12   MOSI 11   MISO 13   CS 10
-    control:    RSTn 4    IRQ 5     WAKEUP 6
-    clock:      2 MHz init / 8 MHz steady
+    SPI2 / FSPI:  SCLK 12   MOSI 11   MISO 13   CS 10
+    control:      RSTn  4   IRQ   5   WAKEUP 6
+    clock:        2 MHz init / 8 MHz steady
 
-## Build / flash
+## Build, flash, run
 
-    . ~/esp/esp-idf/export.sh
-    cd ports/esp32-idf
-    idf.py set-target esp32s3      # once
-    idf.py build
-    idf.py -p <PORT> flash monitor # needs the board + DWM3000EVB
+```bash
+cd ports/esp32-idf
+idf.py set-target esp32s3   # once per checkout
+make build
+make flash
+make monitor
+```
 
-## Known hardware-bring-up risks (verify when the DWM3000EVB arrives)
+`make` alone prints the grouped target list: `build`, `menuconfig`, `size`, `flash`,
+`app-flash` (app only, fast iteration), `flash-erase`, `monitor`, `term` (tio), `ports`,
+`clean`. ESP-IDF is expected at `~/esp/esp-idf`; override with `IDF_EXPORT=`.
 
-- SPI transfers use a DMA-capable bounce buffer + manual GPIO CS held low across
-  each DW3000 command. Confirm the DW3000 tolerates the inter-segment gaps and the
-  8 MHz clock on your wiring; drop to `WOZ_DW3000_SPI_SLOW_HZ` first if reads are
-  garbage.
-- `-Wno-format`/`-Wno-maybe-uninitialized` are set for the reused component only
-  (ESP-IDF `-Werror=all` vs the Nordic toolchain where `int32_t == int`). They do
-  not affect behavior.
-- The IRQ runs a dedicated core-1 task calling `dwt_isr()` while the line is high
-  (mirrors the Nordic dedicated-workqueue design); tune its priority against BLE
-  when coexistence is added.
+`flash` and `monitor` auto-select the board's USB-UART and **refuse any SEGGER/J-Link
+port**, so this can never write to an nRF5340 DK sharing the bench. If another process
+holds the port, flashing refuses with a clear message; `FORCE=1` stops the holder first.
+
+## Console
+
+`make monitor` gives a REPL at the `esp32>` prompt:
+
+| Command | What it does |
+|---|---|
+| `status` | responder state, last and trusted range |
+| `range` | latest distance |
+| `aliro-start` / `aliro-stop` | start or stop the demo DS-TWR responder (canned URSK, no phone needed) |
+| `aliro-prov` | show reader identity and credential trust store |
+| `aliro-trust` | persist the last-presented credential as trusted |
+| `help`, `clear` | REPL built-ins |
+
+At boot the app brings the radio up, starts the demo responder, starts the reader, and
+then polls for a distance every 500 ms. Bringing the radio up at boot rather than on
+first use is deliberate: probing the DW3000 from inside a BLE host callback fails.
+
+## Tests
+
+```bash
+ports/esp32-idf/test/run.sh
+```
+
+Five host suites (no ESP-IDF, no hardware): the port headers, the `aliro_crypto` key
+schedule against published vectors, the `aliro_apdu` wire codec, the `aliro_prov`
+identity and trust logic, and the bolt-state LED policy. The crypto core compiles
+host-identical to target, which is what makes a host KAT a statement about on-target
+behavior.
+
+A sixth step, `verify_port.sh`, builds the firmware and checks the link seam, the
+excluded diagnostic sources, and that the app still fits its partition. It skips cleanly
+with a notice when `idf.py` is not on `PATH`.
+
+These suites are not yet a CI gate. Run them yourself before believing a crypto or wire
+change — every bug in the gotchas log built cleanly first.
+
+## Further reading
+
+- [`BRINGUP.md`](BRINGUP.md) — wire it up and confirm the radio answers.
+- [`../docs/esp-32-gotchas.md`](../docs/esp-32-gotchas.md) — every trap hit on the way to
+  a working unlock, with symptom and fix.
+- [`../esp32-matter/README.md`](../esp32-matter/README.md) — the same stack inside a
+  Matter door lock.

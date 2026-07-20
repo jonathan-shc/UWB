@@ -72,6 +72,7 @@ struct aliro_uwb_adapter
 	 * @param cherry_ctx Cherry library context to bind the new reader adapter to.
 	 */
 	aliro_uwb_adapter_create_reader(
+		// Opaque CCC context handle, threaded through to the CCC session API calls.
 		struct cherry *cherry_ctx,
 		/**
 		 * @brief Device capabilities (channels, PRF, supported algorithms) advertised by

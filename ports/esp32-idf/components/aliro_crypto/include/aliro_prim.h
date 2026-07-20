@@ -45,6 +45,12 @@ int aliro_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce,
 int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR],
 			 uint8_t pub[ALIRO_P256_POINT]);
 
+/* Derive the 65-byte uncompressed public key from a 32-byte P-256 private
+ * scalar (used to recover the reader group key X from the provisioned
+ * signingKey; verificationKey = pub(signingKey)). */
+int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
+				uint8_t pub[ALIRO_P256_POINT]);
+
 /* ECDH: shared_x = X coordinate (32 bytes) of priv * peer_pub. */
 int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR],
 		    const uint8_t peer_pub[ALIRO_P256_POINT],

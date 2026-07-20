@@ -22,10 +22,10 @@ bump means new capability and a patch bump means fixes only.
    `build/merged.hex` and compute its checksum:
    `shasum -a 256 build/merged.hex > merged.hex.sha256`.
 4. **GitHub release.** Create a release from the tag. The notes contain, in order: the
-   changelog section for this version, the hardware validation results table (with
-   firmware commit, NCS version, phone model, iOS version), and flashing instructions
-   (`nrfjprog`/`west flash` of `merged.hex` needs a full-erase first flash, same as
-   `make flash-erase`). Attach `merged.hex` and `merged.hex.sha256`.
+   changelog section for this version, the hardware validation results tables (with
+   firmware commit, toolchain versions, phone model, iOS version), and flashing
+   instructions (`nrfjprog`/`west flash` of `merged.hex` needs a full-erase first flash,
+   same as `make flash-erase`). Attach `merged.hex` and `merged.hex.sha256`.
 
 ## Notes
 
@@ -34,3 +34,7 @@ bump means new capability and a patch bump means fixes only.
   tag-triggered build workflow can replace step 3.
 - The prebuilt hex targets the default configuration (nRF5340 DK, DW3110, ST25R300).
   Other configurations (`CHIP=dw3720`) build from source.
+- No ESP32 binary is attached. That build depends on an ESP-IDF and esp-matter pair that
+  this repository does not pin, so a prebuilt image would not be reproducible from the
+  tag alone. Build it from `ports/esp32-matter` and record the two toolchain versions in
+  the release notes alongside the ESP32 validation table.

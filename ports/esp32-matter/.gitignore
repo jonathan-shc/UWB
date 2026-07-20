@@ -1,0 +1,7 @@
+# ESP-IDF / esp-matter build output + generated / fetched artifacts.
+# sdkconfig.defaults* are the tracked source of truth.
+/build/
+/sdkconfig
+/sdkconfig.old
+/dependencies.lock
+/managed_components/
