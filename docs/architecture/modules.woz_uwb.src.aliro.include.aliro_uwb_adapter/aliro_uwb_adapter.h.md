@@ -17,33 +17,21 @@
 
 @brief Ordered preferred hopping configurations.
 
-### `struct cherry *cherry_ctx,`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:76`
+### `struct aliro_uwb_adapter_reader_config`
+`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:77`
 
-Opaque CCC context handle, threaded through to the CCC session API calls.
-
-### `struct cherry_core_event_device_capabilities *caps,`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:82`
-
-@brief Device capabilities (channels, PRF, supported algorithms) advertised by
-the reader during CCC discovery.
-@param caps Device capabilities to advertise during CCC discovery.
-
-### `struct aliro_uwb_adapter_reader_config *config);`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:87`
-
-@brief Reader-side selection preferences (borrowed for the adapter's lifetime).
-@param config Reader adapter configuration borrowed for the adapter's lifetime.
-
-### `struct cherry_common_diag_cfg config);`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:97`
-
-@brief Diagnostic configuration for CCC reporting (ranging, signal metrics, session
-status).
-@param config Diagnostic configuration to apply for CCC reporting.
+Reader-side selection preferences (borrowed for the adapter's lifetime).
 
 ### `void aliro_uwb_adapter_destroy(struct aliro_uwb_adapter *aliro_ctx)`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:103`
+`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:91`
 
 @brief Release an adapter context.
 @param aliro_ctx Adapter context to release.
+
+<details><summary>Undocumented (3)</summary>
+
+- `cherry`
+- `cherry_core_event_device_capabilities`
+- `cherry_common_diag_cfg`
+
+</details>

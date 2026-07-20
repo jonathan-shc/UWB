@@ -20,7 +20,7 @@ struct aliro_uwb_msg_builder {
 	size_t capacity;
 };
 
-/** Allocate a message with room for @payload_len payload bytes plus header. */
+/** Allocate a message with room for @p payload_len payload bytes plus header. */
 bool aliro_uwb_msg_builder_init(struct aliro_uwb_msg_builder *builder, uint16_t payload_len);
 
 /** Append the 4-byte header (protocol, id, big-endian payload length). */
@@ -42,12 +42,12 @@ bool aliro_uwb_msg_builder_add_u32(struct aliro_uwb_msg_builder *builder, uint8_
 bool aliro_uwb_msg_builder_add_u64(struct aliro_uwb_msg_builder *builder, uint8_t id,
 				   uint64_t value);
 
-/** Append an attribute whose value is @count big-endian 16-bit words. */
+/** Append an attribute whose value is @p count big-endian 16-bit words. */
 bool aliro_uwb_msg_builder_add_u16_array(struct aliro_uwb_msg_builder *builder, uint8_t id,
 					 size_t count, const uint16_t *values);
 
 /**
- * @brief Append an attribute whose value is @count raw bytes.
+ * @brief Append an attribute whose value is @p count raw bytes.
  */
 bool aliro_uwb_msg_builder_add_bytes(struct aliro_uwb_msg_builder *builder, uint8_t id,
 				     size_t count, const uint8_t *values);

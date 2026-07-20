@@ -73,13 +73,19 @@ configuration; returns NULL if callback, config, or allocation fails.
 
 Opaque Cherry context: a holder for the (unused) core callback the adapter passes at create.
 
+### `struct cherry_session *cherry_ccc_session_to_base(struct cherry_ccc_session *session)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:151`
+
+Cast a CCC session pointer to its embedded base session structure; null propagates (the header
+wrappers rely on it).
+
 ### `void *cherry_session_get_user_data(struct cherry_session *session)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:158`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:157`
 
 Retrieve the user data pointer stored in the base session; returns NULL if session is null.
 
 ### `void cherry_session_destroy(struct cherry_session *session)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:165`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:164`
 
 Stop the UWB radio, emit a DEINIT status event, and deallocate the session; safe if session or
 its base pointer is null.
@@ -87,7 +93,7 @@ its base pointer is null.
 **calls** `emit_status`, `to_ccc`
 
 ### `enum cherry_err cherry_session_start(struct cherry_session *session)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:185`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:184`
 
 Start an Aliro UWB session by building a RangingConfiguration byte array from the session config,
 calling woz_uwb_start_aliro, and emitting IDLE then ACTIVE status events; returns
@@ -97,19 +103,19 @@ not set, or CHERRY_ERR_SESSION_INIT if the UWB start fails.
 **calls** `emit_error`, `emit_status`, `to_ccc`
 
 ### `struct cherry_ccc_aliro_session_config *config`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:188`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:187`
 
 Borrowed pointer to the adapter's negotiated params, valid until destroy.
 
 ### `struct woz_uwb_aliro_cfg fcfg`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:192`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:191`
 
 Configuration struct for woz_uwb_start_aliro; holds session ID, channel, sync code,
 timing, slot geometry, STS index, UWB time, URSK key, and the RangingConfiguration byte
 array required to derive the CCC SaltedHash.
 
 ### `enum cherry_err cherry_session_stop(struct cherry_session *session)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:263`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:262`
 
 Stop the UWB radio and emit an IDLE status event; returns CHERRY_ERR_INVALID_PARAMETER if session
 or its base pointer is null, otherwise CHERRY_ERR_NONE.
@@ -117,56 +123,71 @@ or its base pointer is null, otherwise CHERRY_ERR_NONE.
 **calls** `emit_status`, `to_ccc`
 
 ### `enum cherry_err cherry_ccc_session_set_ursk(struct cherry_ccc_session *session, const uint8_t *ursk)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:279`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:278`
 
 Copy the URSK (Unique Responder Session Key) into the session and mark it as present; returns
 CHERRY_ERR_INVALID_PARAMETER if session or ursk is null, otherwise CHERRY_ERR_NONE.
 
-### `cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:327`
+### `enum cherry_err cherry_ccc_session_set_protocol_version(struct cherry_ccc_session *session, uint16_t selected_protocol_version)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:290`
+
+Validate that the session exists; the selected_protocol_version parameter is accepted but
+ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+
+### `enum cherry_err cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session, uint32_t sts_index)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:299`
+
+Store the STS index on the session config; returns CHERRY_ERR_INVALID_PARAMETER if session or its
+config is null, otherwise CHERRY_ERR_NONE.
+
+### `enum cherry_err cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session, uint64_t initiation_time_us)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:311`
+
+Store the UWB initiation timestamp in microseconds on the session config; returns
+CHERRY_ERR_INVALID_PARAMETER if session or its config is null, otherwise CHERRY_ERR_NONE.
+
+### `enum cherry_err cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:323`
+
+Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
+returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+
+### `enum cherry_err cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:323`
 
 Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
 returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
 
 ### `enum cherry_err cherry_session_set_antennas(struct cherry_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:337`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:334`
 
 Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
 returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
 
-### `cherry_session_set_diagnostics`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:347`
+### `enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session, struct cherry_common_diag_cfg config, bool controlee_only)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:344`
 
 Validate that the session exists; diagnostics config and controlee_only parameters are accepted
 but ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
 
-### `struct cherry_session`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:348`
+### `enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session, struct cherry_common_diag_cfg config, bool controlee_only)`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:344`
 
-Base session object; first member of cherry_ccc_session so the base functions can up-cast.
-
-### `struct cherry_common_diag_cfg config, bool controlee_only)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:351`
-
-Configuration structure for common CCC diagnostics reporting;
-passed to session_set_diagnostics but ignored in this shim.
+Validate that the session exists; diagnostics config and controlee_only parameters are accepted
+but ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
 
 ### `void cherry_ccc_event_free(struct cherry_ccc_event *event)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:361`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:356`
 
 Free a CCC event handle.
 
 ### `void cherry_ccc_event_free(struct cherry_ccc_event *event)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:361`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:356`
 
 Free a CCC event handle.
 
-<details><summary>Undocumented (5)</summary>
+<details><summary>Undocumented (1)</summary>
 
-- `cherry_ccc_session_to_base` — tested: cherry
-- `cherry_ccc_session_set_protocol_version` — tested: cherry
-- `cherry_ccc_session_set_sts_index` — tested: cherry
-- `cherry_ccc_session_set_initiation_time` — tested: cherry
-- `cherry_ccc_session_set_round2_antennas` — tested: cherry
+- `cherry_common_diag_cfg`
 
 </details>

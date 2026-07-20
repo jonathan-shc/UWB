@@ -145,7 +145,7 @@ is the AP command payload to frame with type=ACCESS, opcode=AP_OP_COMMAND.
 Drop the trailing ISO7816 status word (SW1 SW2) from an APDU response body.
 Returns the SW via *sw (0x9000 = OK) and shortens *len, or -1 if too short.
 
-### `int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len, // Holds the fields parsed from an AUTH0 response APDU: the device's mandatory ephemeral public key and an optional cryptogram. struct aliro_auth0_response *r)`
+### `int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len, struct aliro_auth0_response *r)`
 `ports/esp32-idf/components/aliro_reader/aliro_apdu.c:267`
 
 Parses an AUTH0 response APDU body, extracting the device's ephemeral public key and optional cryptogram.
@@ -155,12 +155,14 @@ Returns 0 on success with *r populated (zero-initialized first); returns -1 if t
 **calls** `aliro_tlv_find`
 
 ### `struct aliro_auth0_response *r)`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:269`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:268`
 
-Holds the fields parsed from an AUTH0 response APDU: the device's mandatory ephemeral public key and an optional cryptogram.
+Fields parsed from an AUTH0Response APDU: the device's mandatory ephemeral
+public key, plus the optional cryptogram sent when the device recognises the
+reader and offers the fast path.
 
-### `int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len, // Holds the fields parsed from an AUTH1 response APDU: the device's mandatory signature and an optional device public key. struct aliro_auth1_response *r)`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:289`
+### `int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len, struct aliro_auth1_response *r)`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:288`
 
 Parses an AUTH1 response APDU body, extracting the device's signature and optional device public key.
 buf/len is the APDU body with any status word already stripped. The device signature (tag ALIRO_TAG_SIG) is mandatory and must be exactly 64 bytes; the device public key (tag ALIRO_TAG_DEVICE_PUB) is optional and, if present, must be exactly 65 bytes. A signaling-bitmap item at tag 0x91 is recognized but ignored.
@@ -169,18 +171,20 @@ Returns 0 on success with *r populated (zero-initialized first); returns -1 if t
 **calls** `aliro_tlv_find`
 
 ### `struct aliro_auth1_response *r)`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:291`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:289`
 
-Holds the fields parsed from an AUTH1 response APDU: the device's mandatory signature and an optional device public key.
+Fields parsed from an AUTH1Response APDU: the device's mandatory signature
+over the transcript, plus the device public key and signaling bitmap it sends
+when the standard (non-fast) path is taken.
 
 ### `int aliro_ble_frame(uint8_t type, uint8_t opcode, const uint8_t *payload, size_t plen, uint8_t *out, size_t cap, size_t *out_len)`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:316`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:314`
 
 Frames a payload into an Aliro BLE envelope: 1-byte type (top 2 bits masked off), 1-byte opcode, 2-byte big-endian payload length, followed by the payload.
 Returns 0 on success with *out_len set to the total framed length; returns -1 if plen exceeds 0xFFFF or cap is too small to hold the header plus payload.
 
 ### `int aliro_ble_unframe(const uint8_t *buf, size_t len, uint8_t *type, uint8_t *opcode, const uint8_t **payload, size_t *plen)`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:336`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.c:334`
 
 Parses an Aliro BLE envelope, extracting the type, opcode, and a pointer/length into the payload region of buf.
 The returned *payload points into buf; the caller must not use it beyond buf's lifetime.

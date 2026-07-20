@@ -13,11 +13,6 @@
  * @brief Encrypt one AES-ECB block using mbedTLS, supporting 128-bit and 256-bit keys, as the
  * portable crypto seam selected by CONFIG_WOZ_CRYPTO_MBEDTLS (see docs/porting.md; same contract as
  * ccc_crypto_psa.c).
- * @param key AES key buffer.
- * @param key_bits Key length in bits; must be 128 or 256.
- * @param in 16-byte input block to encrypt.
- * @param out 16-byte buffer to receive the encrypted block.
- * @return 0 on success, -EINVAL on invalid parameters, -EIO on crypto failure.
  */
 int crypto_aes_ecb_encrypt(const uint8_t *key, size_t key_bits, const uint8_t in[16],
 			   uint8_t out[16])

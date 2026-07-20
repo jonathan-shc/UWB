@@ -41,22 +41,17 @@ enum aliro_uwb_err cherry_err_to_aliro(enum cherry_err err)
 	return ALIRO_UWB_ERR_INTERNAL;
 }
 
-/* Deep-copy the device CCC capabilities into the adapter. */
-static enum aliro_uwb_err
 /**
  * @brief Deep-copy the device CCC capabilities into the adapter.
  * @param adapter Adapter whose `ccc_caps` field receives the copied capabilities.
  * @param caps Device capabilities event supplying the source CCC capabilities to copy.
- * @return `ALIRO_UWB_ERR_NONE` on success, or `ALIRO_UWB_ERR_INTERNAL` if the source capabilities are missing or allocation fails.
+ * @return `ALIRO_UWB_ERR_NONE` on success, or `ALIRO_UWB_ERR_INTERNAL` if the source capabilities
+ * are missing or allocation fails.
  */
-copy_capabilities(struct aliro_uwb_adapter *adapter,
-		  struct cherry_core_event_device_capabilities *caps)
+static enum aliro_uwb_err copy_capabilities(struct aliro_uwb_adapter *adapter,
+					    struct cherry_core_event_device_capabilities *caps)
 {
 	struct cherry_ccc_capabilities *src = caps->ccc_capabilities;
-	/**
-	 * @brief CCC device capabilities reported by the reader, including protocol versions, UWB
-	 * configs, and pulse shape combinations.
-	 */
 	struct cherry_ccc_capabilities *dst = &adapter->ccc_caps;
 
 	if (!src) {
@@ -98,9 +93,6 @@ copy_capabilities(struct aliro_uwb_adapter *adapter,
  */
 static bool reader_config_valid(const struct aliro_uwb_adapter_reader_config *config)
 {
-	/**
-	 * @brief Preferred hopping sequences offered by the reader to a ranging session.
-	 */
 	const struct aliro_uwb_preferred_hopping_configs *hops = &config->preferred_hopping_configs;
 	size_t i;
 
@@ -118,24 +110,14 @@ static bool reader_config_valid(const struct aliro_uwb_adapter_reader_config *co
 	return false;
 }
 
-struct aliro_uwb_adapter
-	*
-	/**
-	 * @brief Opaque CCC context handle, threaded through to the CCC session API calls.
-	 */
-	aliro_uwb_adapter_create_reader(
-		// Opaque CCC context handle, threaded through to the CCC session API calls.
-		struct cherry *cherry_ctx,
-		/**
-		 * @brief Device capabilities event from CCC, containing supported protocol
-		 * versions, UWB configurations, and pulse shape combos.
-		 */
-		struct cherry_core_event_device_capabilities *caps,
-		/**
-		 * @brief Configuration for an Aliro UWB adapter reader, specifying hopping
-		 * preferences, antenna assignments, and RAN multiplier bounds.
-		 */
-		struct aliro_uwb_adapter_reader_config *config)
+/**
+ * @brief Create a reader-mode adapter, copying the peer's CCC capabilities into it and
+ * resolving the minimum RAN multiplier against the reader's own configuration.
+ */
+struct aliro_uwb_adapter *
+aliro_uwb_adapter_create_reader(struct cherry *cherry_ctx,
+				struct cherry_core_event_device_capabilities *caps,
+				struct aliro_uwb_adapter_reader_config *config)
 {
 	struct aliro_uwb_adapter *adapter;
 
@@ -174,15 +156,9 @@ struct aliro_uwb_adapter
 /**
  * @brief Store a diagnostics configuration in the adapter for later application to CCC sessions,
  * allocating storage if needed.
- * @param aliro_ctx Adapter that receives the diagnostics configuration.
- * @param config Common diagnostic configuration applied to a CCC session.
  */
-void aliro_uwb_adapter_set_diagnostics(
-	struct aliro_uwb_adapter *aliro_ctx,
-	/**
-	 * @brief Common diagnostic configuration applied to a CCC session.
-	 */
-	struct cherry_common_diag_cfg config)
+void aliro_uwb_adapter_set_diagnostics(struct aliro_uwb_adapter *aliro_ctx,
+				       struct cherry_common_diag_cfg config)
 {
 	if (!aliro_ctx) {
 		return;
@@ -199,7 +175,6 @@ void aliro_uwb_adapter_set_diagnostics(
 /**
  * @brief Destroy an Aliro UWB adapter, freeing all associated CCC capabilities arrays and
  * diagnostic configuration.
- * @param aliro_ctx Adapter to destroy; no-op if NULL.
  */
 void aliro_uwb_adapter_destroy(struct aliro_uwb_adapter *aliro_ctx)
 {

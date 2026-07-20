@@ -14,12 +14,16 @@ handshake.
 
 zero length
 
-### `struct aliro_auth0_response *r);`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.h:121`
+### `struct aliro_auth0_response`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.h:123`
 
-Response payload for an Aliro AUTH0 APDU exchange.
+Fields parsed from an AUTH0Response APDU: the device's mandatory ephemeral
+public key, plus the optional cryptogram sent when the device recognises the
+reader and offers the fast path.
 
-### `struct aliro_auth1_response *r);`
-`ports/esp32-idf/components/aliro_reader/aliro_apdu.h:131`
+### `struct aliro_auth1_response`
+`ports/esp32-idf/components/aliro_reader/aliro_apdu.h:135`
 
-Response payload for an Aliro AUTH1 APDU exchange.
+Fields parsed from an AUTH1Response APDU: the device's mandatory signature
+over the transcript, plus the device public key and signaling bitmap it sends
+when the standard (non-fast) path is taken.

@@ -92,6 +92,9 @@ static void compute_reader_group_x(void)
  * need no lock. Created in load_provisioning() (runs single-threaded at boot). */
 static SemaphoreHandle_t s_prov_lock;
 
+/* Where the credential-auth transaction has got to on this connection. Advances
+ * strictly forward from PH_IDLE as each command's response arrives; PH_FAILED is
+ * terminal until the peer reconnects. */
 enum txn_phase {
 	PH_IDLE = 0,    /* connected; awaiting the peer's first message */
 	PH_SENT_AUTH0,  /* AUTH0 sent; awaiting AUTH0Response */

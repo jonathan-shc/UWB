@@ -16,4 +16,4 @@ payload.
 ### `bool aliro_uwb_msg_builder_add_bytes(struct aliro_uwb_msg_builder *builder, uint8_t id, size_t count, const uint8_t *values)`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h:52`
 
-@brief Append an attribute whose value is @count raw bytes.
+@brief Append an attribute whose value is @p count raw bytes.

@@ -7,14 +7,13 @@
 
 ## API
 
-### `aliro_uwb_msg_build_general_error(struct aliro_uwb_session *session, uint8_t error_code)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.h:32`
+### `struct aliro_uwb_message *aliro_uwb_msg_build_general_error(struct aliro_uwb_session *session, uint8_t error_code)`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.h:27`
 
-@brief Build a general-error message for the given session.
-@param session Session for which the error message is built.
+Build a general-error message for the given session.
 
 ### `void aliro_uwb_msg_free(struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.h:38`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.h:34`
 
 @brief Release a message built by this layer.
 @param message Message to free.

@@ -15,9 +15,6 @@ bool aliro_uwb_msg_builder_init(struct aliro_uwb_msg_builder *builder, uint16_t 
 {
 	size_t total = ALIRO_HEADER_LENGTH + payload_len;
 
-	/**
-	 * @brief Message payload buffer allocated inline after the aliro_uwb_message header.
-	 */
 	builder->message = qmalloc(sizeof(struct aliro_uwb_message) + total);
 	if (!builder->message) {
 		return false;

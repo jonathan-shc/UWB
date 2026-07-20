@@ -7,12 +7,13 @@
 
 ## API
 
-### `cherry_session_set_diagnostics(struct cherry_session *session, /** * @brief Common diagnostic configuration to apply to the CCC session. */ struct cherry_common_diag_cfg config, bool enable_fallback)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h:39`
+### `enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session, struct cherry_common_diag_cfg config, bool enable_fallback)`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h:38`
 
 @brief Opaque generic session pointer (defined by the shim; first member of a CCC session).
 
-### `struct cherry_common_diag_cfg config,`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h:43`
+<details><summary>Undocumented (1)</summary>
 
-@brief Common diagnostic configuration to apply to the CCC session.
+- `cherry_common_diag_cfg`
+
+</details>

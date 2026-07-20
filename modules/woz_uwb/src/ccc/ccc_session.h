@@ -31,9 +31,6 @@ struct ccc_ran_session {
 uint16_t ccc_session_n_round(const struct ccc_ran_session *s);
 
 /** Map an Aliro session onto the CCC MAC's ranging-schedule parameters. */
-int ccc_session_to_ran_params(const struct ccc_ran_session *s,
-			      // RAN (Random Access Number) parameters: multiplier, index, and
-			      // preamble code, populated by CCC during session setup.
-			      struct ccc_ran_params *out);
+int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out);
 
 #endif /* CCC_SESSION_H */

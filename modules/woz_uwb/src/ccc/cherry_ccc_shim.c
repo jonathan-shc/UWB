@@ -146,10 +146,9 @@ cherry_ccc_session_create_aliro_responder(struct cherry *ctx, cherry_ccc_cb_t ca
 	return s;
 }
 
-struct cherry_session *
 // Cast a CCC session pointer to its embedded base session structure; null propagates (the header
 // wrappers rely on it).
-cherry_ccc_session_to_base(struct cherry_ccc_session *session)
+struct cherry_session *cherry_ccc_session_to_base(struct cherry_ccc_session *session)
 {
 	return session ? &session->base : NULL;
 }
@@ -286,20 +285,19 @@ enum cherry_err cherry_ccc_session_set_ursk(struct cherry_ccc_session *session, 
 	return CHERRY_ERR_NONE;
 }
 
-enum cherry_err
 // Validate that the session exists; the selected_protocol_version parameter is accepted but
 // ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_protocol_version(struct cherry_ccc_session *session,
-					uint16_t selected_protocol_version)
+enum cherry_err cherry_ccc_session_set_protocol_version(struct cherry_ccc_session *session,
+							uint16_t selected_protocol_version)
 {
 	ARG_UNUSED(selected_protocol_version);
 	return session ? CHERRY_ERR_NONE : CHERRY_ERR_INVALID_PARAMETER;
 }
 
-enum cherry_err
 // Store the STS index on the session config; returns CHERRY_ERR_INVALID_PARAMETER if session or its
 // config is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session, uint32_t sts_index)
+enum cherry_err cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session,
+						 uint32_t sts_index)
 {
 	if (!session || !session->config) {
 		return CHERRY_ERR_INVALID_PARAMETER;
@@ -308,11 +306,10 @@ cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session, uint32_t st
 	return CHERRY_ERR_NONE;
 }
 
-enum cherry_err
 // Store the UWB initiation timestamp in microseconds on the session config; returns
 // CHERRY_ERR_INVALID_PARAMETER if session or its config is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session,
-				       uint64_t initiation_time_us)
+enum cherry_err cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session,
+						       uint64_t initiation_time_us)
 {
 	if (!session || !session->config) {
 		return CHERRY_ERR_INVALID_PARAMETER;
@@ -321,11 +318,11 @@ cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session,
 	return CHERRY_ERR_NONE;
 }
 
-enum cherry_err
 // Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
 // returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set,
-				       uint8_t rx_antenna_set)
+enum cherry_err cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session,
+						       uint8_t tx_antenna_set,
+						       uint8_t rx_antenna_set)
 {
 	ARG_UNUSED(tx_antenna_set);
 	ARG_UNUSED(rx_antenna_set);
@@ -344,11 +341,9 @@ enum cherry_err cherry_session_set_antennas(struct cherry_session *session, uint
 
 // Validate that the session exists; diagnostics config and controlee_only parameters are accepted
 // but ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-enum cherry_err
-cherry_session_set_diagnostics(struct cherry_session *session,
-			       // Configuration structure for common CCC diagnostics reporting;
-			       // passed to session_set_diagnostics but ignored in this shim.
-			       struct cherry_common_diag_cfg config, bool controlee_only)
+enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session,
+					       struct cherry_common_diag_cfg config,
+					       bool controlee_only)
 {
 	ARG_UNUSED(config);
 	ARG_UNUSED(controlee_only);

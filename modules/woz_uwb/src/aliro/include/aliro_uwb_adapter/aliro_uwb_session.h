@@ -18,7 +18,7 @@ struct aliro_uwb_session;
 
 /** Framed Aliro BLE message (header + TLV payload). */
 struct aliro_uwb_message {
-	/** Number of valid bytes in @data. */
+	/** Number of valid bytes in @p data. */
 	size_t len;
 	/** Message bytes (4-byte header followed by TLV attributes). */
 	uint8_t data[];
@@ -80,17 +80,20 @@ typedef void (*aliro_uwb_adapter_transmit_message_t)(struct aliro_uwb_message *m
 						     struct aliro_uwb_session *session,
 						     void *user_data, bool timeout);
 
-/** Create a session (NULL on error). */
-struct aliro_uwb_session
-	*
-	/**
-	 * @brief Aliro adapter instance holding Cherry context, provisioned credentials, and
-	 * ranging session state.
-	 * @param aliro_ctx Aliro adapter instance to create the session from.
-	 */
-	aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx, uint32_t session_id,
-				 aliro_uwb_session_cb_t callback,
-				 aliro_uwb_adapter_transmit_message_t transmit, void *user_data);
+/**
+ * @brief Create a session in the CREATED state. No CCC session is started here.
+ * @param aliro_ctx Adapter supplying the Cherry context and reader configuration.
+ * @param session_id Session identifier carried in the ranging-service messages.
+ * @param callback Session event callback; must not be NULL.
+ * @param transmit Message transmit callback; must not be NULL.
+ * @param user_data Opaque pointer passed back to the callbacks.
+ * @return New session, or NULL on bad parameters or allocation failure.
+ */
+struct aliro_uwb_session *aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx,
+						   uint32_t session_id,
+						   aliro_uwb_session_cb_t callback,
+						   aliro_uwb_adapter_transmit_message_t transmit,
+						   void *user_data);
 
 /** Stop if needed and release a session. */
 void aliro_uwb_session_destroy(struct aliro_uwb_session *session);
@@ -120,13 +123,8 @@ enum aliro_uwb_err aliro_uwb_session_set_time_offset(struct aliro_uwb_session *s
 						     int64_t time_offset);
 
 /** Handle an incoming BLE message (M2/M4, suspend/resume, notifications). */
-enum aliro_uwb_err
-aliro_uwb_session_message_handle(struct aliro_uwb_session *session,
-				 /**
-				  * @brief Framed Aliro BLE message (header + TLV payload).
-				  * @param message Framed Aliro BLE message to process.
-				  */
-				 struct aliro_uwb_message *message);
+enum aliro_uwb_err aliro_uwb_session_message_handle(struct aliro_uwb_session *session,
+						    struct aliro_uwb_message *message);
 
 /** Request a graceful suspend (builds and sends a suspend request). */
 enum aliro_uwb_err aliro_uwb_session_suspend(struct aliro_uwb_session *session);

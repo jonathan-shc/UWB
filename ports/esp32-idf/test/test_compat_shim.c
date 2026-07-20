@@ -65,6 +65,8 @@ static void test_byteorder(void)
 	CHECK("roundtrip_be32", sys_get_be32(buf) == 0xDEADBEEFu);
 }
 
+/* Scratch record the compat-shim tests write through to prove the container_of
+ * and byte-order helpers address the right member. */
 struct co_probe {
 	uint32_t pad;
 	uint16_t field;

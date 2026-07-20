@@ -8,13 +8,12 @@ ccc_ran_params.
 
 ## API
 
-### `int ccc_session_to_ran_params(const struct ccc_ran_session *s, // RAN (Random Access Number) parameters: multiplier, index, and // preamble code, populated by CCC during session setup. struct ccc_ran_params *out)`
+### `int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out)`
 `modules/woz_uwb/src/ccc/ccc_session.h:34`
 
 Map an Aliro session onto the CCC MAC's ranging-schedule parameters.
 
-### `struct ccc_ran_params *out);`
-`modules/woz_uwb/src/ccc/ccc_session.h:37`
+### `int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out)`
+`modules/woz_uwb/src/ccc/ccc_session.h:34`
 
-RAN (Random Access Number) parameters: multiplier, index, and
-preamble code, populated by CCC during session setup.
+Map an Aliro session onto the CCC MAC's ranging-schedule parameters.
