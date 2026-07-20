@@ -104,6 +104,6 @@ Shell command handler: trusts the last-presented Aliro credential and persists i
 ### `void app_shell_start(void)`
 `ports/esp32-idf/main/app_shell.c:215`
 
-Register commands and start the USB-Serial-JTAG console REPL (own task).
+Register commands and start the UART console REPL (own task).
 
 **calls** `print_banner`
