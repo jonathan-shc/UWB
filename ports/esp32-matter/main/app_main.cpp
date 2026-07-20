@@ -51,24 +51,35 @@ uint16_t door_lock_endpoint_id = 0;
 /* Kept so `status` can report the reader task's stack high-water mark. */
 TaskHandle_t aliro_reader_task_handle = nullptr;
 
-/* Bisect switch, currently off. With this cluster present, Home ran a full
- * commissioning to CommissioningComplete and then sent RemoveFabric, i.e. it accepted
- * the device and then rejected it. The cluster sits in Apple's own MEI space, so that
- * is the first thing to rule out. Set to 1 to put it back. */
-#define APPROACH_DIRECTION_CLUSTER 0
+#define APPROACH_DIRECTION_CLUSTER 1
 
 #if APPROACH_DIRECTION_CLUSTER
 /* Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349 (Apple),
- * cluster 0xFC03. Attribute 0x0000 is a uint8 direction bitmask.
+ * cluster 0xFC03, sitting on the door lock endpoint alongside DoorLock itself.
  *
- * Only the composite default of 7 is established (three directions, all permitted,
- * matching Home's "unlock when you approach from any direction"). Which individual bit
- * means Left versus Right is inferred, not confirmed, and nothing here depends on it.
+ * The cluster is a server with three attributes totalling 7 bytes:
  *
- * Note Home was observed reading cluster 0x1349FC00 attribute 0x0001, not this one. */
+ *   0x0000  size 1  type 0x18 (bitmap8)  mask 0x03 (writable|nonvolatile)  default 7
+ *   0xFFFC  size 4  type 0x1B (bitmap32) FeatureMap                        default 0
+ *   0xFFFD  size 2  type 0x21 (int16u)   ClusterRevision                   default 1
+ *
+ * The direction attribute is a bitmap, not an integer, and 7 means all three
+ * directions permitted, matching Home's "unlock when you approach from any
+ * direction". Which single bit is Left versus Right is still unknown; nothing here
+ * depends on it.
+ *
+ * An earlier attempt typed the attribute as uint8 and declared neither global
+ * attribute. Home commissioned the device fully and then sent RemoveFabric, which is
+ * what a cluster that cannot answer ClusterRevision deserves.
+ *
+ * Nothing gates unlock on this: a single-antenna DW3110 cannot measure the angle, so
+ * the value is stored and reported but never enforced.
+ */
 constexpr uint32_t kApproachDirectionClusterId = 0x1349FC03;
 constexpr uint32_t kApproachDirectionAttributeId = 0x0000;
 constexpr uint8_t kApproachDirectionAll = 0x07;
+constexpr uint32_t kApproachDirectionFeatureMap = 0;
+constexpr uint16_t kApproachDirectionClusterRevision = 1;
 #endif
 #endif
 
@@ -352,24 +363,19 @@ extern "C" void app_main()
 	cluster::door_lock::feature::aliro_bleuwb::add(door_lock_cluster);
 
 #if APPROACH_DIRECTION_CLUSTER
-	/* Approach Direction. Manufacturer-specific cluster in *Apple's* vendor space
-	 * (MEI 0x1349 = Apple per CHIPVendorIdentifiers.hpp, cluster 0xFC03), not in the
-	 * standard DoorLock cluster, which is why no Aliro attribute carries it. Apple's
-	 * Home app renders the Left/Front/Right screen when a lock exposes this.
-	 *
-	 * Attribute 0x0000 is a uint8 bitmask, default 7 = all three directions allowed,
-	 * matching Home's "unlock when you approach from any direction". Writable and
-	 * nonvolatile so the user's choice survives a reboot.
-	 *
-	 * Nothing gates unlock on this yet: a single-antenna DW3110 cannot measure the
-	 * angle, so the value is stored and reported but not enforced.
-	 */
+	/* See the constants above for the descriptor this mirrors. FeatureMap and
+	 * ClusterRevision are mandatory on every cluster, and cluster::create() does not
+	 * emit them, so they are added explicitly. */
 	cluster_t *approach_dir_cluster =
 		cluster::create(endpoint, kApproachDirectionClusterId, CLUSTER_FLAG_SERVER);
 	if (approach_dir_cluster != nullptr) {
 		attribute::create(approach_dir_cluster, kApproachDirectionAttributeId,
 				  ATTRIBUTE_FLAG_WRITABLE | ATTRIBUTE_FLAG_NONVOLATILE,
-				  esp_matter_uint8(kApproachDirectionAll));
+				  esp_matter_bitmap8(kApproachDirectionAll));
+		cluster::global::attribute::create_feature_map(approach_dir_cluster,
+							      kApproachDirectionFeatureMap);
+		cluster::global::attribute::create_cluster_revision(
+			approach_dir_cluster, kApproachDirectionClusterRevision);
 		ESP_LOGI(TAG, "Approach Direction cluster 0x%08X created",
 			 (unsigned)kApproachDirectionClusterId);
 	} else {
