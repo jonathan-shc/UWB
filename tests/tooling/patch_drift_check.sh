@@ -21,6 +21,32 @@ PIN="$(sed -n 's/^PIN="\([0-9a-f]\{40\}\)".*/\1/p' "$ROOT/bootstrap.sh")"
 grep -q "revision: $PIN" "$ROOT/west.yml" \
   || { echo "ERROR: west.yml revision != bootstrap.sh PIN ($PIN)" >&2; exit 1; }
 
+# Per-repo patch lists, in bootstrap.sh's apply order. The HA patches are checked
+# even though the default build skips them (HA=1 opts in): drift is about whether
+# a patch still applies upstream, not about whether this build uses it. Order
+# matters — ha-occupancy-endpoint is cut against a tree with the others applied.
+ADDON_PATCHES=(
+  "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch"
+  "$P/pretty-shell.patch" "$P/console-quiet-flood.patch"
+  "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch"
+  "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch"
+  "$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch"
+)
+NRF_PATCHES=("$P/nrf-flashfit-dfu-guards.patch")
+MATTER_PATCHES=("$P/matter-ble-multi-identity.patch")
+
+# A patch no list names is never checked, so it rots silently at the next pin
+# bump. Refuse to pass rather than under-report coverage.
+covered="$(printf '%s\n' "${ADDON_PATCHES[@]}" "${NRF_PATCHES[@]}" "${MATTER_PATCHES[@]}" \
+  | sed 's|.*/||' | sort)"
+ondisk="$(cd "$P" && printf '%s\n' *.patch | sort)"
+[ "$covered" = "$ondisk" ] || {
+  echo "ERROR: integration/patches/ and this script's lists disagree" >&2
+  echo "       (< = listed but absent, > = present but unchecked)" >&2
+  diff <(printf '%s\n' "$covered") <(printf '%s\n' "$ondisk") >&2 || true
+  exit 1
+}
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -58,9 +84,7 @@ check() {
 
 echo "==> patch drift check (add-on pin ${PIN:0:10}…)"
 check addon "https://github.com/nrfconnect/ncs-door-lock-and-access-control" "$PIN" \
-  "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" \
-  "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" \
-  "$P/kpersistent-orphan-selfheal.patch"
+  "${ADDON_PATCHES[@]}"
 
 # nrf revision from the add-on's manifest at the pin (blob fetched on demand).
 git -C "$WORK/addon" show FETCH_HEAD:west.yml >"$WORK/addon-west.yml"
@@ -68,7 +92,7 @@ NRF_REV="$(west_field "$WORK/addon-west.yml" nrf revision)"
 NRF_REPO="$(west_field "$WORK/addon-west.yml" nrf repo-path)"
 [ -n "$NRF_REV" ] || { echo "ERROR: no nrf revision in add-on west.yml" >&2; exit 1; }
 check nrf "https://github.com/nrfconnect/${NRF_REPO:-sdk-nrf}" "$NRF_REV" \
-  "$P/nrf-flashfit-dfu-guards.patch"
+  "${NRF_PATCHES[@]}"
 
 # matter revision from sdk-nrf's manifest at that revision.
 git -C "$WORK/nrf" show FETCH_HEAD:west.yml >"$WORK/nrf-west.yml"
@@ -76,6 +100,6 @@ MATTER_REV="$(west_field "$WORK/nrf-west.yml" matter revision)"
 MATTER_REPO="$(west_field "$WORK/nrf-west.yml" matter repo-path)"
 [ -n "$MATTER_REV" ] || { echo "ERROR: no matter revision in sdk-nrf west.yml" >&2; exit 1; }
 check matter "https://github.com/nrfconnect/${MATTER_REPO:-sdk-connectedhomeip}" "$MATTER_REV" \
-  "$P/matter-ble-multi-identity.patch"
+  "${MATTER_PATCHES[@]}"
 
-echo "    ✓ all 7 patches apply cleanly at the pinned revisions"
+echo "    ✓ all $(( ${#ADDON_PATCHES[@]} + ${#NRF_PATCHES[@]} + ${#MATTER_PATCHES[@]} )) patches apply cleanly at the pinned revisions"

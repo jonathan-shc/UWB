@@ -4,7 +4,7 @@
 @file ccc_crypto_mbedtls.c — AES-ECB block via mbedTLS, backing the CCC key schedule on SoCs
 without a PSA provider (e.g. ESP32-S3).
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md)  ·  **discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md)  ·  **discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md), [`docs/porting.md`](../../porting.md)
 
 ## API
 

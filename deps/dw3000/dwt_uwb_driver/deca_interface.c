@@ -12,7 +12,7 @@
 #include "deca_interface.h"
 #include "deca_device_api.h"
 #include <stdbool.h>
-#include <zephyr/sys/printk.h> /* DIAG: llhw<->driver op trace (temporary) */
+#include "woz_log.h"           /* DIAG: llhw<->driver op trace (temporary) */
 
 #ifndef AUTO_DW3300Q_DRIVER
 /**

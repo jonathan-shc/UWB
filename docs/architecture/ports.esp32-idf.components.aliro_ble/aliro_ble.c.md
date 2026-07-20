@@ -9,8 +9,6 @@ aliro_ble_start_attached). Tracks CoC channels per connection handle in a fixed-
 and exposes send/receive plus reader-status notification helpers to the rest of the Aliro
 reader.
 
-**depends on** [`ports/esp32-idf/components/aliro_ble/include/aliro_ble.h`](../ports.esp32-idf.components.aliro_ble.include/aliro_ble.h.md)
-
 ```mermaid
 flowchart TD
   aliro_advertise --> build_aliro_svc_data

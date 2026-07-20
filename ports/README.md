@@ -1,8 +1,14 @@
 # Ports
 
 Aliro locks on targets other than the primary nRF5340 DK build at the repository root.
-Each port is additive: it reuses `modules/woz_uwb/src` and `deps/dw3000` unchanged and
-keeps all target-specific code inside its own directory.
+Each port reuses `modules/woz_uwb/src` and `deps/dw3000` and keeps all target-specific
+code inside its own directory.
+
+The platform contract is [`modules/woz_uwb/src/facade/woz_port.h`](../modules/woz_uwb/src/facade/woz_port.h):
+eight functions (heap, monotonic clock, two sleeps, cycle counter), plus `woz_log.h` for
+logging. A new RTOS is a new branch in those two headers; a new board on an existing RTOS
+is a DW3000 SPI/GPIO backend. See [`docs/porting.md`](../docs/porting.md) for the tiers and
+what each costs.
 
 | Directory | What it is | Status |
 |---|---|---|

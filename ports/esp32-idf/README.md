@@ -17,16 +17,20 @@ ending in an approach unlock.
 | `aliro_ble` | NimBLE transport: `0xFFF2` advertisement, the SPSM/version GATT characteristics, and the L2CAP CoC that carries the transaction. Works standalone or attached to an existing NimBLE host. See its [`SPEC.md`](components/aliro_ble/SPEC.md). |
 | `aliro_crypto` | The key schedule and secure channels: SHA-256 / HMAC / HKDF / X9.63 in portable C, with an mbedTLS-PSA backend for AES-256-GCM and P-256. |
 | `aliro_reader` | The transaction itself: AUTH0 → AUTH1 → EXCHANGE over APDUs, then the M1-M4 ranging setup, plus the reader identity and credential trust store in NVS. |
-| `woz_uwb` | The shared engine. `modules/woz_uwb/src` and `deps/dw3000` are compiled **unchanged** behind a Zephyr-compat layer, with an ESP-IDF DW3000 backend underneath. |
+| `woz_uwb` | The shared engine. `modules/woz_uwb/src` and `deps/dw3000` are compiled straight from the repo against the `woz_port.h` platform contract, with an ESP-IDF DW3000 backend underneath. |
 
-Nothing outside `ports/` is edited to make this build. Two seams do the work:
+Only one seam is target-specific:
 
-- **`components/woz_uwb/compat/zephyr/`** — a small fake `<zephyr/*>` layer (`kernel.h`,
-  `logging/log.h`, `sys/{printk,util,byteorder}.h`) backed by FreeRTOS, `esp_timer`, and
-  `esp_log`. It resolves first on the include path, so the shared engine sources compile
-  byte-for-byte. It is the on-silicon twin of the host-test shim in `tests/host/shim/`.
 - **`components/woz_uwb/port/`** — the ESP-IDF DW3000 platform backend (`dw3000_spi.c`,
-  `dw3000_hw.c`) replacing the Zephyr one, plus `board_pins.h` and `woz_wrap_stubs.c`.
+  `dw3000_hw.c`) replacing the Zephyr `deps/dw3000/platform/` one (SPI-master + GPIO/IRQ),
+  plus `board_pins.h` and a tiny wrap/diag stub (`woz_wrap_stubs.c`).
+
+There is **no Zephyr compatibility layer**. The engine takes its whole OS surface
+from `modules/woz_uwb/src/facade/woz_port.h` (eight functions: heap, monotonic
+clock, two sleeps, cycle counter) and its logging from `woz_log.h`, both of which
+select an ESP-IDF backend on `ESP_PLATFORM`. The earlier `compat/zephyr/*` shim,
+194 lines of fake `<zephyr/*>` headers, was deleted once those two headers
+existed. See [`docs/porting.md`](../../docs/porting.md).
 
 The CCC STS substitution links the same way it does on Nordic: `--wrap=dwt_rxenable`
 (the load-bearing one, where `ccc_shim_rx.c` programs the CCC key and IV on every RX-arm)
@@ -89,7 +93,7 @@ first use is deliberate: probing the DW3000 from inside a BLE host callback fail
 ports/esp32-idf/test/run.sh
 ```
 
-Five host suites (no ESP-IDF, no hardware): the compat shim, the `aliro_crypto` key
+Five host suites (no ESP-IDF, no hardware): the port headers, the `aliro_crypto` key
 schedule against published vectors, the `aliro_apdu` wire codec, the `aliro_prov`
 identity and trust logic, and the bolt-state LED policy. The crypto core compiles
 host-identical to target, which is what makes a host KAT a statement about on-target

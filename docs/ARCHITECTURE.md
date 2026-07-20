@@ -1,41 +1,29 @@
 <!-- generated documentation — edit the source, not this file -->
-# openaliro — architecture
+# portability — architecture
 
 Every subsystem on one page, in reading order: entry points (nothing imports them) first, then the machinery they drive. Each section is the subsystem's own prose, what it exposes, and how the pieces depend on each other; headings link to the full per-module reference under [`architecture/`](architecture/).
 
 ```mermaid
 flowchart LR
-  modules.woz_aliro_ecp.src --> ports.esp32-idf.components.woz_uwb.compat.zephyr.logging
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.ccc
   modules.woz_uwb.src.aliro --> modules.woz_uwb.src.facade
-  modules.woz_uwb.src.aliro --> ports.esp32-idf.components.woz_uwb.compat.zephyr.logging
-  modules.woz_uwb.src.aliro --> ports.esp32-idf.components.woz_uwb.compat.zephyr.sys
   modules.woz_uwb.src.aliro.include.aliro_uwb_adapter --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_uwb.src.ccc --> modules.woz_uwb.src.aliro.include.cherry
   modules.woz_uwb.src.ccc --> modules.woz_uwb.src.driver
   modules.woz_uwb.src.ccc --> modules.woz_uwb.src.facade
   modules.woz_uwb.src.ccc --> modules.woz_uwb.src.fira
-  modules.woz_uwb.src.ccc --> ports.esp32-idf.components.woz_uwb.compat.zephyr
-  modules.woz_uwb.src.ccc --> ports.esp32-idf.components.woz_uwb.compat.zephyr.logging
-  modules.woz_uwb.src.ccc --> ports.esp32-idf.components.woz_uwb.compat.zephyr.sys
   modules.woz_uwb.src.driver --> modules.woz_uwb.src.ccc
   modules.woz_uwb.src.driver --> modules.woz_uwb.src.facade
   modules.woz_uwb.src.driver --> modules.woz_uwb.src.fira
-  modules.woz_uwb.src.driver --> ports.esp32-idf.components.woz_uwb.compat.zephyr
-  modules.woz_uwb.src.driver --> ports.esp32-idf.components.woz_uwb.compat.zephyr.logging
   modules.woz_uwb.src.facade --> modules.woz_uwb.src.ccc
   modules.woz_uwb.src.facade --> modules.woz_uwb.src.fira
-  modules.woz_uwb.src.facade --> ports.esp32-idf.components.woz_uwb.compat.zephyr
-  modules.woz_uwb.src.facade --> ports.esp32-idf.components.woz_uwb.compat.zephyr.logging
-  modules.woz_uwb.src.facade --> ports.esp32-idf.components.woz_uwb.compat.zephyr.sys
   modules.woz_uwb.src.fira --> modules.woz_uwb.src.ccc
-  modules.woz_uwb.src.fira --> ports.esp32-idf.components.woz_uwb.compat.zephyr
+  modules.woz_uwb.src.fira --> modules.woz_uwb.src.facade
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.ccc
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.driver
   modules.woz_uwb.src.shell --> modules.woz_uwb.src.fira
-  modules.woz_uwb.src.shell --> ports.esp32-idf.components.woz_uwb.compat.zephyr
   ports.esp32-idf.components.aliro_ble --> ports.esp32-idf.components.aliro_ble.include
   ports.esp32-idf.components.aliro_crypto.src --> ports.esp32-idf.components.aliro_crypto.include
   ports.esp32-idf.components.aliro_reader --> modules.woz_uwb.src.aliro.include.aliro_uwb_adapter
@@ -47,8 +35,6 @@ flowchart LR
   ports.esp32-matter.main --> ports.esp32-idf.components.aliro_reader.include
   ports.esp32-matter.main --> ports.esp32-matter.main.lock
   ports.esp32-matter.main.lock --> ports.esp32-idf.components.aliro_reader.include
-  ports.esp32s3.sample.src --> ports.esp32-idf.components.woz_uwb.compat.zephyr
-  ports.esp32s3.sample.src --> ports.esp32-idf.components.woz_uwb.compat.zephyr.logging
 ```
 
 ## `modules/woz_uwb/src/aliro/`
@@ -57,19 +43,19 @@ flowchart LR
 
 @file aliro_uwb_msg.c — setup/notification message codec.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/util.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/util.h.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_util.h`](architecture/modules.woz_uwb.src.facade/woz_util.h.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md)
 
 @file aliro_uwb_session.c — per-session lifecycle and state machine.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_session.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md)
 
 @file aliro_uwb_adapter.c — reader-context lifecycle.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](architecture/modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md)
 
@@ -81,7 +67,7 @@ flowchart LR
 
 @file aliro_uwb_msg_parser.c — TLV attribute parser and big-endian reads.
 
-**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
+**depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)
 
 ### [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md)
 
@@ -120,21 +106,21 @@ flowchart LR
 @file ccc_shim_rx.c — responder-RX CCC STS substitution (ld --wrap=dwt_rxenable) programming the
 CCC STS on each RX-arm; target only.
 
-**depends on** [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/byteorder.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/byteorder.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](architecture/modules.woz_uwb.src.ccc/ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_port.h`](architecture/modules.woz_uwb.src.facade/woz_port.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
 
 @file cherry_ccc_shim.c — cherry_ccc_* seam (Aliro responder) implemented over the lock-native
 FiRa MAC; maps each call onto woz_uwb_facade.
 
-**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/util.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/util.h.md)
+**depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](architecture/modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_util.h`](architecture/modules.woz_uwb.src.facade/woz_util.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
 
 ### [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md)
 
 @file ccc_shim_wrap.c — per-frame STS interception (ld --wrap=dwt_configurestsiv) substituting
 CCC STS for the FiRa MAC; target only.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/byteorder.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/byteorder.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)
 
 ### [`modules/woz_uwb/src/ccc/ccc_session.c`](architecture/modules.woz_uwb.src.ccc/ccc_session.c.md)
 
@@ -146,7 +132,7 @@ CCC STS for the FiRa MAC; target only.
 
 @file ccc_sts.c — DW3000 STS register load for the CCC ranging path.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/byteorder.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/byteorder.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_sts.h`](architecture/modules.woz_uwb.src.ccc/ccc_sts.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
 
 ### [`modules/woz_uwb/src/ccc/ccc_mac.c`](architecture/modules.woz_uwb.src.ccc/ccc_mac.c.md)
 
@@ -226,50 +212,6 @@ ccc_ran_params.
 
 **depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](architecture/modules.woz_uwb.src.ccc/ccc_kdf.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
 
-## `modules/woz_uwb/src/driver/`
-
-### [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
-
-@file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat.
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
-### [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
-
-@file uwb_isr.c — DW3000 interrupt-callback registration (implementation).
-
-**depends on** [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
-### [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md)
-
-@file uwb_selftest.c — Kconfig-gated one-shot UWB init self-test (no iPhone).
-
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
-### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
-
-@file uwb_min.c — DW3110 bring-up driver (implementation).
-
-**depends on** [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
-### [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md)
-
-@file uwb_min.h — Minimal DW3110 (DWM3000EVB) hardware bring-up driver.
-
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
-
-### [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md)
-
-@file uwb_rxdiag.h — Read-side accessors for the RX event tallies + log stream.
-
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
-
-### [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md)
-
-@file uwb_isr.h — DW3000 interrupt-callback registration (public surface).
-
-**used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
-
 ## `ports/esp32-idf/components/aliro_reader/`
 
 ### [`ports/esp32-idf/components/aliro_reader/aliro_ranging.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_ranging.c.md)
@@ -345,13 +287,49 @@ credential is authenticated.
 
 **used by** [`ports/esp32-idf/components/aliro_reader/aliro_prov.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_prov.c.md), [`ports/esp32-idf/components/aliro_reader/aliro_prov_nvs.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_prov_nvs.c.md), [`ports/esp32-idf/components/aliro_reader/aliro_reader.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_reader.c.md)
 
-## `modules/woz_uwb/src/shell/`
+## `modules/woz_uwb/src/driver/`
 
-### [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+### [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
 
-@file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
+@file uwb_rxdiag.c — Diagnostic RX/TX event tallies + ranging heartbeat.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
+
+@file uwb_isr.c — DW3000 interrupt-callback registration (implementation).
+
+**depends on** [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_port.h`](architecture/modules.woz_uwb.src.facade/woz_port.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md)
+
+@file uwb_min.c — DW3110 bring-up driver (implementation).
+
+**depends on** [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_port.h`](architecture/modules.woz_uwb.src.facade/woz_port.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md)
+
+@file uwb_selftest.c — Kconfig-gated one-shot UWB init self-test (no iPhone).
+
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
+
+### [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md)
+
+@file uwb_min.h — Minimal DW3110 (DWM3000EVB) hardware bring-up driver.
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+### [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md)
+
+@file uwb_rxdiag.h — Read-side accessors for the RX event tallies + log stream.
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
+
+### [`modules/woz_uwb/src/driver/uwb_isr.h`](architecture/modules.woz_uwb.src.driver/uwb_isr.h.md)
+
+@file uwb_isr.h — DW3000 interrupt-callback registration (public surface).
+
+**used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
 
 ## `modules/woz_uwb/src/facade/`
 
@@ -363,11 +341,59 @@ callbacks).
 
 **depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
+### [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
+
+Memory allocation and timing facade: qmalloc, qcalloc, qfree wrap the platform heap;
+qrtc_get_us returns monotonic microseconds since boot.
+
+**depends on** [`modules/woz_uwb/src/facade/woz_port.h`](architecture/modules.woz_uwb.src.facade/woz_port.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
+
+### [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)
+
+*No module docstring. First commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract".*
+
+**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
+
+### [`modules/woz_uwb/src/facade/woz_util.h`](architecture/modules.woz_uwb.src.facade/woz_util.h.md)
+
+*No module docstring. First commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract".*
+
+**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
+
+### [`modules/woz_uwb/src/facade/woz_bytes.h`](architecture/modules.woz_uwb.src.facade/woz_bytes.h.md)
+
+*No module docstring. First commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract".*
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
+
+### [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
+
+@file woz_diag.h — DIAGK(): compile-time gate for verbose UWB bring-up diagnostics.
+
+**depends on** [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
+
+### [`modules/woz_uwb/src/facade/woz_port.h`](architecture/modules.woz_uwb.src.facade/woz_port.h.md)
+
+*No module docstring. First commit: "port: replace the Zephyr compat shims with a neutral woz_port.h contract".*
+
+**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md)
+
+### [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
+
+Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
+engine is bound and unbound via internal ursk and stop calls.
+
+**used by** [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
+
+### [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
+
+@file trace.h — Structured [WOZ_TRACE] emit helpers, gated on CONFIG_WOZ_E2E_TRACE.
+
+**depends on** [`modules/woz_uwb/src/facade/woz_log.h`](architecture/modules.woz_uwb.src.facade/woz_log.h.md)  ·  **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
+
 ### [`modules/woz_uwb/src/facade/woz_logfmt.c`](architecture/modules.woz_uwb.src.facade/woz_logfmt.c.md)
 
 @file woz_logfmt.c — PRETTY-gated high-res timestamp + compact colored log line.
-
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
 
 ### [`modules/woz_uwb/src/facade/woz_logquiet.c`](architecture/modules.woz_uwb.src.facade/woz_logquiet.c.md)
 
@@ -387,33 +413,13 @@ Reversible: compiled only under CONFIG_WOZ_PRETTY_SHELL (PRETTY=1). Drop PRETTY
 and every one of these lines returns for raw diagnosis. Needs
 CONFIG_LOG_RUNTIME_FILTERING=y (set in integration/overlays/woz-pretty.conf).
 
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
+## `modules/woz_uwb/src/shell/`
 
-### [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md)
+### [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md)
 
-Memory allocation and timing facade: qmalloc, qcalloc, qfree wrap Zephyr k_* heap routines;
-qrtc_get_us returns monotonic microseconds since boot.
+@file aliro_shell.c — `aliro` UART shell command: colored console over the UWB engine.
 
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
-
-### [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
-
-@file woz_diag.h — DIAGK(): compile-time gate for verbose UWB bring-up diagnostics.
-
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/printk.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/printk.h.md)  ·  **used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md)
-
-### [`modules/woz_uwb/src/facade/woz_uwb_facade.h`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.h.md)
-
-Public header for UWB facade: exposes Aliro DS-TWR responder lifecycle and range query; the CCC
-engine is bound and unbound via internal ursk and stop calls.
-
-**used by** [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/woz_uwb_facade.c`](architecture/modules.woz_uwb.src.facade/woz_uwb_facade.c.md)
-
-### [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md)
-
-@file trace.h — Structured [WOZ_TRACE] emit helpers, gated on CONFIG_WOZ_E2E_TRACE.
-
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/printk.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/printk.h.md)  ·  **used by** [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_shim.h`](architecture/modules.woz_uwb.src.ccc/ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](architecture/modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ## `ports/esp32-matter/main/`
 
@@ -475,7 +481,7 @@ current locked and Aliro-ranging state.
 
 @file fira_session.c — Range + URSK store for the CCC Pre-POLL responder.
 
-**depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/aliro_kdf.h`](architecture/modules.woz_uwb.src.ccc/aliro_kdf.h.md), [`modules/woz_uwb/src/facade/woz_port.h`](architecture/modules.woz_uwb.src.facade/woz_port.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
 ### [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md)
 
@@ -594,28 +600,6 @@ attributes at init time.
 
 **used by** [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md), [`ports/esp32-matter/main/app_shell.cpp`](architecture/ports.esp32-matter.main/app_shell.cpp.md), [`ports/esp32-matter/main/lock/door_lock_callbacks.cpp`](architecture/ports.esp32-matter.main.lock/door_lock_callbacks.cpp.md), [`ports/esp32-matter/main/lock/door_lock_manager.cpp`](architecture/ports.esp32-matter.main.lock/door_lock_manager.cpp.md)
 
-## `ports/esp32s3/sample/src/`
-
-### [`ports/esp32s3/sample/src/main.c`](architecture/ports.esp32s3.sample.src/main.c.md)
-
-Woz UWB ranging engine on ESP32-S3 — minimal bring-up sample.
-Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
-polls for a range. With no iPhone/initiator present this proves the SPI +
-DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
-drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
-Reference scaffold (see ports/esp32s3/README.md) — not yet built on silicon.
-
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
-## `modules/woz_aliro_ecp/src/`
-
-### [`modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp`](architecture/modules.woz_aliro_ecp.src/nfc_prop_ecp.cpp.md)
-
-NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
-Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
-
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
 ## `ports/esp32-idf/components/aliro_ble/`
 
 ### [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md)
@@ -692,40 +676,6 @@ Also keeps the dwt_configurestsmode pass-through the essential RX path needs.
 
 **depends on** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)  ·  **used by** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`ports/esp32-idf/components/aliro_reader/aliro_ranging.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_ranging.c.md)
 
-## `ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/`
-
-### [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
-ESP-IDF compat for <zephyr/logging/log.h> — Zephyr LOG_* mapped onto esp_log.
-Each module's LOG_MODULE_REGISTER/DECLARE(name, ...) fixes a per-file TAG.
-
-**used by** [`modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp`](architecture/modules.woz_aliro_ecp.src/nfc_prop_ecp.cpp.md), [`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_adapter.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg_parser.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_logfmt.c`](architecture/modules.woz_uwb.src.facade/woz_logfmt.c.md), [`modules/woz_uwb/src/facade/woz_logquiet.c`](architecture/modules.woz_uwb.src.facade/woz_logquiet.c.md), [`ports/esp32s3/sample/src/main.c`](architecture/ports.esp32s3.sample.src/main.c.md)
-
-## `ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/`
-
-### [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/util.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/util.h.md)
-
-ESP-IDF compat for <zephyr/sys/util.h> — container/compare macros plus
-IS_ENABLED (the on-silicon build compiles dw3000_device.c, which uses it;
-the host shim did not need it because it stubs the driver).
-
-**used by** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/ccc/cherry_ccc_shim.c`](architecture/modules.woz_uwb.src.ccc/cherry_ccc_shim.c.md)
-
-### [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/byteorder.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/byteorder.h.md)
-
-ESP-IDF compat for <zephyr/sys/byteorder.h> — endian-neutral load/store
-helpers the pure modules use (ccc_sts.c, aliro codec). Copied from
-tests/host/shim/zephyr/sys/byteorder.h; results match target regardless of
-host endianness.
-
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/ccc/ccc_shim_wrap.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_wrap.c.md), [`modules/woz_uwb/src/ccc/ccc_sts.c`](architecture/modules.woz_uwb.src.ccc/ccc_sts.c.md)
-
-### [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/printk.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/printk.h.md)
-
-ESP-IDF compat for <zephyr/sys/printk.h> — map printk/snprintk onto stdio.
-
-**used by** [`modules/woz_uwb/src/facade/trace.h`](architecture/modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](architecture/modules.woz_uwb.src.facade/woz_diag.h.md)
-
 ## `modules/woz_uwb/src/aliro/include/cherry/`
 
 ### [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md)
@@ -751,18 +701,6 @@ ESP-IDF compat for <zephyr/sys/printk.h> — map printk/snprintk onto stdio.
 @file cherry_common.h — diagnostics config struct and report forward decl.
 
 **used by** [`modules/woz_uwb/src/aliro/include/cherry/cherry.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_session.h`](architecture/modules.woz_uwb.src.aliro.include.cherry/cherry_session.h.md)
-
-## `ports/esp32-idf/components/woz_uwb/compat/zephyr/`
-
-### [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](architecture/ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md)
-
-ESP-IDF compat for <zephyr/kernel.h> — the k_* surface the woz_uwb engine +
-dw3000 platform glue touch, backed by FreeRTOS + esp_timer. On-silicon twin
-of tests/host/shim/zephyr/kernel.h (which is libc-backed for host tests).
-Additive: the shared engine .c files compile unmodified because this resolves
-first on the include path. See ports/esp32-idf/README.md.
-
-**used by** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md), [`modules/woz_uwb/src/driver/uwb_isr.c`](architecture/modules.woz_uwb.src.driver/uwb_isr.c.md), [`modules/woz_uwb/src/driver/uwb_min.c`](architecture/modules.woz_uwb.src.driver/uwb_min.c.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.c`](architecture/modules.woz_uwb.src.driver/uwb_rxdiag.c.md), [`modules/woz_uwb/src/driver/uwb_selftest.c`](architecture/modules.woz_uwb.src.driver/uwb_selftest.c.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](architecture/modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_logfmt.c`](architecture/modules.woz_uwb.src.facade/woz_logfmt.c.md), [`modules/woz_uwb/src/fira/fira_session.c`](architecture/modules.woz_uwb.src.fira/fira_session.c.md), [`modules/woz_uwb/src/shell/aliro_shell.c`](architecture/modules.woz_uwb.src.shell/aliro_shell.c.md), [`ports/esp32s3/sample/src/main.c`](architecture/ports.esp32s3.sample.src/main.c.md)
 
 ## `ports/esp32-idf/components/aliro_ble/include/`
 
@@ -843,3 +781,21 @@ Cheap because it uses an APFS copy-on-write clone (cp -c): the clone shares
 every block with the primary and costs ~0 extra disk until a patched file
 diverges. Cleanup is automatic — the workspace lives inside the worktree, so
 deleting the worktree deletes it (see `make ws-clean`).
+
+## `modules/woz_aliro_ecp/src/`
+
+### [`modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp`](architecture/modules.woz_aliro_ecp.src/nfc_prop_ecp.cpp.md)
+
+NFC Type A proprietary callback implementation for Aliro Express unlock (tap-to-unlock without
+Face ID). Emits a CRC_A–checksummed ECP frame carrying the reader identifier.
+
+## `ports/esp32s3/sample/src/`
+
+### [`ports/esp32s3/sample/src/main.c`](architecture/ports.esp32s3.sample.src/main.c.md)
+
+Woz UWB ranging engine on ESP32-S3 — minimal bring-up sample.
+Binds a canned URSK and starts the CCC DS-TWR responder on the DW3000, then
+polls for a range. With no iPhone/initiator present this proves the SPI +
+DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
+drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
+Reference scaffold (see ports/esp32s3/README.md) — not yet built on silicon.
