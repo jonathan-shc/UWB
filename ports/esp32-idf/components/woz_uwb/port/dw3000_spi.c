@@ -32,6 +32,13 @@ static SemaphoreHandle_t s_lock;
 static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_txbuf[DW_XFER_MAX];
 static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_rxbuf[DW_XFER_MAX];
 
+// Bring up the DW3000 SPI bus and CS GPIO for this port.
+// Idempotent: returns 0 immediately if already initialized. Configures CS as an
+// active-low output (idle high), initializes the SPI bus with DMA disabled
+// (transfers <=64 B use CPU data registers directly; larger ones are chunked by
+// dw_xfer), and adds both a slow-clock and fast-clock device handle on the bus.
+// Starts the active device at slow speed. Only the DW3000 sits on this bus.
+// Returns 0 on success, -1 if bus init or device add fails.
 int dw3000_spi_init(void)
 {
 	if (s_dev_fast != NULL) {
@@ -89,9 +96,13 @@ int dw3000_spi_init(void)
 	return 0;
 }
 
+// Switch subsequent DW3000 SPI transfers to the slow-clock device handle.
 void dw3000_spi_speed_slow(void) { s_cur = s_dev_slow; }
+// Switch subsequent DW3000 SPI transfers to the fast-clock device handle.
 void dw3000_spi_speed_fast(void) { s_cur = s_dev_fast; }
 
+// Tears down the DW3000 SPI bus: removes the slow and fast SPI device handles if present, then frees the SPI bus on WOZ_DW3000_SPI_HOST.
+// Safe to call when devices were never added (each handle is checked for non-NULL before removal).
 void dw3000_spi_fini(void)
 {
 	if (s_dev_slow) {
@@ -156,6 +167,9 @@ static int32_t dw_xfer(const uint8_t *hdr, uint16_t hlen, const uint8_t *body,
 	return (e == ESP_OK) ? 0 : -1;
 }
 
+// Read from the DW3000 over SPI: sends a header then clocks in readLength bytes.
+// Thin wrapper over dw_xfer with no body write and no CRC. Returns whatever
+// dw_xfer returns.
 int32_t dw3000_spi_read(uint16_t headerLength, uint8_t *headerBuffer,
 			uint16_t readLength, uint8_t *readBuffer)
 {
@@ -163,6 +177,9 @@ int32_t dw3000_spi_read(uint16_t headerLength, uint8_t *headerBuffer,
 		       NULL);
 }
 
+// Write to the DW3000 over SPI: sends a header followed by a body, no CRC byte.
+// Thin wrapper over dw_xfer with no read capture. Returns whatever dw_xfer
+// returns.
 int32_t dw3000_spi_write(uint16_t headerLength, const uint8_t *headerBuffer,
 			 uint16_t bodyLength, const uint8_t *bodyBuffer)
 {
@@ -170,6 +187,9 @@ int32_t dw3000_spi_write(uint16_t headerLength, const uint8_t *headerBuffer,
 		       NULL);
 }
 
+// Write to the DW3000 over SPI with a trailing CRC8 byte appended after the body.
+// Thin wrapper over dw_xfer with no read capture. Returns whatever dw_xfer
+// returns.
 int32_t dw3000_spi_write_crc(uint16_t headerLength, const uint8_t *headerBuffer,
 			     uint16_t bodyLength, const uint8_t *bodyBuffer,
 			     uint8_t crc8)
@@ -178,6 +198,9 @@ int32_t dw3000_spi_write_crc(uint16_t headerLength, const uint8_t *headerBuffer,
 		       &crc8);
 }
 
+// Wake the DW3000 from sleep by toggling CS.
+// Drives CS low for ~500us then releases it high, per the Qorvo CS-toggle wake
+// sequence. Blocks for the duration of the delay.
 void dw3000_spi_wakeup(void)
 {
 	/* CS active low: drive low ~500us to wake, then release (Qorvo CS-toggle). */
@@ -186,4 +209,5 @@ void dw3000_spi_wakeup(void)
 	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
 }
 
+// No-op: SPI transaction tracing is not implemented in this port.
 void dw3000_spi_trace_output(void) { /* SPI trace not built in this port. */ }

@@ -1,3 +1,8 @@
+// Persistent reader provisioning storage: identity and credential trust anchors saved to and
+// loaded from NVS.
+// Declares aliro_prov_store for committing an identity/trust pair to NVS, and struct
+// aliro_trust_store, the set of trusted credential public keys against which a presented
+// credential is authenticated.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

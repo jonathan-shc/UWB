@@ -1,3 +1,6 @@
+// APDU framing and parsing for the Aliro Access Protocol: builds outbound command APDUs via a
+// TLV writer and parses the AUTH0/AUTH1 response APDUs exchanged during the reader-device
+// handshake.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -114,6 +117,7 @@ struct aliro_auth0_response {
 	uint8_t cryptogram[64];
 };
 int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len,
+				    // Response payload for an Aliro AUTH0 APDU exchange.
 				    struct aliro_auth0_response *r);
 
 struct aliro_auth1_response {
@@ -123,6 +127,7 @@ struct aliro_auth1_response {
 	uint16_t signaling;     /* 2-byte signaling bitmap */
 };
 int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len,
+				    // Response payload for an Aliro AUTH1 APDU exchange.
 				    struct aliro_auth1_response *r);
 
 /* ---- 4-byte L2CAP envelope: [type&0x3F][opcode][len_be16][payload] ---- */

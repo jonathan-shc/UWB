@@ -1,3 +1,4 @@
+// ESP32-IDF console shell for the Aliro Matter door lock app: registers status, range, aliro, lock/unlock, codes, factoryreset, and clear commands and runs the REPL.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -39,11 +40,13 @@ extern uint16_t door_lock_endpoint_id;
 #define C_BAD   "\x1b[31m"   /* red */
 #define C_RST   "\x1b[0m"
 
+// Return the ANSI color escape code c, or an empty string if linenoise is in dumb-terminal mode.
 static const char *col(const char *c)
 {
 	return linenoiseIsDumbMode() ? "" : c;
 }
 
+// Prints the shell's startup banner: app name, version, IDF version, and a one-line usage hint.
 static void print_banner(void)
 {
 	const esp_app_desc_t *app = esp_app_get_description();
@@ -60,6 +63,7 @@ static void print_banner(void)
  * state takes the stack lock; anything mutating it is scheduled onto the Matter
  * task, which is the only thread allowed to drive the lock cluster. */
 
+// Shell command handler: prints the current Matter door lock state, fabric count, and (when Aliro BLE/UWB is enabled) the last measured and last trusted UWB ranges in cm, or "none" if unavailable. Always returns 0.
 static int cmd_status(int argc, char **argv)
 {
 	(void)argc;
@@ -99,6 +103,8 @@ static int cmd_status(int argc, char **argv)
 }
 
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+// Shell handler for the "range" command; prints the last measured UWB range in cm, or "no range yet"
+// if none has been recorded. Always returns 0.
 static int cmd_range(int argc, char **argv)
 {
 	(void)argc;
@@ -112,6 +118,10 @@ static int cmd_range(int argc, char **argv)
 	return 0;
 }
 
+// Shell handler for the "aliro" command. Subcommands: "prov" prints reader provisioning info;
+// "trust" adds the last-presented credential to the trust store and persists it to NVS, reporting
+// whether a credential was actually available to trust or whether the store/NVS write failed.
+// Any other or missing argument prints usage. Always returns 0.
 static int cmd_aliro(int argc, char **argv)
 {
 	if (argc == 2 && strcmp(argv[1], "prov") == 0) {
@@ -148,6 +158,8 @@ static int cmd_lock(int argc, char **argv)
 	return 0;
 }
 
+// Shell handler for the "unlock" command; schedules a manual bolt unlock on the Matter work queue
+// and confirms the request was submitted. Always returns 0.
 static int cmd_unlock(int argc, char **argv)
 {
 	(void)argc;
@@ -171,6 +183,8 @@ static int cmd_codes(int argc, char **argv)
 	return 0;
 }
 
+// Shell handler for the "factoryreset" command; erases persisted config and reboots the device via
+// esp_matter::factory_reset(). Always returns 0 (the reboot happens before returning is meaningful).
 static int cmd_factoryreset(int argc, char **argv)
 {
 	(void)argc;
@@ -180,6 +194,7 @@ static int cmd_factoryreset(int argc, char **argv)
 	return 0;
 }
 
+// Shell handler for the "clear" command; clears the terminal screen. Always returns 0.
 static int cmd_clear(int argc, char **argv)
 {
 	(void)argc;

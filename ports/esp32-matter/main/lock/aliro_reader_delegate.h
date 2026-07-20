@@ -1,3 +1,6 @@
+// Declares AliroReaderDelegate, the Aliro (Apple Home Key) reader-provisioning and BLE-UWB half of
+// the Matter DoorLock cluster delegate, bridging controller commands to the on-device reader
+// identity, trust store, and BLE advertising state.
 /*
  *
  *    Copyright (c) 2026 Project CHIP Authors

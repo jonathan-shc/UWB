@@ -1,3 +1,8 @@
+// Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport
+// callbacks connecting the BLE peripheral role to the Phase-3 Aliro protocol handler.
+// Callers configure the transport via aliro_ble_prepare (which builds the READ characteristic
+// payload without touching NimBLE), then register the GATT service returned by
+// aliro_ble_service_def with the host's combined service table.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

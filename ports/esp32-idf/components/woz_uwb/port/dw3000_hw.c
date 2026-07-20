@@ -27,6 +27,7 @@ volatile uint32_t g_dw_cyc_work;
 volatile uint32_t g_dw_cyc_isrdone;
 volatile uint32_t g_dw_cyc_per_us = 240; /* ESP32-S3 core @240 MHz */
 
+// Return the current CPU cycle count, used as the DW3000 driver's cycle-counter timebase on this port.
 uint32_t dw3000_dwt_cyccnt(void) { return esp_cpu_get_cycle_count(); }
 
 static bool s_asleep;
@@ -34,9 +35,14 @@ static bool s_irq_enabled;
 static SemaphoreHandle_t s_irq_sem;
 static TaskHandle_t s_irq_task;
 
+// Mark the DW3000 as asleep. Does not itself put the chip to sleep; only updates local state.
 void dw3000_hw_mark_asleep(void) { s_asleep = true; }
+// Return whether the DW3000 is currently marked asleep.
 bool dw3000_hw_is_asleep(void) { return s_asleep; }
 
+// Initialize the DW3000 hardware port: configure the reset line as input (relying on an external
+// pull-up, driven low only when active) and the wakeup line as output held high, then initialize SPI.
+// Returns the result of dw3000_spi_init(); 0 on success.
 int dw3000_hw_init(void)
 {
 	/* Reset line: input = released (external pull-up); active low when driven. */
@@ -57,6 +63,9 @@ int dw3000_hw_init(void)
 	return dw3000_spi_init();
 }
 
+// GPIO interrupt handler for the DW3000 IRQ line.
+// Runs in IRAM. Latches the cycle count at interrupt time into g_dw_cyc_gpio, then signals s_irq_sem;
+// yields to a higher-priority task if the semaphore give woke one.
 static void IRAM_ATTR dw3000_gpio_isr(void *arg)
 {
 	(void)arg;
@@ -68,6 +77,10 @@ static void IRAM_ATTR dw3000_gpio_isr(void *arg)
 	}
 }
 
+// Background task that services DW3000 interrupts: blocks on the IRQ semaphore, then calls
+// dwt_isr() in a loop for as long as the IRQ line stays asserted. Records cycle-count timestamps
+// (g_dw_cyc_work, g_dw_cyc_isrdone) around the service loop for latency diagnostics. Runs for the
+// lifetime of the program; never returns.
 static void dw3000_isr_task(void *arg)
 {
 	(void)arg;
@@ -81,6 +94,11 @@ static void dw3000_isr_task(void *arg)
 	}
 }
 
+// Configure the DW3000 IRQ GPIO, install the shared ISR service, and start the pinned ISR worker task.
+// Idempotent: safe to call more than once, the ISR service and worker task are each created only once.
+// The worker task runs on core 1 at priority 23 (above esp_timer and Thread) so DS-TWR slot callbacks
+// (RX/TX-done) are not delayed by preemption; it is bursty and mostly blocked on the IRQ semaphore.
+// Leaves the interrupt enabled. Returns 0 on success, -1 if the ISR service failed to install.
 int dw3000_hw_init_interrupt(void)
 {
 	static bool isr_service_installed;
@@ -122,6 +140,7 @@ int dw3000_hw_init_interrupt(void)
 	return 0;
 }
 
+// Re-enable the DW3000 IRQ GPIO interrupt after a prior disable. No-op if already enabled.
 void dw3000_hw_interrupt_enable(void)
 {
 	if (!s_irq_enabled) {
@@ -130,6 +149,7 @@ void dw3000_hw_interrupt_enable(void)
 	}
 }
 
+// Disable the DW3000 IRQ GPIO interrupt. No-op if already disabled.
 void dw3000_hw_interrupt_disable(void)
 {
 	if (s_irq_enabled) {
@@ -138,8 +158,11 @@ void dw3000_hw_interrupt_disable(void)
 	}
 }
 
+// Return whether the DW3000 IRQ GPIO interrupt is currently enabled.
 bool dw3000_hw_interrupt_is_enabled(void) { return s_irq_enabled; }
 
+// Hardware-reset the DW3000 by pulsing the RESET pin low then releasing it to hi-Z.
+// Blocks for about 3 ms total to let the chip climb to IDLE_RC. Clears the asleep flag.
 void dw3000_hw_reset(void)
 {
 	/* Drive reset low (assert), release to hi-Z, let the chip climb to IDLE_RC. */
@@ -151,6 +174,10 @@ void dw3000_hw_reset(void)
 	s_asleep = false;
 }
 
+// Wake the DW3000 from sleep if marked asleep; no-op otherwise.
+// Drives the wake sequence over SPI, waits for the INIT_RC-to-IDLE_RC startup delay, clears the
+// asleep flag, then polls dwt_checkidlerc() (up to ~5 ms) and logs an error if the chip never
+// reaches IDLE_RC.
 void dw3000_hw_wakeup(void)
 {
 	if (!s_asleep) {
@@ -171,11 +198,14 @@ void dw3000_hw_wakeup(void)
 	}
 }
 
+// Drive the DW3000 WAKEUP pin low.
 void dw3000_hw_wakeup_pin_low(void)
 {
 	gpio_set_level(WOZ_DW3000_PIN_WAKEUP, 0);
 }
 
+// Tear down the DW3000 hardware port: disable the IRQ line if enabled and finalize the SPI bus.
+// Safe to call after dw3000_hw_init; leaves s_irq_enabled cleared.
 void dw3000_hw_fini(void)
 {
 	if (s_irq_enabled) {

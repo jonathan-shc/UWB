@@ -1,3 +1,5 @@
+// Aliro crypto public API: key derivation, AES-GCM secure channels, and wire message
+// seal/open framing shared by the reader and device sides of an Aliro session.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
