@@ -47,6 +47,41 @@
 
 static const char *TAG = "app_main";
 uint16_t door_lock_endpoint_id = 0;
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+/* Kept so `status` can report the reader task's stack high-water mark. */
+TaskHandle_t aliro_reader_task_handle = nullptr;
+
+#define APPROACH_DIRECTION_CLUSTER 1
+
+#if APPROACH_DIRECTION_CLUSTER
+/* Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349 (Apple),
+ * cluster 0xFC03, sitting on the door lock endpoint alongside DoorLock itself.
+ *
+ * The cluster is a server with three attributes totalling 7 bytes:
+ *
+ *   0x0000  size 1  type 0x18 (bitmap8)  mask 0x03 (writable|nonvolatile)  default 7
+ *   0xFFFC  size 4  type 0x1B (bitmap32) FeatureMap                        default 0
+ *   0xFFFD  size 2  type 0x21 (int16u)   ClusterRevision                   default 1
+ *
+ * The direction attribute is a bitmap, not an integer, and 7 means all three
+ * directions permitted, matching Home's "unlock when you approach from any
+ * direction". Which single bit is Left versus Right is still unknown; nothing here
+ * depends on it.
+ *
+ * An earlier attempt typed the attribute as uint8 and declared neither global
+ * attribute. Home commissioned the device fully and then sent RemoveFabric, which is
+ * what a cluster that cannot answer ClusterRevision deserves.
+ *
+ * Nothing gates unlock on this: a single-antenna DW3110 cannot measure the angle, so
+ * the value is stored and reported but never enforced.
+ */
+constexpr uint32_t kApproachDirectionClusterId = 0x1349FC03;
+constexpr uint32_t kApproachDirectionAttributeId = 0x0000;
+constexpr uint8_t kApproachDirectionAll = 0x07;
+constexpr uint32_t kApproachDirectionFeatureMap = 0;
+constexpr uint16_t kApproachDirectionClusterRevision = 1;
+#endif
+#endif
 
 using namespace esp_matter;
 using namespace esp_matter::attribute;
@@ -171,7 +206,11 @@ static void start_aliro_reader_once(void)
 		return;
 	}
 	started = true;
-	xTaskCreate(aliro_reader_task, "aliro_reader", 8192, nullptr, 5, nullptr);
+	/* 12 KiB, not the previous 8: aliro_reader_start_attached() runs a deep chain
+	 * (NimBLE GATT/L2CAP registration, NVS reads, P-256 setup) before the poll loop
+	 * begins. `status` reports the high-water mark so the real headroom is measurable
+	 * rather than assumed. */
+	xTaskCreate(aliro_reader_task, "aliro_reader", 12288, nullptr, 5, &aliro_reader_task_handle);
 	ESP_LOGI(TAG, "Aliro reader (attach mode) task started");
 }
 #endif // CONFIG_ENABLE_ALIRO_BLE_UWB
@@ -349,6 +388,27 @@ extern "C" void app_main()
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 	cluster::door_lock::feature::aliro_provisioning::add(door_lock_cluster);
 	cluster::door_lock::feature::aliro_bleuwb::add(door_lock_cluster);
+
+#if APPROACH_DIRECTION_CLUSTER
+	/* See the constants above for the descriptor this mirrors. FeatureMap and
+	 * ClusterRevision are mandatory on every cluster, and cluster::create() does not
+	 * emit them, so they are added explicitly. */
+	cluster_t *approach_dir_cluster =
+		cluster::create(endpoint, kApproachDirectionClusterId, CLUSTER_FLAG_SERVER);
+	if (approach_dir_cluster != nullptr) {
+		attribute::create(approach_dir_cluster, kApproachDirectionAttributeId,
+				  ATTRIBUTE_FLAG_WRITABLE | ATTRIBUTE_FLAG_NONVOLATILE,
+				  esp_matter_bitmap8(kApproachDirectionAll));
+		cluster::global::attribute::create_feature_map(approach_dir_cluster,
+							      kApproachDirectionFeatureMap);
+		cluster::global::attribute::create_cluster_revision(
+			approach_dir_cluster, kApproachDirectionClusterRevision);
+		ESP_LOGI(TAG, "Approach Direction cluster 0x%08X created",
+			 (unsigned)kApproachDirectionClusterId);
+	} else {
+		ESP_LOGE(TAG, "Failed to create Approach Direction cluster");
+	}
+#endif /* APPROACH_DIRECTION_CLUSTER */
 #endif
 	// 0 disables CHIP's fixed auto-relock timer (DoorLockServer skips scheduling when
 	// AutoRelockTime == 0). Relock is driven by proximity instead: the reader task

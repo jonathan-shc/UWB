@@ -419,6 +419,8 @@ enum aliro_uwb_err aliro_uwb_session_message_handle(struct aliro_uwb_session *se
 		return aliro_uwb_msg_process_ranging(session, message);
 	case ALIRO_UWB_PROTOCOL_TYPE_NOTIFICATION:
 		return aliro_uwb_msg_process_notification(session, message);
+	case ALIRO_UWB_PROTOCOL_TYPE_SUPPLEMENTARY_SERVICE:
+		return aliro_uwb_msg_process_supplementary(session, message);
 	default:
 		LOG_INF("protocol %u unsupported", protocol);
 		return ALIRO_UWB_ERR_MESSAGE_UNSUPPORTED;

@@ -21,6 +21,9 @@
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader.h>
 #include <woz_uwb_facade.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #endif
 
 #include "app_shell.h"
@@ -30,6 +33,9 @@ using namespace chip;
 using namespace chip::app::Clusters;
 
 extern uint16_t door_lock_endpoint_id;
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+extern TaskHandle_t aliro_reader_task_handle;
+#endif
 
 /* ---- look & feel -------------------------------------------------------- *
  * All color goes through col(): a terminal that failed the escape-sequence
@@ -71,9 +77,11 @@ static int cmd_status(int argc, char **argv)
 
 	app::DataModel::Nullable<DoorLock::DlLockState> lock_state;
 	uint8_t fabrics;
+	uint32_t feature_map = 0;
 
 	DeviceLayer::PlatformMgr().LockChipStack();
 	DoorLock::Attributes::LockState::Get(door_lock_endpoint_id, lock_state);
+	DoorLock::Attributes::FeatureMap::Get(door_lock_endpoint_id, &feature_map);
 	fabrics = Server::GetInstance().GetFabricTable().FabricCount();
 	DeviceLayer::PlatformMgr().UnlockChipStack();
 
@@ -85,6 +93,11 @@ static int cmd_status(int argc, char **argv)
 	}
 	printf("lock      : %s%s%s\n", col(locked ? C_BAD : C_OK), state_str, col(C_RST));
 	printf("fabrics   : %s%u%s\n", col(fabrics ? C_OK : C_BAD), fabrics, col(C_RST));
+	/* Aliro feature bits: 0x2000 AliroProvisioning, 0x4000 AliroBLEUWB. */
+	printf("featuremap: 0x%04X (aliro prov %s%s%s, ble-uwb %s%s%s)\n", (unsigned)feature_map,
+	       col((feature_map & 0x2000) ? C_OK : C_BAD), (feature_map & 0x2000) ? "y" : "n",
+	       col(C_RST), col((feature_map & 0x4000) ? C_OK : C_BAD),
+	       (feature_map & 0x4000) ? "y" : "n", col(C_RST));
 
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 	int32_t cm;
@@ -97,6 +110,15 @@ static int cmd_status(int argc, char **argv)
 		printf("trusted   : %d cm\n", (int)cm);
 	} else {
 		printf("trusted   : none\n");
+	}
+	/* Smallest free stack ever seen, in bytes. A value near zero on any of these is
+	 * the overflow to chase; the end-of-stack watchpoint will name it if it trips. */
+	if (aliro_reader_task_handle != nullptr) {
+		unsigned free_b =
+			(unsigned)uxTaskGetStackHighWaterMark(aliro_reader_task_handle) *
+			sizeof(StackType_t);
+		printf("stack rdr : %s%u B free%s\n", col(free_b < 1024 ? C_BAD : C_OK), free_b,
+		       col(C_RST));
 	}
 #endif
 	return 0;
@@ -140,7 +162,18 @@ static int cmd_aliro(int argc, char **argv)
 		}
 		return 0;
 	}
-	printf("usage: aliro <prov|trust>\n");
+	if (argc == 2 && strcmp(argv[1], "clear") == 0) {
+		int rc = aliro_reader_trust_clear();
+		if (rc == 0) {
+			printf("aliro clear: trust store emptied + saved to NVS\n");
+		} else if (rc == 1) {
+			printf("aliro clear: already empty\n");
+		} else {
+			printf("aliro clear: FAILED (NVS error)\n");
+		}
+		return 0;
+	}
+	printf("usage: aliro <prov|trust|clear>\n");
 	return 0;
 }
 #endif /* CONFIG_ENABLE_ALIRO_BLE_UWB */
@@ -246,7 +279,8 @@ void app_shell_start(void)
 		 .hint = NULL,
 		 .func = cmd_range},
 		{.command = "aliro",
-		 .help = "aliro <prov|trust>: show reader identity / trust last credential",
+		 .help = "aliro <prov|trust|clear>: show identity / trust last credential / "
+			 "empty trust store",
 		 .hint = NULL,
 		 .func = cmd_aliro},
 #endif

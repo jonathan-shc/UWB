@@ -75,6 +75,12 @@ void aliro_reader_prov_print(void);
  *  trusted), negative on a store error. */
 int aliro_reader_trust_last(void);
 
+/** Empty the trust store and persist it, keeping the reader identity. Returns 0
+ *  (cleared + saved), 1 (already empty), negative on an NVS error. Needed because
+ *  nothing evicts superseded credentials and a Matter factory reset leaves this
+ *  store intact, so it otherwise fills up and rejects the current credential. */
+int aliro_reader_trust_clear(void);
+
 /* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
  * Apple Home provisions the reader over Matter (Door Lock SetAliroReaderConfig +
  * SetCredential). These let the Matter delegate persist that identity + trust
