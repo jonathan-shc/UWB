@@ -8,7 +8,7 @@
 #                        the ESP-IDF env; skips cleanly without it).
 #
 # On-target functional tests (Unity on the DW3000 SPI/IRQ path) are deferred:
-# they need the DWM3000EVB wired up. See ../BRINGUP.md.
+# they need the DWM3000EVB wired up. See ../../../docs/esp32-bringup.md.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 

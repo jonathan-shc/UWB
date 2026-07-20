@@ -95,7 +95,7 @@ make go            # build + flash + monitor
 ```
 
 See [`ports/README.md`](ports/README.md) for the port index, and
-[`ports/esp32-idf/BRINGUP.md`](ports/esp32-idf/BRINGUP.md) to wire the radio up.
+[`docs/esp32-bringup.md`](docs/esp32-bringup.md) to wire the radio up.
 
 ## Hardware
 
@@ -119,7 +119,7 @@ Pin assignments live in
 
 Pin assignments live in
 [`ports/esp32-idf/components/woz_uwb/port/board_pins.h`](ports/esp32-idf/components/woz_uwb/port/board_pins.h);
-the wiring table is in [`ports/esp32-idf/BRINGUP.md`](ports/esp32-idf/BRINGUP.md).
+the wiring table is in [`docs/esp32-bringup.md`](docs/esp32-bringup.md).
 
 ## How it works
 
@@ -167,7 +167,7 @@ manual [hardware validation checklist](docs/hardware-validation.md).
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): common build, flash, unlock, and
   wiring issues, both targets.
 - [`ports/README.md`](ports/README.md): the ESP32-S3 port, and
-  [`ports/docs/esp-32-gotchas.md`](ports/docs/esp-32-gotchas.md), a long log of every
+  [`docs/esp32-gotchas.md`](docs/esp32-gotchas.md), a long log of every
   non-obvious trap that bring-up hit, with symptom and fix. It is the most useful thing
   here if you are building your own reader.
 - [`docs/porting-esp32.md`](docs/porting-esp32.md): how the port was planned and how it
