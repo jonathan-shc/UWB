@@ -6,7 +6,7 @@ reader identity plus trusted-credential store to/from a self-describing binary b
 Also implements the trust-store membership check and add-with-dedup operations used to decide
 whether a presented credential public key is trusted.
 
-**depends on** [`ports/esp32-idf/components/aliro_reader/aliro_prov.h`](aliro_prov.h.md)
+**depends on** [`ports/esp32-idf/components/aliro_reader/aliro_prov.h`](aliro_prov.h.md)  ·  **discussed in** [`ports/esp32-idf/components/aliro_reader/README.md`](../../../ports/esp32-idf/components/aliro_reader/README.md)
 
 ## API
 

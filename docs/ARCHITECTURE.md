@@ -769,7 +769,7 @@ first on the include path. See ports/esp32-idf/README.md.
 ### [`ports/esp32-idf/components/aliro_ble/include/aliro_ble.h`](architecture/ports.esp32-idf.components.aliro_ble.include/aliro_ble.h.md)
 
 Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport
-callbacks connecting the BLE peripheral role to the Phase-3 Aliro protocol handler.
+callbacks connecting the BLE peripheral role to the Aliro protocol handler in aliro_reader.
 Callers configure the transport via aliro_ble_prepare (which builds the READ characteristic
 payload without touching NimBLE), then register the GATT service returned by
 aliro_ble_service_def with the host's combined service table.

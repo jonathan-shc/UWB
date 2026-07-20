@@ -84,14 +84,14 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `ee5ff72`.*
+*Mined from git history as of `6558e2d`.*
 
-**Most-changed:** [`ports/esp32-idf/components/aliro_reader/aliro_reader.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_reader.c.md) (15 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (11 commits), [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md) (8 commits), [`build.sh`](architecture/root/build.sh.md) (7 commits), [`ports/esp32-idf/components/aliro_reader/include/aliro_reader.h`](architecture/ports.esp32-idf.components.aliro_reader.include/aliro_reader.h.md) (7 commits).
+**Most-changed:** [`ports/esp32-idf/components/aliro_reader/aliro_reader.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_reader.c.md) (15 commits), [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (11 commits), [`ports/esp32-idf/components/aliro_reader/include/aliro_reader.h`](architecture/ports.esp32-idf.components.aliro_reader.include/aliro_reader.h.md) (8 commits), [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md) (8 commits), [`build.sh`](architecture/root/build.sh.md) (7 commits).
 
 **Change together without importing each other:**
 
+- [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md) ↔ [`ports/esp32-idf/components/aliro_reader/include/aliro_reader.h`](architecture/ports.esp32-idf.components.aliro_reader.include/aliro_reader.h.md) (5 shared commits)
+- [`ports/esp32-idf/components/aliro_ble/include/aliro_ble.h`](architecture/ports.esp32-idf.components.aliro_ble.include/aliro_ble.h.md) ↔ [`ports/esp32-idf/components/aliro_reader/include/aliro_reader.h`](architecture/ports.esp32-idf.components.aliro_reader.include/aliro_reader.h.md) (5 shared commits)
 - [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md) ↔ [`ports/esp32-idf/components/aliro_reader/aliro_reader.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_reader.c.md) (4 shared commits)
-- [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md) ↔ [`ports/esp32-idf/components/aliro_reader/include/aliro_reader.h`](architecture/ports.esp32-idf.components.aliro_reader.include/aliro_reader.h.md) (4 shared commits)
-- [`ports/esp32-idf/components/aliro_ble/include/aliro_ble.h`](architecture/ports.esp32-idf.components.aliro_ble.include/aliro_ble.h.md) ↔ [`ports/esp32-idf/components/aliro_reader/include/aliro_reader.h`](architecture/ports.esp32-idf.components.aliro_reader.include/aliro_reader.h.md) (4 shared commits)
 - [`ports/esp32-idf/components/aliro_crypto/src/aliro_crypto.c`](architecture/ports.esp32-idf.components.aliro_crypto.src/aliro_crypto.c.md) ↔ [`ports/esp32-idf/components/aliro_reader/aliro_reader.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_reader.c.md) (3 shared commits)
 - [`ports/esp32-idf/components/aliro_reader/aliro_apdu.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_apdu.c.md) ↔ [`ports/esp32-idf/components/aliro_reader/aliro_reader.c`](architecture/ports.esp32-idf.components.aliro_reader/aliro_reader.c.md) (3 shared commits)
