@@ -1,11 +1,17 @@
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
- * woz_port.h - the platform contract for the UWB engine.
+ * woz_port.h - the platform contract for the UWB engine and the Aliro reader.
  *
  * This header IS the port specification. Everything the ranging engine needs
  * from an operating system is the eight functions below; a new target is a new
  * branch here plus a DW3000 SPI/GPIO backend. Nothing else.
+ *
+ * woz_mutex_* is the one addition beyond the ranging engine's needs: the Aliro
+ * reader in modules/woz_aliro guards its trust store against the BLE-host and
+ * REPL tasks, and a second competing port contract for one mutex would be worse
+ * than widening this one. It stays a plain blocking lock — no try-lock, no
+ * timeout — so every backend is three lines.
  *
  * Deliberately absent: work queues, timers, and init hooks. Those are used only
  * by uwb_rxdiag.c, uwb_selftest.c, woz_logfmt.c, woz_logquiet.c and
@@ -23,6 +29,7 @@
  *   woz_sleep_ms                    relinquish the CPU for at least ms
  *   woz_sleep_us                    short busy-wait, microseconds (deca_sleep)
  *   woz_cycle_get_32                free-running counter, RX-arm latency probe
+ *   woz_mutex_init/lock/unlock      blocking mutex (Aliro reader trust store)
  */
 #ifndef WOZ_PORT_H
 #define WOZ_PORT_H
@@ -66,11 +73,25 @@ static inline uint32_t woz_cycle_get_32(void)
 {
 	return k_cycle_get_32();
 }
+typedef struct k_mutex woz_mutex_t;
+static inline void woz_mutex_init(woz_mutex_t *m)
+{
+	k_mutex_init(m);
+}
+static inline void woz_mutex_lock(woz_mutex_t *m)
+{
+	k_mutex_lock(m, K_FOREVER);
+}
+static inline void woz_mutex_unlock(woz_mutex_t *m)
+{
+	k_mutex_unlock(m);
+}
 
 #elif defined(ESP_PLATFORM)
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include <stdlib.h>
 
 #include "esp_cpu.h"
@@ -110,6 +131,22 @@ static inline void woz_sleep_us(int64_t us)
 static inline uint32_t woz_cycle_get_32(void)
 {
 	return esp_cpu_get_cycle_count();
+}
+typedef struct {
+	StaticSemaphore_t buf;
+	SemaphoreHandle_t h;
+} woz_mutex_t;
+static inline void woz_mutex_init(woz_mutex_t *m)
+{
+	m->h = xSemaphoreCreateMutexStatic(&m->buf);
+}
+static inline void woz_mutex_lock(woz_mutex_t *m)
+{
+	xSemaphoreTake(m->h, portMAX_DELAY);
+}
+static inline void woz_mutex_unlock(woz_mutex_t *m)
+{
+	xSemaphoreGive(m->h);
 }
 
 #elif defined(WOZ_PORT_HOST)
@@ -151,6 +188,19 @@ static inline void woz_sleep_us(int64_t us)
 static inline uint32_t woz_cycle_get_32(void)
 {
 	return (uint32_t)woz_uptime_us(); /* us resolution is plenty for the probe */
+}
+typedef int woz_mutex_t; /* host tests are single-threaded */
+static inline void woz_mutex_init(woz_mutex_t *m)
+{
+	(void)m;
+}
+static inline void woz_mutex_lock(woz_mutex_t *m)
+{
+	(void)m;
+}
+static inline void woz_mutex_unlock(woz_mutex_t *m)
+{
+	(void)m;
 }
 
 #else
