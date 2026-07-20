@@ -29,9 +29,14 @@ using namespace chip::Protocols::InteractionModel;
 namespace {
 
 // Read an optional fixed-size config blob into data. Treats "config not found" as success (the blob
-// is optional and data is left untouched), logs and returns false on any other read error or on a
-// size mismatch between the stored value and dataLen.
-bool ReadOptionalConfigBlob(ESP32Config::Key key, uint8_t *data, size_t dataLen)
+// is optional and data is left untouched), logs and returns false on any other read error.
+//
+// A size mismatch means the blob was written by a build whose record layout differs from this one
+// (for example EmberAfPluginDoorLockUserInfo growing across a CHIP update). That is a stale on-disk
+// format, not a read failure: the partially-filled buffer is unusable, so *outStale is set and the
+// caller reinitialises and rewrites every table. Reporting it as a failure instead would fail
+// InitLockState() on every boot with no path back to a good state.
+bool ReadOptionalConfigBlob(ESP32Config::Key key, uint8_t *data, size_t dataLen, bool *outStale)
 {
     size_t outLen = 0;
     CHIP_ERROR err = ESP32Config::ReadConfigValueBin(key, data, dataLen, outLen);
@@ -43,9 +48,10 @@ bool ReadOptionalConfigBlob(ESP32Config::Key key, uint8_t *data, size_t dataLen)
         return false;
     }
     if (outLen != dataLen) {
-        ESP_LOGW(TAG, "Ignoring door lock config blob '%s' with unexpected size %u, expected %u", key.Name,
+        ESP_LOGW(TAG, "Door lock config blob '%s' has stale size %u, expected %u; reinitialising", key.Name,
                  static_cast<unsigned>(outLen), static_cast<unsigned>(dataLen));
-        return false;
+        *outStale = true;
+        return true;
     }
     return true;
 }
@@ -147,36 +153,40 @@ bool BoltLockManager::IsValidHolidayScheduleIndex(uint8_t scheduleIndex)
 }
 
 // Loads all persisted door-lock state (users, credentials, names, credential data, per-user credential links, weekday/yearday/holiday schedules) from NVM into the in-memory tables.
-// Detects a stale database format by checking whether credential slot 0 is occupied with a non-programming-PIN type (an old mixed-type layout); if so, clears all in-memory user and credential tables and rewrites the affected blobs to NVM.
+// Detects a stale database, either by a blob whose stored size does not match this build's table
+// size or by credential slot 0 holding a non-programming-PIN type (an old mixed-type layout); in
+// either case clears every in-memory table and rewrites all blobs to NVM.
 // Returns true if all blob reads (and, if triggered, all stale-format rewrites) succeed; false if any read or rewrite fails.
+//
+// Every blob is sized by its own array via sizeof, never by the runtime LockParams counts. The
+// counts come from Matter attributes and can differ from the compiled capacity, which would make
+// the read length disagree with the write length and re-flag the blob as stale on every boot.
 bool BoltLockManager::ReadConfigValues()
 {
     bool ok = true;
-    ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_LockUser, reinterpret_cast<uint8_t *>(&mLockUsers),
-                                 sizeof(EmberAfPluginDoorLockUserInfo) * MATTER_ARRAY_SIZE(mLockUsers));
-
-    ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_Credential, reinterpret_cast<uint8_t *>(&mLockCredentials),
-                                 sizeof(mLockCredentials));
+    bool stale = false;
+    ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_LockUser, reinterpret_cast<uint8_t *>(mLockUsers),
+                                 sizeof(mLockUsers), &stale);
+    ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_Credential, reinterpret_cast<uint8_t *>(mLockCredentials),
+                                 sizeof(mLockCredentials), &stale);
     ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_LockUserName, reinterpret_cast<uint8_t *>(mUserNames),
-                                 sizeof(mUserNames));
+                                 sizeof(mUserNames), &stale);
     ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_CredentialData, reinterpret_cast<uint8_t *>(mCredentialData),
-                                 sizeof(mCredentialData));
+                                 sizeof(mCredentialData), &stale);
     ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_UserCredentials, reinterpret_cast<uint8_t *>(mCredentials),
-                                 sizeof(CredentialStruct) * LockParams.numberOfUsers * LockParams.numberOfCredentialsPerUser);
+                                 sizeof(mCredentials), &stale);
     ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_WeekDaySchedules, reinterpret_cast<uint8_t *>(mWeekdaySchedule),
-                                 sizeof(EmberAfPluginDoorLockWeekDaySchedule) * LockParams.numberOfWeekdaySchedulesPerUser *
-                                 LockParams.numberOfUsers);
+                                 sizeof(mWeekdaySchedule), &stale);
     ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_YearDaySchedules, reinterpret_cast<uint8_t *>(mYeardaySchedule),
-                                 sizeof(EmberAfPluginDoorLockYearDaySchedule) * LockParams.numberOfYeardaySchedulesPerUser *
-                                 LockParams.numberOfUsers);
-    ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_HolidaySchedules, reinterpret_cast<uint8_t *>(&(mHolidaySchedule)),
-                                 sizeof(EmberAfPluginDoorLockHolidaySchedule) * LockParams.numberOfHolidaySchedules);
+                                 sizeof(mYeardaySchedule), &stale);
+    ok &= ReadOptionalConfigBlob(ESP32Config::kConfigKey_HolidaySchedules, reinterpret_cast<uint8_t *>(mHolidaySchedule),
+                                 sizeof(mHolidaySchedule), &stale);
     if (!ok) {
         return false;
     }
-    if (mLockCredentials[0].status == DlCredentialStatus::kOccupied &&
-            mLockCredentials[0].credentialType != CredentialTypeEnum::kProgrammingPIN) {
-        ESP_LOGW(TAG, "Clearing stale door lock database with mixed credential-type storage");
+    if (stale || (mLockCredentials[0].status == DlCredentialStatus::kOccupied &&
+                  mLockCredentials[0].credentialType != CredentialTypeEnum::kProgrammingPIN)) {
+        ESP_LOGW(TAG, "Clearing stale door lock database");
         for (auto &user : mLockUsers) {
             user = EmberAfPluginDoorLockUserInfo();
         }
@@ -186,6 +196,11 @@ bool BoltLockManager::ReadConfigValues()
         memset(mUserNames, 0, sizeof(mUserNames));
         memset(mCredentialData, 0, sizeof(mCredentialData));
         memset(mCredentials, 0, sizeof(mCredentials));
+        /* A stale size can belong to any blob, including the schedule tables, so clear and rewrite
+         * those too rather than leaving a partially-read buffer behind. */
+        memset(mWeekdaySchedule, 0, sizeof(mWeekdaySchedule));
+        memset(mYeardaySchedule, 0, sizeof(mYeardaySchedule));
+        memset(mHolidaySchedule, 0, sizeof(mHolidaySchedule));
         ok &= WriteConfigBlob(ESP32Config::kConfigKey_LockUser, reinterpret_cast<const uint8_t *>(&mLockUsers),
                               sizeof(mLockUsers));
         ok &= WriteConfigBlob(ESP32Config::kConfigKey_Credential, reinterpret_cast<const uint8_t *>(&mLockCredentials),
@@ -196,6 +211,12 @@ bool BoltLockManager::ReadConfigValues()
                               sizeof(mCredentialData));
         ok &= WriteConfigBlob(ESP32Config::kConfigKey_UserCredentials, reinterpret_cast<const uint8_t *>(mCredentials),
                               sizeof(mCredentials));
+        ok &= WriteConfigBlob(ESP32Config::kConfigKey_WeekDaySchedules, reinterpret_cast<const uint8_t *>(mWeekdaySchedule),
+                              sizeof(mWeekdaySchedule));
+        ok &= WriteConfigBlob(ESP32Config::kConfigKey_YearDaySchedules, reinterpret_cast<const uint8_t *>(mYeardaySchedule),
+                              sizeof(mYeardaySchedule));
+        ok &= WriteConfigBlob(ESP32Config::kConfigKey_HolidaySchedules, reinterpret_cast<const uint8_t *>(mHolidaySchedule),
+                              sizeof(mHolidaySchedule));
     }
     return ok;
 }
@@ -309,10 +330,10 @@ bool BoltLockManager::SetUser(EndpointId endpointId, uint16_t userIndex, FabricI
     userInStorage.credentials = Span<const CredentialStruct>(mCredentials[userIndex], totalCredentials);
 
     // Save user information in NVM flash
-    if (!WriteConfigBlob(ESP32Config::kConfigKey_LockUser, reinterpret_cast<const uint8_t *>(&mLockUsers),
-                         sizeof(EmberAfPluginDoorLockUserInfo) * LockParams.numberOfUsers) ||
+    if (!WriteConfigBlob(ESP32Config::kConfigKey_LockUser, reinterpret_cast<const uint8_t *>(mLockUsers),
+                         sizeof(mLockUsers)) ||
             !WriteConfigBlob(ESP32Config::kConfigKey_UserCredentials, reinterpret_cast<const uint8_t *>(mCredentials),
-                             sizeof(CredentialStruct) * LockParams.numberOfUsers * LockParams.numberOfCredentialsPerUser) ||
+                             sizeof(mCredentials)) ||
             !WriteConfigBlob(ESP32Config::kConfigKey_LockUserName, reinterpret_cast<const uint8_t *>(mUserNames),
                              sizeof(mUserNames))) {
         return false;
@@ -464,8 +485,7 @@ DlStatus BoltLockManager::SetWeekdaySchedule(EndpointId endpointId, uint8_t week
 
     // Save schedule information in NVM flash
     if (!WriteConfigBlob(ESP32Config::kConfigKey_WeekDaySchedules, reinterpret_cast<const uint8_t *>(mWeekdaySchedule),
-                         sizeof(EmberAfPluginDoorLockWeekDaySchedule) * LockParams.numberOfWeekdaySchedulesPerUser *
-                         LockParams.numberOfUsers)) {
+                         sizeof(mWeekdaySchedule))) {
         return DlStatus::kFailure;
     }
     return DlStatus::kSuccess;
@@ -521,8 +541,7 @@ DlStatus BoltLockManager::SetYeardaySchedule(EndpointId endpointId, uint8_t year
 
     // Save schedule information in NVM flash
     if (!WriteConfigBlob(ESP32Config::kConfigKey_YearDaySchedules, reinterpret_cast<const uint8_t *>(mYeardaySchedule),
-                         sizeof(EmberAfPluginDoorLockYearDaySchedule) * LockParams.numberOfYeardaySchedulesPerUser *
-                         LockParams.numberOfUsers)) {
+                         sizeof(mYeardaySchedule))) {
         return DlStatus::kFailure;
     }
     return DlStatus::kSuccess;
@@ -572,8 +591,8 @@ DlStatus BoltLockManager::SetHolidaySchedule(EndpointId endpointId, uint8_t holi
     scheduleInStorage.status                  = status;
 
     // Save schedule information in NVM flash
-    if (!WriteConfigBlob(ESP32Config::kConfigKey_HolidaySchedules, reinterpret_cast<const uint8_t *>(&(mHolidaySchedule)),
-                         sizeof(EmberAfPluginDoorLockHolidaySchedule) * LockParams.numberOfHolidaySchedules)) {
+    if (!WriteConfigBlob(ESP32Config::kConfigKey_HolidaySchedules, reinterpret_cast<const uint8_t *>(mHolidaySchedule),
+                         sizeof(mHolidaySchedule))) {
         return DlStatus::kFailure;
     }
     return DlStatus::kSuccess;
