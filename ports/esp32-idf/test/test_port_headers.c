@@ -1,23 +1,22 @@
 /*
- * Host unit test for the ESP-IDF compat shim's pure headers
- * (components/woz_uwb/compat/zephyr/sys/{util,byteorder}.h).
+ * Host unit test for the engine's pure port headers
+ * (modules/woz_uwb/src/facade/{woz_bytes,woz_util}.h).
  *
- * These two headers are the only compat pieces with no FreeRTOS/esp_* deps, so
- * they compile and run on the host. They back the shared engine's endian
- * load/store and container/compare macros, so a silent edit here would corrupt
- * the codec on-silicon with no build error. This pins their behavior. The rest
- * of the compat layer (kernel.h, logging/log.h) is FreeRTOS-backed and only
- * proves out on target; see verify_port.sh for the on-target build/link guard.
+ * These two carry no OS dependency at all, so they compile and run on the host
+ * with no backend selected. They back the shared engine's endian load/store and
+ * container/compare macros, so a silent edit here would corrupt the codec
+ * on-silicon with no build error. This pins their behavior. The platform-bound
+ * headers (woz_port.h, woz_log.h) only prove out on target; see verify_port.sh
+ * for the on-target build/link guard.
  *
- * Plain C, no toolchain — mirrors tests/host/run.sh's spirit. Returns nonzero on
- * any failure.
+ * Plain C, no toolchain. Returns nonzero on any failure.
  */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "zephyr/sys/util.h"
-#include "zephyr/sys/byteorder.h"
+#include "woz_util.h"
+#include "woz_bytes.h"
 
 static int failures;
 
@@ -105,7 +104,7 @@ int main(void)
 	test_byteorder();
 	test_util();
 
-	printf("\ncompat shim: %s (%d failure%s)\n",
+	printf("\nport headers: %s (%d failure%s)\n",
 	       failures ? "FAIL" : "PASS", failures, failures == 1 ? "" : "s");
 	return failures ? 1 : 0;
 }

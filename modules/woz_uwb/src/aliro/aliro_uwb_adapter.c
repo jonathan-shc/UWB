@@ -8,7 +8,7 @@
 #include "woz_alloc.h"
 #include <string.h>
 
-#include <zephyr/logging/log.h>
+#include "woz_log.h"
 
 LOG_MODULE_REGISTER(woz_aliro_uwb, LOG_LEVEL_INF);
 
