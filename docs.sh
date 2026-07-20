@@ -42,6 +42,11 @@ for tool in doxygen dot; do
 	}
 done
 
+# Doxygen runs first: docs/reference.md links into site/api/, and the page
+# generator's dead-link gate resolves that link against the rendered site.
+echo "==> reference tree (doxygen)"
+doxygen docs/Doxyfile
+
 echo "==> subsystem tree, guides and site shell"
 if [ -x "$PAGE_GEN" ]; then
 	"$PAGE_GEN" build
@@ -51,9 +56,6 @@ else
 	echo "    need the generator. Building the reference tree over it instead."
 	SKIPPED_GEN=1
 fi
-
-echo "==> reference tree (doxygen)"
-doxygen docs/Doxyfile
 
 echo "==> titles"
 python3 tools/docs_title.py

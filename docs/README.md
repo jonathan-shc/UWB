@@ -61,6 +61,10 @@ flowchart LR
 
 ## Hotspots
 
-*Mined from git history as of `0d41b33`.*
+*Mined from git history as of `2d4b6b1`.*
 
-**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (11 commits), [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md) (8 commits), [`build.sh`](architecture/root/build.sh.md) (7 commits), [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md) (7 commits), [`bootstrap.sh`](architecture/root/bootstrap.sh.md) (4 commits).
+**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (12 commits), [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md) (9 commits), [`build.sh`](architecture/root/build.sh.md) (8 commits), [`bootstrap.sh`](architecture/root/bootstrap.sh.md) (7 commits), [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md) (7 commits).
+
+**Change together without importing each other:**
+
+- [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md) ↔ [`ports/esp32-matter/main/lock/door_lock_manager.cpp`](architecture/ports.esp32-matter.main.lock/door_lock_manager.cpp.md) (3 shared commits)

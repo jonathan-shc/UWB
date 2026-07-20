@@ -133,6 +133,24 @@ def main() -> int:
         if fixed != raw:
             page.write_bytes(fixed)
 
+    # The Reference tree is a build artifact, so an authored page cannot link to
+    # it: on GitHub the target does not exist, and the generator's link gate
+    # rightly rejects it. docs/reference.md therefore names the path in prose;
+    # here, where the tree does exist, that mention becomes the real link.
+    api = SITE / "api" / "index.html"
+    if api.is_file():
+        for page in pages:
+            if str(api) in str(page):
+                continue
+            raw = page.read_bytes()
+            span = b"<code>site/api/index.html</code>"
+            if span not in raw:
+                continue
+            rel = os.path.relpath(api, page.parent)
+            link = b'<a href="' + rel.encode() + b'"><code>site/api/index.html</code></a>'
+            page.write_bytes(raw.replace(span, link))
+            rewritten += raw.count(span)
+
     # Verify: every remaining relative link must resolve inside site/.
     for page in pages:
         for m in HREF.finditer(page.read_bytes()):

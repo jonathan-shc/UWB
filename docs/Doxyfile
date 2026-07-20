@@ -15,6 +15,7 @@ HTML_OUTPUT            = api
 CREATE_SUBDIRS         = NO
 
 INPUT                  = modules/woz_uwb \
+                         modules/woz_aliro \
                          modules/woz_aliro_ecp \
                          ports/esp32-idf/components/aliro_ble \
                          ports/esp32-idf/components/aliro_crypto \
