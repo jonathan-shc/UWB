@@ -60,7 +60,6 @@ LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
 
 /**
  * @brief Releases a message allocated by this layer's message builders.
- * @param message Message to free; may be NULL.
  */
 void aliro_uwb_msg_free(struct aliro_uwb_message *message)
 {
@@ -117,27 +116,17 @@ struct aliro_uwb_message *aliro_uwb_msg_build_m1(struct aliro_uwb_session *sessi
 	return builder.message;
 }
 
-static struct aliro_uwb_message
-	*
-	/**
-	 * @brief Builds the M3 ranging-parameters message, deriving RAN multiplier and
-	 * chaps-per-slot from the M2-negotiated durations and committing the reader's MAC mode.
-	 * @param session Session whose negotiated M2 config and reader settings populate the M3
-	 * attributes.
-	 * @return Newly allocated M3 message, or NULL if builder init or attribute encoding fails.
-	 */
-	aliro_uwb_msg_build_m3(struct aliro_uwb_session *session)
+/**
+ * @brief Builds the M3 ranging-parameters message, deriving RAN multiplier and
+ * chaps-per-slot from the M2-negotiated durations and committing the reader's MAC mode.
+ * @param session Session whose negotiated M2 config and reader settings populate the M3
+ * attributes.
+ * @return Newly allocated M3 message, or NULL if builder init or attribute encoding fails.
+ */
+static struct aliro_uwb_message *aliro_uwb_msg_build_m3(struct aliro_uwb_session *session)
 {
 	struct aliro_uwb_msg_builder builder;
-	/**
-	 * @brief Reader configuration (MAC mode, preferred hopping modes) from the session's Aliro
-	 * context, used to derive M3 ranging parameters.
-	 */
 	struct aliro_uwb_adapter_reader_config *reader = session->aliro_ctx->config;
-	/**
-	 * @brief CCC capabilities (sync code and slot bitmasks, hopping config bitmask) from the
-	 * session's Aliro context, used to negotiate common ranging parameters during M1-M3.
-	 */
 	struct cherry_ccc_capabilities *caps = &session->aliro_ctx->ccc_caps;
 	struct cherry_ccc_aliro_session_config *cfg = &session->ccc_aliro_config;
 	uint16_t payload_length;
@@ -201,16 +190,15 @@ static struct aliro_uwb_message
 	return builder.message;
 }
 
-struct aliro_uwb_message
-	*
-	/**
-	 * @brief Builds a suspend or resume request message carrying the session identifier.
-	 * @param session Session whose session ID is encoded into the message.
-	 * @param suspend True to build a suspend request, false to build a resume request.
-	 * @return Newly allocated request message, or NULL if builder init or attribute encoding
-	 * fails.
-	 */
-	aliro_uwb_msg_build_suspend_resume_request(struct aliro_uwb_session *session, bool suspend)
+/**
+ * @brief Builds a suspend or resume request message carrying the session identifier.
+ * @param session Session whose session ID is encoded into the message.
+ * @param suspend True to build a suspend request, false to build a resume request.
+ * @return Newly allocated request message, or NULL if builder init or attribute encoding
+ * fails.
+ */
+struct aliro_uwb_message *
+aliro_uwb_msg_build_suspend_resume_request(struct aliro_uwb_session *session, bool suspend)
 {
 	struct aliro_uwb_msg_builder builder;
 	uint16_t payload_length;
@@ -236,17 +224,16 @@ struct aliro_uwb_message
 	return builder.message;
 }
 
-static struct aliro_uwb_message
-	*
-	/**
-	 * @brief Builds a suspend-response message carrying an accept or reject status.
-	 * @param session Unused; reserved for a consistent builder signature.
-	 * @param status Response status; must be ALIRO_UWB_RANGING_SERVICE_STATUS_ACCEPT or
-	 * ALIRO_UWB_RANGING_SERVICE_STATUS_REJECT.
-	 * @return Newly allocated suspend-response message, or NULL if status is invalid, or if
-	 * builder init or attribute encoding fails.
-	 */
-	aliro_uwb_msg_build_suspend_response(struct aliro_uwb_session *session, uint8_t status)
+/**
+ * @brief Builds a suspend-response message carrying an accept or reject status.
+ * @param session Unused; reserved for a consistent builder signature.
+ * @param status Response status; must be ALIRO_UWB_RANGING_SERVICE_STATUS_ACCEPT or
+ * ALIRO_UWB_RANGING_SERVICE_STATUS_REJECT.
+ * @return Newly allocated suspend-response message, or NULL if status is invalid, or if
+ * builder init or attribute encoding fails.
+ */
+static struct aliro_uwb_message *
+aliro_uwb_msg_build_suspend_response(struct aliro_uwb_session *session, uint8_t status)
 {
 	struct aliro_uwb_msg_builder builder;
 	uint16_t payload_length;
@@ -277,21 +264,16 @@ static struct aliro_uwb_message
 	return builder.message;
 }
 
-struct aliro_uwb_message
-	*
-	/**
-	 * @brief Builds an Aliro general-error notification message carrying the given error code.
-	 * @param session Unused; reserved for a consistent builder signature.
-	 * @param error_code Error code to encode in the general-error notification attribute.
-	 * @return Newly allocated notification message, or NULL if builder init or attribute
-	 * encoding fails.
-	 */
-	aliro_uwb_msg_build_general_error(struct aliro_uwb_session *session, uint8_t error_code)
+/**
+ * @brief Builds an Aliro general-error notification message carrying the given error code.
+ * @param session Unused; reserved for a consistent builder signature.
+ * @param error_code Error code to encode in the general-error notification attribute.
+ * @return Newly allocated notification message, or NULL if builder init or attribute encoding
+ * fails.
+ */
+struct aliro_uwb_message *aliro_uwb_msg_build_general_error(struct aliro_uwb_session *session,
+							    uint8_t error_code)
 {
-	/**
-	 * @brief Message builder state (buffer, write offset, message pointer) used to accumulate a
-	 * payload and construct its header incrementally.
-	 */
 	struct aliro_uwb_msg_builder builder;
 	uint16_t payload_length;
 
@@ -519,15 +501,16 @@ static enum aliro_uwb_err parse_slot_bitmask(struct aliro_uwb_session *session,
 	return ALIRO_UWB_ERR_NONE;
 }
 
-static enum aliro_uwb_err
 /**
- * @brief Parses the sync code bitmask attribute from M2 and logs the peer's offered bitmask; the reader retains its own capability bitmask for M3 and does not update the session config.
+ * @brief Parses the sync code bitmask attribute from M2 and logs the peer's offered bitmask; the
+ * reader retains its own capability bitmask for M3 and does not update the session config.
  * @param session Unused; reserved for a consistent parser signature.
  * @param attr Attribute to parse.
- * @return ALIRO_UWB_ERR_NONE on success, or ALIRO_UWB_ERR_MSG_MALFORMED if the value cannot be read.
+ * @return ALIRO_UWB_ERR_NONE on success, or ALIRO_UWB_ERR_MSG_MALFORMED if the value cannot be
+ * read.
  */
-parse_sync_code_bitmask(struct aliro_uwb_session *session,
-			struct aliro_uwb_msg_attribute *attr)
+static enum aliro_uwb_err parse_sync_code_bitmask(struct aliro_uwb_session *session,
+						  struct aliro_uwb_msg_attribute *attr)
 {
 	uint32_t bitmask;
 
@@ -571,11 +554,6 @@ static enum aliro_uwb_err parse_sync_code_index(struct aliro_uwb_session *sessio
 static enum aliro_uwb_err parse_hopping_bitmask(struct aliro_uwb_session *session,
 						struct aliro_uwb_msg_attribute *attr)
 {
-	/**
-	 * @brief Array of preferred hopping configurations (disabled, continuous default, adaptive
-	 * default) from the reader config, matched against peer capabilities to select a common
-	 * mode during M2 parsing.
-	 */
 	const struct aliro_uwb_preferred_hopping_configs *prefs =
 		&session->aliro_ctx->config->preferred_hopping_configs;
 	uint8_t peer_caps;
@@ -690,15 +668,16 @@ static enum aliro_uwb_err parse_status(struct aliro_uwb_msg_attribute *attr, uin
 	return ALIRO_UWB_ERR_NONE;
 }
 
-static enum aliro_uwb_err
 /**
- * @brief Dispatches a ranging-service session attribute to its type-specific parser and applies it to the session; unknown attributes are logged and ignored.
+ * @brief Dispatches a ranging-service session attribute to its type-specific parser and applies it
+ * to the session; unknown attributes are logged and ignored.
  * @param attr Attribute to parse and apply.
  * @param session Session updated by the attribute-specific parser.
- * @return ALIRO_UWB_ERR_NONE on success or for ignored/unknown attributes, otherwise the error from the specific parser.
+ * @return ALIRO_UWB_ERR_NONE on success or for ignored/unknown attributes, otherwise the error from
+ * the specific parser.
  */
-parse_session_attribute(struct aliro_uwb_msg_attribute *attr,
-			struct aliro_uwb_session *session)
+static enum aliro_uwb_err parse_session_attribute(struct aliro_uwb_msg_attribute *attr,
+						  struct aliro_uwb_session *session)
 {
 	switch (attr->id) {
 	case ALIRO_UWB_RANGING_SERVICE_ATTR_CONFIGURATION_IDENTIFIER:
@@ -779,11 +758,6 @@ static enum aliro_uwb_err parse_ranging(struct aliro_uwb_session *session,
  */
 static void compute_initiation_time(struct aliro_uwb_session *session)
 {
-	/**
-	 * @brief Aliro session config state (UWB config ID, channel, pulse shape, slot/RAN
-	 * durations, sync code index, STS index, hopping mode, UWB time, MAC mode, STS ladder),
-	 * populated by the M1-M4 parsers and passed to the CCC engine for ranging setup.
-	 */
 	struct cherry_ccc_aliro_session_config *cfg = &session->ccc_aliro_config;
 
 	/* Without a synchronized time base, start as soon as possible. */
@@ -1016,15 +990,15 @@ static enum aliro_uwb_err handle_resume_response(struct aliro_uwb_session *sessi
 	return ALIRO_UWB_ERR_NONE;
 }
 
-enum aliro_uwb_err
 /**
  * @brief Dispatch an inbound ranging-phase message to its handler based on message type.
  * @param session Aliro UWB session to update.
  * @param message Received ranging message to dispatch.
- * @return Handler's result on success; ALIRO_UWB_ERR_INVALID_PARAMETER if session or message is NULL; ALIRO_UWB_ERR_MESSAGE_UNSUPPORTED for unknown message types.
+ * @return Handler's result on success; ALIRO_UWB_ERR_INVALID_PARAMETER if session or message is
+ * NULL; ALIRO_UWB_ERR_MESSAGE_UNSUPPORTED for unknown message types.
  */
-aliro_uwb_msg_process_ranging(struct aliro_uwb_session *session,
-			      struct aliro_uwb_message *message)
+enum aliro_uwb_err aliro_uwb_msg_process_ranging(struct aliro_uwb_session *session,
+						 struct aliro_uwb_message *message)
 {
 	if (!session || !message) {
 		return ALIRO_UWB_ERR_INVALID_PARAMETER;
@@ -1099,15 +1073,16 @@ static enum aliro_uwb_err handle_ranging_suspended(struct aliro_uwb_session *ses
 	return aliro_uwb_session_stop(session);
 }
 
-static enum aliro_uwb_err
 /**
- * @brief Parse an Aliro event notification message, logging busy, general-error, and reader-descriptor events.
+ * @brief Parse an Aliro event notification message, logging busy, general-error, and
+ * reader-descriptor events.
  * @param session Aliro UWB session (unused).
  * @param message Received event notification message to parse.
- * @return ALIRO_UWB_ERR_NONE on success; ALIRO_UWB_ERR_MSG_MALFORMED if a general-error attribute has the wrong length.
+ * @return ALIRO_UWB_ERR_NONE on success; ALIRO_UWB_ERR_MSG_MALFORMED if a general-error attribute
+ * has the wrong length.
  */
-parse_event_notification(struct aliro_uwb_session *session,
-			 struct aliro_uwb_message *message)
+static enum aliro_uwb_err parse_event_notification(struct aliro_uwb_session *session,
+						   struct aliro_uwb_message *message)
 {
 	struct aliro_uwb_msg_parser parser = ALIRO_UWB_MSG_PARSER_INIT(message);
 	struct aliro_uwb_msg_attribute *attr;
@@ -1146,25 +1121,17 @@ parse_event_notification(struct aliro_uwb_session *session,
 	return ALIRO_UWB_ERR_NONE;
 }
 
-static enum aliro_uwb_err
 /**
- * @brief Parse a ranging-setup notification message and dispatch each attribute to its session state handler.
+ * @brief Parse a ranging-setup notification message and dispatch each attribute to its session
+ * state handler.
  * @param session Aliro UWB session to update.
  * @param message Received ranging notification message to parse.
  * @return ALIRO_UWB_ERR_NONE on success; the first handler error encountered otherwise.
  */
-parse_ranging_notification(struct aliro_uwb_session *session,
-			   struct aliro_uwb_message *message)
+static enum aliro_uwb_err parse_ranging_notification(struct aliro_uwb_session *session,
+						     struct aliro_uwb_message *message)
 {
-	/**
-	 * @brief Parser state initialized from the notification message, advanced to iterate over
-	 * its attributes.
-	 */
 	struct aliro_uwb_msg_parser parser = ALIRO_UWB_MSG_PARSER_INIT(message);
-	/**
-	 * @brief Current attribute yielded by the parser while iterating the ranging notification
-	 * message.
-	 */
 	struct aliro_uwb_msg_attribute *attr;
 	enum aliro_uwb_err err = ALIRO_UWB_ERR_NONE;
 
@@ -1200,15 +1167,16 @@ parse_ranging_notification(struct aliro_uwb_session *session,
 	return ALIRO_UWB_ERR_NONE;
 }
 
-enum aliro_uwb_err
 /**
- * @brief Aliro UWB session to update with the parsed notification's effects.
+ * @brief Dispatch a received notification message to its parser by message ID. Reader-status
+ * notifications are informational and ignored; unknown IDs are logged and ignored.
+ * @param session Aliro UWB session to update with the parsed notification's effects.
+ * @param message Received notification message to dispatch.
+ * @return ALIRO_UWB_ERR_NONE for handled, informational and unknown notifications, otherwise
+ * the error from the event or ranging parser.
  */
-aliro_uwb_msg_process_notification(struct aliro_uwb_session *session,
-				   /**
-				    * @brief Received notification message to dispatch to the appropriate parser.
-				    */
-				   struct aliro_uwb_message *message)
+enum aliro_uwb_err aliro_uwb_msg_process_notification(struct aliro_uwb_session *session,
+						      struct aliro_uwb_message *message)
 {
 	switch (aliro_uwb_msg_message_id(message->data)) {
 	case ALIRO_UWB_MESSAGE_NOTIFICATION_EVENT:

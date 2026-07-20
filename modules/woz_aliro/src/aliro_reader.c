@@ -99,6 +99,9 @@ static void compute_reader_group_x(void)
 static woz_mutex_t s_prov_lock;
 static bool s_prov_lock_ready;
 
+/* Where the credential-auth transaction has got to on this connection. Advances
+ * strictly forward from PH_IDLE as each command's response arrives; PH_FAILED is
+ * terminal until the peer reconnects. */
 enum txn_phase {
 	PH_IDLE = 0,      /* connected; awaiting the peer's first message */
 	PH_SENT_AUTH0,    /* AUTH0 sent; awaiting AUTH0Response */
@@ -132,6 +135,11 @@ static const char *phase_str(enum txn_phase p)
 
 #define ALIRO_MAX_SESSIONS 2
 
+/* One credential-auth transaction, keyed by BLE connection handle. Holds the
+ * reader's ephemeral keypair and the transcript inputs (txid, device pubkey, Z)
+ * that derive the two secure channels and the URSK, so everything a transaction
+ * needs between AUTH0 and ranging setup lives here. Cleared on disconnect;
+ * ALIRO_MAX_SESSIONS of them are statically allocated. */
 static struct aliro_session {
 	bool active;
 	uint16_t conn_handle;

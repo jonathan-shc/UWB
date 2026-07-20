@@ -104,7 +104,9 @@ struct cherry_ccc_controller_session_report;
  */
 struct cherry_ccc_controlee_session_report;
 
-/** CCC notification delivered to the adapter. */
+/**
+ * @brief CCC notification delivered to the adapter.
+ */
 struct cherry_ccc_event {
 	enum cherry_ccc_event_type type;
 	/**
@@ -151,7 +153,9 @@ enum cherry_ccc_hopping_mode {
 	CHERRY_CCC_HOPPING_MODE_ADAPTATIVE_DEFAULT = 0xA3,
 };
 
-/** Negotiated Aliro ranging params (filled in-place across M1-M4). */
+/**
+ * @brief Negotiated Aliro ranging params (filled in-place across M1-M4).
+ */
 struct cherry_ccc_aliro_session_config {
 	uint32_t session_id;
 	uint16_t uwb_config_id;
@@ -169,31 +173,23 @@ struct cherry_ccc_aliro_session_config {
 	uint64_t uwb_time_us;
 };
 
-/** Create an Aliro responder session bound to @config (NULL on error). */
-struct cherry_ccc_session *cherry_ccc_session_create_aliro_responder(
-	/**
-	 * @brief Cherry library context managing CCC session lifecycle and event dispatch.
-	 */
-	struct cherry *ctx, cherry_ccc_cb_t callback, void *user_data,
-	/**
-	 * @brief Negotiated Aliro ranging parameters, filled in-place across M1-M4.
-	 */
-	struct cherry_ccc_aliro_session_config *config);
+/** Create an Aliro responder session bound to @p config (NULL on error). */
+struct cherry_ccc_session *
+cherry_ccc_session_create_aliro_responder(struct cherry *ctx, cherry_ccc_cb_t callback,
+					  void *user_data,
+					  struct cherry_ccc_aliro_session_config *config);
 
 /**
  * @brief Return the base session for a CCC session (the base is the first member).
  */
 struct cherry_session *cherry_ccc_session_to_base(struct cherry_ccc_session *session);
 
-/** Convenience: fetch the CCC session's user_data via its base. */
-static inline void
-	*
-	/**
-	 * @brief Fetch the CCC session's user_data via its base session.
-	 * @param session CCC session to query.
-	 * @return The user_data pointer associated with the session's base.
-	 */
-	cherry_ccc_session_get_user_data(struct cherry_ccc_session *session)
+/**
+ * @brief Fetch the CCC session's user_data via its base session.
+ * @param session CCC session to query.
+ * @return The user_data pointer associated with the session's base.
+ */
+static inline void *cherry_ccc_session_get_user_data(struct cherry_ccc_session *session)
 {
 	return cherry_session_get_user_data(cherry_ccc_session_to_base(session));
 }
@@ -205,42 +201,38 @@ static inline void
 void cherry_ccc_event_free(struct cherry_ccc_event *event);
 
 /** Destroy a CCC session (delegates to the base). */
-static inline void
 /**
  * @brief Destroy a CCC session, delegating to the base session.
  * @param session CCC session to destroy.
  */
-cherry_ccc_session_destroy(struct cherry_ccc_session *session)
+static inline void cherry_ccc_session_destroy(struct cherry_ccc_session *session)
 {
 	cherry_session_destroy(cherry_ccc_session_to_base(session));
 }
 
 /** Start a CCC session (delegates to the base). */
-static inline enum cherry_err
 /**
  * @brief Start a CCC session, delegating to the base session.
  * @param session CCC session to start.
  * @return Error code from cherry_session_start.
  */
-cherry_ccc_session_start(struct cherry_ccc_session *session)
+static inline enum cherry_err cherry_ccc_session_start(struct cherry_ccc_session *session)
 {
 	return cherry_session_start(cherry_ccc_session_to_base(session));
 }
 
 /** Stop a CCC session (delegates to the base). */
-static inline enum cherry_err
 /**
  * @brief Stop a CCC session, delegating to the base session.
  * @param session CCC session to stop.
  * @return Error code from cherry_session_stop.
  */
-cherry_ccc_session_stop(struct cherry_ccc_session *session)
+static inline enum cherry_err cherry_ccc_session_stop(struct cherry_ccc_session *session)
 {
 	return cherry_session_stop(cherry_ccc_session_to_base(session));
 }
 
 /** Select round-1 antennas for a CCC session (delegates to the base). */
-static inline enum cherry_err
 /**
  * @brief Select round-1 antennas for a CCC session, delegating to the base session.
  * @param session CCC session to configure.
@@ -248,8 +240,9 @@ static inline enum cherry_err
  * @param rx_antenna_set Antenna set to use for reception.
  * @return Error code from cherry_session_set_antennas.
  */
-cherry_ccc_session_set_antennas(struct cherry_ccc_session *session,
-				uint8_t tx_antenna_set, uint8_t rx_antenna_set)
+static inline enum cherry_err cherry_ccc_session_set_antennas(struct cherry_ccc_session *session,
+							      uint8_t tx_antenna_set,
+							      uint8_t rx_antenna_set)
 {
 	return cherry_session_set_antennas(cherry_ccc_session_to_base(session), tx_antenna_set,
 					   rx_antenna_set);
@@ -277,14 +270,11 @@ enum cherry_err cherry_ccc_session_set_initiation_time(struct cherry_ccc_session
 						       uint64_t initiation_time_us);
 
 /** Enable/disable diagnostics for a CCC session (delegates to the base). */
-static inline enum cherry_err
 /**
  * @brief Opaque CCC session being configured, defined by the shim.
  */
+static inline enum cherry_err
 cherry_ccc_session_set_diagnostics(struct cherry_ccc_session *session,
-				   /**
-				    * @brief Diagnostic configuration for CCC session reporting (e.g., sampling interval, metrics to include).
-				    */
 				   struct cherry_common_diag_cfg config)
 {
 	return cherry_session_set_diagnostics(cherry_ccc_session_to_base(session), config, false);

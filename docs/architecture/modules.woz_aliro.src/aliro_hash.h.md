@@ -10,6 +10,6 @@ calls.
 ## API
 
 ### `struct aliro_sha256`
-`modules/woz_aliro/src/aliro_hash.h:39`
+`modules/woz_aliro/src/aliro_hash.h:30`
 
 Streaming SHA-256 (FIPS 180-4).

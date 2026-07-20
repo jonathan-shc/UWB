@@ -32,16 +32,9 @@ enum cherry_err cherry_session_set_antennas(struct cherry_session *session, uint
 					    uint8_t rx_antenna_set);
 
 /** Enable/disable per-session diagnostics (config passed by value). */
-enum cherry_err
-/**
- * @brief Opaque generic session pointer (defined by the shim; first member of a CCC session).
- */
-cherry_session_set_diagnostics(struct cherry_session *session,
-			       /**
-			        * @brief Common diagnostic configuration to apply to the CCC session.
-			        */
-			       struct cherry_common_diag_cfg config,
-			       bool enable_fallback);
+enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session,
+					       struct cherry_common_diag_cfg config,
+					       bool enable_fallback);
 
 #ifdef __cplusplus
 }

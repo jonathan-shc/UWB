@@ -22,7 +22,8 @@ CONFIG_LOG_RUNTIME_FILTERING=y (set in integration/overlays/woz-pretty.conf).
 ## API
 
 ### `static int woz_logquiet_init(void)`
-`modules/woz_uwb/src/facade/woz_logquiet.c:36`
+`modules/woz_uwb/src/facade/woz_logquiet.c:39`
 
-One-shot init that mutes specified log sources by setting their filter to LOG_LEVEL_NONE across
-all backends, silencing debug output on startup.
+@brief One-shot init that mutes specified log sources by setting their filter to LOG_LEVEL_NONE
+across all backends.
+@return 0 on success.

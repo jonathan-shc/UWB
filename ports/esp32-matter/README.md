@@ -34,7 +34,7 @@ the nRF5340 build at the repository root.
   `~/esp/esp-idf` and `~/esp/esp-matter`; override with `IDF_EXPORT=` and
   `ESP_MATTER_PATH=` on any target.
 - ESP32-S3 dev board plus a DWM3000EVB wired per
-  [`../esp32-idf/BRINGUP.md`](../esp32-idf/BRINGUP.md).
+  [`docs/esp32-bringup.md`](../../docs/esp32-bringup.md).
 - An Apple Home setup that can commission a Matter-over-Wi-Fi accessory and mint an Aliro
   key: a home hub, and an iPhone new enough to carry the key.
 
@@ -122,7 +122,7 @@ Matter starts.
 
 ## Further reading
 
-- [`../docs/esp-32-gotchas.md`](../docs/esp-32-gotchas.md) — every trap hit during this
+- [`docs/esp32-gotchas.md`](../../docs/esp32-gotchas.md) — every trap hit during this
   bring-up, with symptom and fix. Read this before debugging anything.
 - [`../esp32-idf/README.md`](../esp32-idf/README.md) — the shared component stack.
 - [`../../docs/porting-esp32.md`](../../docs/porting-esp32.md) — how the port was planned

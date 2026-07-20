@@ -9,31 +9,33 @@ CCC STS for the FiRa MAC; target only.
 ## API
 
 ### `void ccc_shim_wrap_log_reset(void)`
-`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:41`
+`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:43`
 
-Reset the frame logging counter to zero, used for re-enabling diagnostics after the first N
-frames.
+@brief Reset the frame logging counter to zero, used for re-enabling diagnostics after the first
+N frames.
 
 ### `static void pack_key(dwt_sts_cp_key_t *out, const uint8_t dursk[CCC_DURSK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:47`
+`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:49`
 
 @brief Pack a 16-byte `dURSK` into the DW3000 STS-key register image.
 
 **called by** `__wrap_dwt_configurestsiv`
 
 ### `static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])`
-`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:62`
+`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:68`
 
-Pack a 16-byte STS-V into the DW3000 STS-IV image (whole-16 reverse then per-word LE, same as
-pack_key).
+@brief Pack a 16-byte STS-V into the DW3000 STS-IV register image (whole-16 reverse then per-word
+LE).
+@param out DW3000 STS-IV register structure (iv0, iv1, iv2, iv3).
+@param sts_v 16-byte STS-V value.
 
 **called by** `__wrap_dwt_configurestsiv`
 
 ### `void __wrap_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv)`
-`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:78`
+`modules/woz_uwb/src/ccc/ccc_shim_wrap.c:86`
 
-Intercept a DW3000 STS IV configuration, mapping the FiRa blob index to CCC index space, deriving
-the dURSK and STS-V, and configuring the radio with CCC secrets. Logs key and IV register
-contents if tracing is enabled. Falls through to the real dwt_configurestsiv if shim is inactive.
+@brief Intercept DW3000 STS IV configuration, deriving dURSK and STS-V from CCC secrets and
+configuring the radio; falls through to real dwt_configurestsiv if shim is inactive.
+@param pStsIv DW3000 STS-IV register structure (also holds the FiRa blob index).
 
 **calls** `pack_iv`, `pack_key`

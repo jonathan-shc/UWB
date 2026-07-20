@@ -32,7 +32,7 @@ the reader identity. Everything below the ranging key was already open in
 
 Two documents carry the detail:
 
-- [`docs/esp-32-gotchas.md`](docs/esp-32-gotchas.md) — every trap hit during bring-up,
+- [`docs/esp32-gotchas.md`](../docs/esp32-gotchas.md) — every trap hit during bring-up,
   with symptom, cause, and fix. Read it before debugging anything on this target.
 - [`../docs/porting-esp32.md`](../docs/porting-esp32.md) — how the port was planned and
   how it actually went.

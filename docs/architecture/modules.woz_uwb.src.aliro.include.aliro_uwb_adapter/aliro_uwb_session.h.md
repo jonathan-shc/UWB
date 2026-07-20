@@ -7,62 +7,20 @@
 
 ## API
 
-#### `struct aliro_uwb_session *session`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:44`
+### `struct aliro_uwb_message`
+`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:24`
 
-@brief Opaque per-session context.
+@brief Framed Aliro BLE message with 4-byte header followed by TLV payload.
+@param len Number of valid bytes in @p data.
+@param data Message bytes (4-byte header followed by TLV attributes).
 
-#### `struct cherry_ccc_session_event_session_status *status`
+### `struct aliro_uwb_session_event`
 `modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:52`
 
-@brief Session status report (active, paused, stopped) and update reason
-(initiation, measurement update, termination).
-
-#### `struct cherry_ccc_session_event_error *error`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:56`
-
-@brief Session error payload carrying error code and diagnostic context.
-
-#### `struct cherry_ccc_controller_session_report *controller_report`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:61`
-
-@brief Controller (phone) session report carrying its distance and timestamp
-estimate.
-
-#### `struct cherry_ccc_controlee_session_report *controlee_report`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:66`
-
-@brief Controlee (lock) session report carrying its distance and timestamp
-estimate.
-
-#### `struct cherry_common_diag_report *diagnostics`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:71`
-
-@brief Diagnostic report snapshot (ranging samples, signal strength, time sync)
-for this update.
-
-### `aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx, uint32_t session_id, aliro_uwb_session_cb_t callback, aliro_uwb_adapter_transmit_message_t transmit, void *user_data)`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:91`
-
-@brief Aliro adapter instance holding Cherry context, provisioned credentials, and
-ranging session state.
-@param aliro_ctx Aliro adapter instance to create the session from.
-
-### `void aliro_uwb_session_event_free(struct aliro_uwb_session_event *event)`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:105`
-
-@brief Free an event delivered to the session callback.
-@param event Event to free.
-
-### `struct aliro_uwb_message *message);`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:129`
-
-@brief Framed Aliro BLE message (header + TLV payload).
-@param message Framed Aliro BLE message to process.
-
-### `enum aliro_uwb_err aliro_uwb_session_resume(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_session.h:142`
-
-@brief Build and send a resume request for a suspended Aliro UWB ranging session.
-@param session Aliro UWB session to resume.
-@return Aliro UWB error code indicating success or failure of the resume request.
+@brief Session event handed to the client, carrying status, error, or distance reports.
+@param session Opaque per-session context.
+@param type Event type (status, error, controller report, controlee report, or diagnostics).
+@param cherry_event Underlying Cherry event object.
+@param data Union holding the event payload: session status, error code and diagnostic context,
+controller distance and timestamp estimate, controlee distance and timestamp estimate, or
+diagnostic report snapshot.

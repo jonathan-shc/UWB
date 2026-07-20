@@ -56,21 +56,14 @@
 **called by** `ccc_aes_cmac`  ·  **calls** `block_lshift1`
 
 ### `int ccc_aes_cmac(const uint8_t *key, size_t key_bits, const uint8_t *msg, size_t msg_len, uint8_t tag[CCC_CMAC_TAG_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:95`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:88`
 
-@brief AES-CMAC over msg (msg may be NULL iff msg_len is 0).
-@param key AES key bytes.
-@param key_bits AES key size in bits.
-@param msg Message to authenticate; may be NULL only if msg_len is 0.
-@param msg_len Length of msg in bytes.
-@param tag Output buffer receiving the CMAC tag.
-@return 0 on success; -EINVAL for invalid arguments; propagated error from AES encryption
-otherwise.
+@brief AES-CMAC authentication tag over message.
 
 **called by** `ccc_derive_salted_hash`, `kdf108_block`  ·  **calls** `cmac_subkey`, `xor_bytes`
 
 ### `static int kdf108_block(const uint8_t *kdk, size_t kdk_bits, uint32_t counter, const uint8_t *label, size_t label_len, const uint8_t *context, size_t ctx_len, uint32_t l_bits, uint8_t out[AES_BLOCK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:170`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:163`
 
 @brief One counter-mode CMAC block: CMAC(kdk, counter || label || 0x00 || context || l_bits).
 @param kdk Key-derivation key.
@@ -88,64 +81,42 @@ CMAC error otherwise.
 **called by** `ccc_derive_mupsk1`, `ccc_derive_mupsk2`, `ccc_derive_mursk`, `ccc_derive_salted_hash`, `ccc_derive_uad`, `ccc_derive_ursk_kt`, `derive_dkey`  ·  **calls** `ccc_aes_cmac`, `put_be32`
 
 ### `int ccc_derive_mupsk1(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MUPSK1_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:227`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:217`
 
 @brief Derive mUPSK1, the SP0 Pre-POLL AES-CCM* key.
-@param ursk 256-bit URSK input key.
-@param out Output buffer receiving mUPSK1.
-@return 0 on success; -EINVAL if ursk or out is NULL.
 
 **calls** `kdf108_block`
 
 ### `int ccc_derive_mupsk2(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MUPSK2_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:243`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:229`
 
 @brief Derive mUPSK2, the seed for the UWB-address KDF.
-@param ursk 256-bit URSK input key.
-@param out Output buffer receiving mUPSK2.
-@return 0 on success; -EINVAL if ursk or out is NULL; propagated error from the underlying KDF
-block otherwise.
 
 **calls** `kdf108_block`
 
 ### `int ccc_derive_mursk(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MURSK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:267`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:249`
 
 @brief Derive mURSK, the ranging-key seed feeding URSK_KT.
-@param ursk 256-bit URSK input key.
-@param out Output buffer receiving mURSK.
-@return 0 on success; -EINVAL if ursk or out is NULL; propagated error from the underlying KDF
-block otherwise.
 
 **calls** `kdf108_block`
 
 ### `int ccc_derive_salted_hash(const uint8_t ursk[CCC_URSK_LEN], const uint8_t *ranging_config, size_t rc_len, uint8_t out[CCC_SALTED_HASH_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:292`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:268`
 
 @brief Derive SaltedHash from the serialized ranging configuration.
-@param ursk 256-bit URSK input key.
-@param ranging_config Serialized ranging configuration bytes (may be omitted if rc_len is 0).
-@param rc_len Length of ranging_config in bytes.
-@param out Output buffer receiving SaltedHash.
-@return 0 on success; -EINVAL for invalid arguments; propagated error from the underlying KDF or
-CMAC otherwise.
 
 **calls** `ccc_aes_cmac`, `kdf108_block`
 
 ### `int ccc_derive_ursk_kt(const uint8_t mursk[CCC_MURSK_LEN], uint32_t sts_index, uint8_t out[CCC_URSK_KT_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:323`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:294`
 
 @brief Derive URSK_KT, generated once per ranging cycle and keyed by the STS index.
-@param mursk mURSK input key.
-@param sts_index STS index for the current ranging cycle, expanded bitwise into the KDF context.
-@param out Output buffer receiving URSK_KT.
-@return 0 on success; -EINVAL if mursk or out is NULL; propagated error from the underlying KDF
-block otherwise.
 
 **calls** `kdf108_block`
 
 ### `static int derive_dkey(const uint8_t ursk_kt[CCC_URSK_KT_LEN], const uint8_t label[4], const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint8_t out[CCC_DURSK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:355`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:326`
 
 @brief Shared dURSK/dUDSK derivation body: CMAC(URSK_KT, ctr1 || label || 0x00 || SaltedHash ||
 0x000000 || 0x80).
@@ -158,54 +129,35 @@ block otherwise.
 **called by** `ccc_derive_dudsk`, `ccc_derive_dursk`  ·  **calls** `kdf108_block`
 
 ### `int ccc_derive_dursk(const uint8_t ursk_kt[CCC_URSK_KT_LEN], const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint8_t out[CCC_DURSK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:374`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:340`
 
 @brief Derive dURSK, per-cycle STS key material.
-@param ursk_kt URSK_KT input key for the current ranging cycle.
-@param salted_hash SaltedHash of the ranging configuration.
-@param out Output buffer receiving dURSK.
-@return 0 on success; -EINVAL if any argument is NULL; propagated error from the underlying
-derivation otherwise.
 
 **calls** `derive_dkey`
 
 ### `int ccc_derive_dudsk(const uint8_t ursk_kt[CCC_URSK_KT_LEN], const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint8_t out[CCC_DUDSK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:391`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:352`
 
 @brief Derive dUDSK, per-cycle SP0 timestamp-frame key.
-@param ursk_kt URSK_KT input key for the current ranging cycle.
-@param salted_hash SaltedHash of the ranging configuration.
-@param out Output buffer receiving dUDSK.
-@return 0 on success; -EINVAL if any argument is NULL; propagated error from the underlying
-derivation otherwise.
 
 **calls** `derive_dkey`
 
 ### `int ccc_derive_sts_v(const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint32_t sts_index, uint8_t out[CCC_STS_V_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:407`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:364`
 
 @brief Derive STS-V (phyHrpUwbStsV), the per-PPDU STS IV for the DW3000.
-@param salted_hash SaltedHash of the ranging configuration; out may alias this buffer.
-@param sts_index STS index added (mod 2^32) into the big-endian word at bytes 8..11.
-@param out Output buffer receiving STS-V.
-@return 0 on success; -EINVAL if salted_hash or out is NULL.
 
 **calls** `get_be32`, `put_be32`
 
 ### `int ccc_derive_uad(const uint8_t mupsk2[CCC_MUPSK2_LEN], uint32_t sts_index0, uint8_t out[CCC_UAD_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:428`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:380`
 
 @brief Derive UAD, the raw UWB-address derivation output.
-@param mupsk2 mUPSK2 input key.
-@param sts_index0 Initial STS index, encoded big-endian into the KDF context.
-@param out Output buffer receiving UAD.
-@return 0 on success; -EINVAL if mupsk2 or out is NULL; propagated error from the underlying KDF
-block otherwise.
 
 **calls** `kdf108_block`, `put_be32`
 
 ### `static void remap_if_reserved(uint8_t *addr, size_t len)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:447`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:399`
 
 @brief If addr is a reserved all-ones value (0xFFFF/0xFFFE for 2 bytes, 0xFF..FF for other
 lengths), clear its top bit.
@@ -215,20 +167,15 @@ lengths), clear its top bit.
 **called by** `ccc_uad_addresses`
 
 ### `int ccc_uad_addresses(const uint8_t uad[CCC_UAD_LEN], uint8_t keysource[CCC_KEYSOURCE_LEN], uint8_t dest_short_addr[CCC_DEST_SHORT_ADDR_LEN], uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:476`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:423`
 
 @brief Split UAD into the UWB addresses (KeySource, destination short address, source long
 address).
-@param uad UAD bytes to split.
-@param keysource Output buffer receiving the KeySource address.
-@param dest_short_addr Output buffer receiving the destination short address.
-@param src_long_addr Output buffer receiving the source long address.
-@return 0 on success; -EINVAL if uad or any output pointer is NULL.
 
 **calls** `remap_if_reserved`
 
 ### `static void sp0_nonce(uint8_t nonce[CCC_SP0_NONCE_LEN], const uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN], uint32_t frame_counter)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:520`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:467`
 
 @brief Build the SP0 CCM* nonce: SrcLongAddr || FrameCounter(BE) || SecLevel.
 @param nonce Output buffer receiving the assembled nonce.
@@ -238,7 +185,7 @@ address).
 **called by** `ccc_sp0_decrypt`, `ccc_sp0_encrypt`  ·  **calls** `put_be32`
 
 ### `static int sp0_cbc_mac(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t nonce[CCC_SP0_NONCE_LEN], const uint8_t *mhr, size_t mhr_len, const uint8_t *payload, size_t payload_len, uint8_t tag[AES_BLOCK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:540`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:487`
 
 @brief Compute the CCM* CBC-MAC over B0 || l(a)||MHR || payload, zero-padded per block.
 @param key AES-128 key used for the CBC-MAC.
@@ -254,7 +201,7 @@ is 0).
 **called by** `ccc_sp0_decrypt`, `ccc_sp0_encrypt`  ·  **calls** `xor_bytes`
 
 ### `static int sp0_ctr(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t nonce[CCC_SP0_NONCE_LEN], const uint8_t *in, size_t len, uint8_t *out, uint8_t s0[AES_BLOCK_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:610`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:557`
 
 @brief Apply CCM* CTR mode: emit the S0 keystream block, then XOR keystream S1.. over in to out
 (symmetric encrypt/decrypt).
@@ -269,21 +216,21 @@ is 0).
 **called by** `ccc_sp0_decrypt`, `ccc_sp0_encrypt`  ·  **calls** `xor_bytes`
 
 ### `static int sp0_ct_diff(const uint8_t *a, const uint8_t *b, size_t n)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:643`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:590`
 
 @brief Constant-time inequality: 0 iff the @p n bytes are equal.
 
 **called by** `ccc_sp0_decrypt`
 
 ### `int ccc_sp0_encrypt(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN], uint32_t frame_counter, const uint8_t *mhr, size_t mhr_len, const uint8_t *payload, size_t payload_len, uint8_t *ciphertext_out, uint8_t mic_out[CCC_SP0_MIC_LEN])`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:653`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:600`
 
 @brief Encrypt + authenticate an SP0 data frame (AES-CCM*, ENC-MIC-64).
 
 **calls** `sp0_cbc_mac`, `sp0_ctr`, `sp0_nonce`, `xor_bytes`
 
 ### `int ccc_sp0_decrypt(const uint8_t key[CCC_MUPSK1_LEN], const uint8_t src_long_addr[CCC_SRC_LONG_ADDR_LEN], uint32_t frame_counter, const uint8_t *mhr, size_t mhr_len, const uint8_t *ciphertext, size_t ciphertext_len, const uint8_t mic[CCC_SP0_MIC_LEN], uint8_t *payload_out)`
-`modules/woz_uwb/src/ccc/ccc_kdf.c:685`
+`modules/woz_uwb/src/ccc/ccc_kdf.c:632`
 
 @brief Decrypt + verify an SP0 data frame; zeroes plaintext and returns -EBADMSG on MIC failure.
 

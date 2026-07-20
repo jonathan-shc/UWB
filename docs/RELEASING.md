@@ -27,6 +27,20 @@ bump means new capability and a patch bump means fixes only.
    instructions (`nrfjprog`/`west flash` of `merged.hex` needs a full-erase first flash,
    same as `make flash-erase`). Attach `merged.hex` and `merged.hex.sha256`.
 
+## Documentation
+
+`make docs` renders the site into `site/` (gitignored). It has two halves:
+
+- The **reference tree** (`site/api/`) is built by Doxygen from `docs/Doxyfile`. It needs
+  `doxygen` and `graphviz` and nothing else, so it builds anywhere.
+- The **subsystem tree, guides and site shell** come from a page generator kept outside
+  this repository. `docs.sh` invokes it through an executable hook at
+  `tools/docs_generate.local`, which is gitignored; override the path with `PAGE_GEN`.
+  The hook takes one argument, `build` or `check`.
+
+Without that hook `make docs` still succeeds and builds the reference tree over the
+committed `docs/` tree, so a contributor never needs it. Regenerating `docs/` does.
+
 ## Notes
 
 - The artifact is built locally, not in CI: the NCS toolchain and workspace fetch

@@ -34,7 +34,7 @@ The ESP-IDF DW3000 backend, replacing `deps/dw3000/platform/`:
   semaphore; a dedicated high-priority task pinned to core 1 calls `dwt_isr()`, because
   that call performs SPI and cannot run in interrupt context.
 - **`board_pins.h`** — the pin map. Source of truth; the wiring table in
-  [`../../BRINGUP.md`](../../BRINGUP.md) mirrors it.
+  [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md) mirrors it.
 - **`woz_wrap_stubs.c`** — the minimal RX-callback chain that the excluded diagnostic
   sources would otherwise have provided. Without it the responder receives frames but
   never replies.

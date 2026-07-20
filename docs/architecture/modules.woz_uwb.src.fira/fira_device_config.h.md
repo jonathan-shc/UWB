@@ -12,6 +12,6 @@ fira_session.c.
 @brief Unicast FiRa ranging device configuration (one session).
 
 ### `typedef struct fira_device_configure_s fira_device_configure_t`
-`modules/woz_uwb/src/fira/fira_device_config.h:52`
+`modules/woz_uwb/src/fira/fira_device_config.h:54`
 
-Typedef alias for struct fira_device_configure_s; holds FiRa device configuration parameters.
+@brief FiRa device configuration parameters.

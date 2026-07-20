@@ -7,13 +7,10 @@
 
 ## API
 
-#### `struct aliro_uwb_message *message`
+### `struct aliro_uwb_msg_builder`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h:19`
 
-@brief Aliro UWB message under construction, holding encoded M1-M4 attributes and
+@brief Accumulates bytes into a heap-allocated Aliro UWB message.
+@param message Aliro UWB message under construction, holding encoded M1-M4 attributes and
 payload.
-
-### `bool aliro_uwb_msg_builder_add_bytes(struct aliro_uwb_msg_builder *builder, uint8_t id, size_t count, const uint8_t *values)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h:52`
-
-@brief Append an attribute whose value is @count raw bytes.
+@param capacity Capacity of the message buffer.

@@ -16,9 +16,13 @@ extern "C" {
 /** Opaque per-session context. */
 struct aliro_uwb_session;
 
-/** Framed Aliro BLE message (header + TLV payload). */
+/**
+ * @brief Framed Aliro BLE message with 4-byte header followed by TLV payload.
+ * @param len Number of valid bytes in @p data.
+ * @param data Message bytes (4-byte header followed by TLV attributes).
+ */
 struct aliro_uwb_message {
-	/** Number of valid bytes in @data. */
+	/** Number of valid bytes in @p data. */
 	size_t len;
 	/** Message bytes (4-byte header followed by TLV attributes). */
 	uint8_t data[];
@@ -36,7 +40,15 @@ enum aliro_uwb_session_event_type {
 		CHERRY_CCC_EVENT_TYPE_SESSION_DIAGNOSTIC_REPORT,
 };
 
-/** Session event handed to the client. */
+/**
+ * @brief Session event handed to the client, carrying status, error, or distance reports.
+ * @param session Opaque per-session context.
+ * @param type Event type (status, error, controller report, controlee report, or diagnostics).
+ * @param cherry_event Underlying Cherry event object.
+ * @param data Union holding the event payload: session status, error code and diagnostic context,
+ * controller distance and timestamp estimate, controlee distance and timestamp estimate, or
+ * diagnostic report snapshot.
+ */
 struct aliro_uwb_session_event {
 	/**
 	 * @brief Opaque per-session context.
@@ -80,17 +92,20 @@ typedef void (*aliro_uwb_adapter_transmit_message_t)(struct aliro_uwb_message *m
 						     struct aliro_uwb_session *session,
 						     void *user_data, bool timeout);
 
-/** Create a session (NULL on error). */
-struct aliro_uwb_session
-	*
-	/**
-	 * @brief Aliro adapter instance holding Cherry context, provisioned credentials, and
-	 * ranging session state.
-	 * @param aliro_ctx Aliro adapter instance to create the session from.
-	 */
-	aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx, uint32_t session_id,
-				 aliro_uwb_session_cb_t callback,
-				 aliro_uwb_adapter_transmit_message_t transmit, void *user_data);
+/**
+ * @brief Create a session in the CREATED state. No CCC session is started here.
+ * @param aliro_ctx Adapter supplying the Cherry context and reader configuration.
+ * @param session_id Session identifier carried in the ranging-service messages.
+ * @param callback Session event callback; must not be NULL.
+ * @param transmit Message transmit callback; must not be NULL.
+ * @param user_data Opaque pointer passed back to the callbacks.
+ * @return New session, or NULL on bad parameters or allocation failure.
+ */
+struct aliro_uwb_session *aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx,
+						   uint32_t session_id,
+						   aliro_uwb_session_cb_t callback,
+						   aliro_uwb_adapter_transmit_message_t transmit,
+						   void *user_data);
 
 /** Stop if needed and release a session. */
 void aliro_uwb_session_destroy(struct aliro_uwb_session *session);
@@ -120,13 +135,8 @@ enum aliro_uwb_err aliro_uwb_session_set_time_offset(struct aliro_uwb_session *s
 						     int64_t time_offset);
 
 /** Handle an incoming BLE message (M2/M4, suspend/resume, notifications). */
-enum aliro_uwb_err
-aliro_uwb_session_message_handle(struct aliro_uwb_session *session,
-				 /**
-				  * @brief Framed Aliro BLE message (header + TLV payload).
-				  * @param message Framed Aliro BLE message to process.
-				  */
-				 struct aliro_uwb_message *message);
+enum aliro_uwb_err aliro_uwb_session_message_handle(struct aliro_uwb_session *session,
+						    struct aliro_uwb_message *message);
 
 /** Request a graceful suspend (builds and sends a suspend request). */
 enum aliro_uwb_err aliro_uwb_session_suspend(struct aliro_uwb_session *session);

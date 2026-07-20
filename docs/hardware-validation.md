@@ -38,7 +38,7 @@ No NFC tap path exists on this target, so there is no equivalent of HV-5.
 ### Test setup
 
 - ESP32-S3 dev board with a DWM3000EVB wired per
-  [`../ports/esp32-idf/BRINGUP.md`](../ports/esp32-idf/BRINGUP.md), including the EVB's
+  [`docs/esp32-bringup.md`](esp32-bringup.md), including the EVB's
   power-select jumper.
 - An iPhone with a key provisioned in Wallet for *this* reader identity. A key minted
   against a different reader will not authenticate.

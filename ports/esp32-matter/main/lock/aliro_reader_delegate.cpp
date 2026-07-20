@@ -92,10 +92,10 @@ CHIP_ERROR AliroReaderDelegate::GetAliroReaderGroupIdentifier(MutableByteSpan &g
 	return CopySpanToMutableSpan(ByteSpan(mGroupIdentifier), groupIdentifier);
 }
 
-CHIP_ERROR
 // Copies the Aliro reader group sub-identifier into groupSubIdentifier.
 // Lazily generates the sub-identifier on first call via EnsureSubIdentifier. Returns CHIP_NO_ERROR
 // on success or whatever CopySpanToMutableSpan reports on failure.
+CHIP_ERROR
 AliroReaderDelegate::GetAliroReaderGroupSubIdentifier(MutableByteSpan &groupSubIdentifier)
 {
 	EnsureSubIdentifier();
@@ -139,11 +139,11 @@ CHIP_ERROR AliroReaderDelegate::GetAliroGroupResolvingKey(MutableByteSpan &group
 	return CopySpanToMutableSpan(ByteSpan(mGroupResolvingKey), groupResolvingKey);
 }
 
-CHIP_ERROR
 // Reports the Aliro BLE-UWB protocol version supported at index.
 // Only index 0 is valid; returns CHIP_ERROR_PROVIDER_LIST_EXHAUSTED for any other index. On
 // success, encodes kKnownProtocolVersion big-endian into protocolVersion via
 // CopyProtocolVersionIntoSpan.
+CHIP_ERROR
 AliroReaderDelegate::GetAliroSupportedBLEUWBProtocolVersionAtIndex(size_t index,
 								   MutableByteSpan &protocolVersion)
 {

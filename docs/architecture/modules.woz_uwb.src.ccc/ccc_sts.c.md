@@ -8,6 +8,9 @@
 ## API
 
 ### `int ccc_sts_apply(const uint8_t dursk[CCC_DURSK_LEN], const uint8_t sts_v[CCC_STS_V_LEN])`
-`modules/woz_uwb/src/ccc/ccc_sts.c:11`
+`modules/woz_uwb/src/ccc/ccc_sts.c:17`
 
-Load one PPDU's STS key + IV into the DW3000 STS registers (chip must be idle).
+@brief Load one PPDU's STS key and IV into the DW3000 STS registers (chip must be idle).
+@param dursk 16-byte derived URSK (key material).
+@param sts_v 16-byte STS-V (initialization vector).
+@return 0 on success, -EINVAL if inputs are null.

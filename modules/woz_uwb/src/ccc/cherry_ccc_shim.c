@@ -19,19 +19,34 @@ LOG_MODULE_REGISTER(woz_ccc_shim, LOG_LEVEL_INF);
 /** URSK length (bytes) the Aliro provisioned-STS path expects. */
 #define SHIM_URSK_LEN 32u
 
-/** Opaque Cherry context: a holder for the (unused) core callback the adapter passes at create. */
+/**
+ * @brief Opaque Cherry context holder.
+ * @param core_cb Core callback (never invoked: no UCI).
+ * @param user_data Client data from cherry_create().
+ */
 struct cherry {
 	cherry_core_cb_t core_cb; /**< Core callback (never invoked: no UCI). */
 	void *user_data;          /**< Client data from cherry_create(). */
 };
 
-/** Base session object; first member of cherry_ccc_session so the base functions can up-cast. */
+/**
+ * @brief Base session object; first member of cherry_ccc_session for up-casting.
+ * @param cb CCC notification callback from create.
+ * @param user_data Client data (the aliro_uwb_session).
+ */
 struct cherry_session {
 	cherry_ccc_cb_t cb; /**< CCC notification callback (from create). */
 	void *user_data;    /**< Client data (the aliro_uwb_session). */
 };
 
-/** CCC ranging session bound to our FiRa MAC. */
+/**
+ * @brief CCC ranging session bound to FiRa MAC.
+ * @param base MUST be first member for up-casting.
+ * @param config Borrowed pointer to adapter's negotiated params, valid until destroy.
+ * @param ursk Provisioned-STS root key (16 bytes).
+ * @param have_ursk True if URSK has been stashed via set_ursk.
+ * @param state Last emitted session state (INIT, IDLE, ACTIVE, or DEINIT).
+ */
 struct cherry_ccc_session {
 	struct cherry_session base; /**< MUST be first (see up-cast below). */
 	/** Borrowed pointer to the adapter's negotiated params, valid until destroy. */
@@ -47,7 +62,10 @@ static inline struct cherry_ccc_session *to_ccc(struct cherry_session *base)
 	return (struct cherry_ccc_session *)base;
 }
 
-/** Allocate + dispatch a SESSION_STATUS event to the CCC callback (event and data heap-allocated).
+/**
+ * @brief Allocate and dispatch a SESSION_STATUS event to the CCC callback.
+ * @param s CCC session.
+ * @param st State to report (INIT, IDLE, ACTIVE, or DEINIT).
  */
 static void emit_status(struct cherry_ccc_session *s, enum cherry_ccc_session_state st)
 {
@@ -98,8 +116,13 @@ static void emit_error(struct cherry_ccc_session *s, enum cherry_err err)
 
 /* ---- Cherry context lifecycle (no UCI; trivial holder) ------------------- */
 
-// Allocate and initialize a Cherry context with the given core callback and user data; device
-// parameter is unused; returns NULL if allocation fails.
+/**
+ * @brief Allocate and initialize a Cherry context with the given core callback and user data.
+ * @param device Device parameter (unused).
+ * @param core_cb Core callback (never invoked).
+ * @param user_data User data to store in the context.
+ * @return Cherry context pointer, or null if allocation fails.
+ */
 struct cherry *cherry_create(const char *device, cherry_core_cb_t core_cb, void *user_data)
 {
 	struct cherry *ctx = qmalloc(sizeof(*ctx));
@@ -113,7 +136,9 @@ struct cherry *cherry_create(const char *device, cherry_core_cb_t core_cb, void 
 	return ctx;
 }
 
-// Deallocate a Cherry context; null input is safely ignored.
+/**
+ * @brief Deallocate a Cherry context; null input is safely ignored.
+ */
 void cherry_destroy_sync(struct cherry *ctx)
 {
 	qfree(ctx);
@@ -121,8 +146,14 @@ void cherry_destroy_sync(struct cherry *ctx)
 
 /* ---- CCC session create + lifetime --------------------------------------- */
 
-// Allocate and initialize an Aliro responder CCC session with the given callback, user context, and
-// configuration; returns NULL if callback, config, or allocation fails.
+/**
+ * @brief Allocate and initialize an Aliro responder CCC session.
+ * @param ctx Cherry context (unused).
+ * @param callback CCC notification callback.
+ * @param user_data User context to pass to callback.
+ * @param config Session configuration (channel, session ID, STS index, timing, slot geometry).
+ * @return Session pointer, or null if callback is null, config is null, or allocation fails.
+ */
 struct cherry_ccc_session *
 cherry_ccc_session_create_aliro_responder(struct cherry *ctx, cherry_ccc_cb_t callback,
 					  void *user_data,
@@ -146,22 +177,30 @@ cherry_ccc_session_create_aliro_responder(struct cherry *ctx, cherry_ccc_cb_t ca
 	return s;
 }
 
-struct cherry_session *
-// Cast a CCC session pointer to its embedded base session structure; null propagates (the header
-// wrappers rely on it).
-cherry_ccc_session_to_base(struct cherry_ccc_session *session)
+/**
+ * @brief Cast a CCC session pointer to its embedded base session structure.
+ * @param session CCC session.
+ * @return Base session pointer, or null if session is null.
+ */
+struct cherry_session *cherry_ccc_session_to_base(struct cherry_ccc_session *session)
 {
 	return session ? &session->base : NULL;
 }
 
-// Retrieve the user data pointer stored in the base session; returns NULL if session is null.
+/**
+ * @brief Retrieve the user data pointer stored in the base session.
+ * @param session Base session.
+ * @return User data pointer, or null if session is null.
+ */
 void *cherry_session_get_user_data(struct cherry_session *session)
 {
 	return session ? session->user_data : NULL;
 }
 
-// Stop the UWB radio, emit a DEINIT status event, and deallocate the session; safe if session or
-// its base pointer is null.
+/**
+ * @brief Stop the UWB radio, emit a DEINIT status event, and deallocate the session.
+ * @param session Base session; null or invalid input is safely ignored.
+ */
 void cherry_session_destroy(struct cherry_session *session)
 {
 	struct cherry_ccc_session *s = to_ccc(session);
@@ -178,10 +217,13 @@ void cherry_session_destroy(struct cherry_session *session)
 
 /* ---- Start / stop -------------------------------------------------------- */
 
-// Start an Aliro UWB session by building a RangingConfiguration byte array from the session config,
-// calling woz_uwb_start_aliro, and emitting IDLE then ACTIVE status events; returns
-// CHERRY_ERR_INVALID_PARAMETER if session or config is null, CHERRY_ERR_SESSION_CONFIG if URSK is
-// not set, or CHERRY_ERR_SESSION_INIT if the UWB start fails.
+/**
+ * @brief Start an Aliro UWB session by building a RangingConfiguration byte array from session
+ * config, calling woz_uwb_start_aliro, and emitting IDLE then ACTIVE status events.
+ * @param session Base session.
+ * @return CHERRY_ERR_INVALID_PARAMETER if session or config is null; CHERRY_ERR_SESSION_CONFIG if
+ * URSK is not set; CHERRY_ERR_SESSION_INIT if UWB start fails; otherwise CHERRY_ERR_NONE.
+ */
 enum cherry_err cherry_session_start(struct cherry_session *session)
 {
 	struct cherry_ccc_session *s = to_ccc(session);
@@ -258,8 +300,11 @@ enum cherry_err cherry_session_start(struct cherry_session *session)
 	return CHERRY_ERR_NONE;
 }
 
-// Stop the UWB radio and emit an IDLE status event; returns CHERRY_ERR_INVALID_PARAMETER if session
-// or its base pointer is null, otherwise CHERRY_ERR_NONE.
+/**
+ * @brief Stop the UWB radio and emit an IDLE status event.
+ * @param session Base session.
+ * @return CHERRY_ERR_INVALID_PARAMETER if session is null or invalid, otherwise CHERRY_ERR_NONE.
+ */
 enum cherry_err cherry_session_stop(struct cherry_session *session)
 {
 	struct cherry_ccc_session *s = to_ccc(session);
@@ -274,8 +319,12 @@ enum cherry_err cherry_session_stop(struct cherry_session *session)
 
 /* ---- Fine session configuration (write-through to the borrowed config) --- */
 
-// Copy the URSK (Unique Responder Session Key) into the session and mark it as present; returns
-// CHERRY_ERR_INVALID_PARAMETER if session or ursk is null, otherwise CHERRY_ERR_NONE.
+/**
+ * @brief Copy the URSK into the session and mark it as present.
+ * @param session CCC session.
+ * @param ursk 16-byte Unique Responder Session Key.
+ * @return CHERRY_ERR_INVALID_PARAMETER if session or ursk is null, otherwise CHERRY_ERR_NONE.
+ */
 enum cherry_err cherry_ccc_session_set_ursk(struct cherry_ccc_session *session, const uint8_t *ursk)
 {
 	if (!session || !ursk) {
@@ -286,20 +335,27 @@ enum cherry_err cherry_ccc_session_set_ursk(struct cherry_ccc_session *session, 
 	return CHERRY_ERR_NONE;
 }
 
-enum cherry_err
-// Validate that the session exists; the selected_protocol_version parameter is accepted but
-// ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_protocol_version(struct cherry_ccc_session *session,
-					uint16_t selected_protocol_version)
+/**
+ * @brief Validate that the session exists; selected protocol version is accepted but ignored.
+ * @param session CCC session.
+ * @param selected_protocol_version Protocol version (ignored).
+ * @return CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+ */
+enum cherry_err cherry_ccc_session_set_protocol_version(struct cherry_ccc_session *session,
+							uint16_t selected_protocol_version)
 {
 	ARG_UNUSED(selected_protocol_version);
 	return session ? CHERRY_ERR_NONE : CHERRY_ERR_INVALID_PARAMETER;
 }
 
-enum cherry_err
-// Store the STS index on the session config; returns CHERRY_ERR_INVALID_PARAMETER if session or its
-// config is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session, uint32_t sts_index)
+/**
+ * @brief Store the STS index on the session config.
+ * @param session CCC session.
+ * @param sts_index STS index value.
+ * @return CHERRY_ERR_INVALID_PARAMETER if session or its config is null, otherwise CHERRY_ERR_NONE.
+ */
+enum cherry_err cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session,
+						 uint32_t sts_index)
 {
 	if (!session || !session->config) {
 		return CHERRY_ERR_INVALID_PARAMETER;
@@ -308,11 +364,14 @@ cherry_ccc_session_set_sts_index(struct cherry_ccc_session *session, uint32_t st
 	return CHERRY_ERR_NONE;
 }
 
-enum cherry_err
-// Store the UWB initiation timestamp in microseconds on the session config; returns
-// CHERRY_ERR_INVALID_PARAMETER if session or its config is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session,
-				       uint64_t initiation_time_us)
+/**
+ * @brief Store the UWB initiation timestamp in microseconds on the session config.
+ * @param session CCC session.
+ * @param initiation_time_us Initiation timestamp in microseconds.
+ * @return CHERRY_ERR_INVALID_PARAMETER if session or its config is null, otherwise CHERRY_ERR_NONE.
+ */
+enum cherry_err cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session,
+						       uint64_t initiation_time_us)
 {
 	if (!session || !session->config) {
 		return CHERRY_ERR_INVALID_PARAMETER;
@@ -321,19 +380,31 @@ cherry_ccc_session_set_initiation_time(struct cherry_ccc_session *session,
 	return CHERRY_ERR_NONE;
 }
 
-enum cherry_err
-// Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
-// returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set,
-				       uint8_t rx_antenna_set)
+/**
+ * @brief Validate that the session exists; TX and RX antenna set parameters are accepted but
+ * ignored.
+ * @param session CCC session.
+ * @param tx_antenna_set TX antenna set (ignored).
+ * @param rx_antenna_set RX antenna set (ignored).
+ * @return CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+ */
+enum cherry_err cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session,
+						       uint8_t tx_antenna_set,
+						       uint8_t rx_antenna_set)
 {
 	ARG_UNUSED(tx_antenna_set);
 	ARG_UNUSED(rx_antenna_set);
 	return session ? CHERRY_ERR_NONE : CHERRY_ERR_INVALID_PARAMETER;
 }
 
-// Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
-// returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+/**
+ * @brief Validate that the session exists; TX and RX antenna set parameters are accepted but
+ * ignored.
+ * @param session Base session.
+ * @param tx_antenna_set TX antenna set (ignored).
+ * @param rx_antenna_set RX antenna set (ignored).
+ * @return CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+ */
 enum cherry_err cherry_session_set_antennas(struct cherry_session *session, uint8_t tx_antenna_set,
 					    uint8_t rx_antenna_set)
 {
@@ -342,13 +413,13 @@ enum cherry_err cherry_session_set_antennas(struct cherry_session *session, uint
 	return session ? CHERRY_ERR_NONE : CHERRY_ERR_INVALID_PARAMETER;
 }
 
-// Validate that the session exists; diagnostics config and controlee_only parameters are accepted
-// but ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-enum cherry_err
-cherry_session_set_diagnostics(struct cherry_session *session,
-			       // Configuration structure for common CCC diagnostics reporting;
-			       // passed to session_set_diagnostics but ignored in this shim.
-			       struct cherry_common_diag_cfg config, bool controlee_only)
+/**
+ * @brief Validate that the session exists; the diagnostics settings are accepted but ignored.
+ * @return CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
+ */
+enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session,
+					       struct cherry_common_diag_cfg config,
+					       bool controlee_only)
 {
 	ARG_UNUSED(config);
 	ARG_UNUSED(controlee_only);
@@ -357,7 +428,9 @@ cherry_session_set_diagnostics(struct cherry_session *session,
 
 /* ---- Event teardown ------------------------------------------------------ */
 
-// Free a CCC event handle.
+/**
+ * @brief Free a CCC event and its payload; null input is safely ignored.
+ */
 void cherry_ccc_event_free(struct cherry_ccc_event *event)
 {
 	if (!event) {

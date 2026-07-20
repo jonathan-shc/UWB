@@ -9,22 +9,28 @@ qrtc_get_us returns monotonic microseconds since boot.
 ## API
 
 ### `static inline void *qmalloc(size_t size)`
-`modules/woz_uwb/src/facade/woz_alloc.h:17`
+`modules/woz_uwb/src/facade/woz_alloc.h:21`
 
-Allocate size bytes; wrapper around woz_malloc.
+@brief Allocate size bytes.
+@param size Number of bytes to allocate.
+@return Pointer to allocated memory, or NULL on failure.
 
 ### `static inline void *qcalloc(size_t nb_items, size_t item_size)`
-`modules/woz_uwb/src/facade/woz_alloc.h:24`
+`modules/woz_uwb/src/facade/woz_alloc.h:32`
 
-Allocate and zero-initialize nb_items elements of item_size bytes each; wrapper around
-woz_calloc.
+@brief Allocate and zero-initialize nb_items elements of item_size bytes each.
+@param nb_items Number of items.
+@param item_size Bytes per item.
+@return Pointer to allocated and zeroed memory, or NULL on failure.
 
 ### `static inline void qfree(void *ptr)`
-`modules/woz_uwb/src/facade/woz_alloc.h:30`
+`modules/woz_uwb/src/facade/woz_alloc.h:41`
 
-Deallocate memory previously allocated by qmalloc or qcalloc; wrapper around woz_free.
+@brief Deallocate memory previously allocated by qmalloc or qcalloc.
+@param ptr Pointer to memory to free (may be NULL).
 
 ### `static inline int64_t qrtc_get_us(void)`
-`modules/woz_uwb/src/facade/woz_alloc.h:36`
+`modules/woz_uwb/src/facade/woz_alloc.h:50`
 
-Monotonic microseconds since boot.
+@brief Monotonic microseconds since boot.
+@return Microseconds elapsed since system start.

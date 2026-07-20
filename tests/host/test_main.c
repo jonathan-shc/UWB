@@ -38,6 +38,7 @@ int main(void)
 		{ "facade", test_facade },
 		{ "prepoll_gate", test_prepoll_gate },
 		{ "prepoll_round", test_prepoll_round },
+		{ "twin", test_twin },
 	};
 	const int n = (int)(sizeof(suites) / sizeof(suites[0]));
 	int npass[32], nfail[32], npend[32];

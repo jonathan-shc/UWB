@@ -29,12 +29,24 @@ static struct {
 	bool suspend;
 } g;
 
-/** Intra-block slot hook: map a blob sub-block offset to a CCC slot (currently pass-through). */
+/**
+ * @brief Map a blob sub-block offset to a CCC slot (currently pass-through).
+ * @param sub Sub-block offset.
+ * @return CCC slot index.
+ */
 static uint32_t ccc_shim_slot_from_sub(uint32_t sub)
 {
 	return sub;
 }
 
+/**
+ * @brief Bind the shim to a ranging session's derived key material.
+ * @param mursk mURSK bytes.
+ * @param salted_hash SaltedHash bytes.
+ * @param sts_index0 Initial STS index for this session.
+ * @param n_slot_per_round Slots per ranging cycle.
+ * @return 0 on success; -EINVAL if any input is invalid.
+ */
 int ccc_shim_bind(const uint8_t mursk[CCC_MURSK_LEN],
 		  const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint32_t sts_index0,
 		  uint16_t n_slot_per_round)
@@ -52,6 +64,15 @@ int ccc_shim_bind(const uint8_t mursk[CCC_MURSK_LEN],
 	return 0;
 }
 
+/**
+ * @brief Bind the shim, deriving mURSK and SaltedHash from URSK and RangingConfiguration.
+ * @param ursk 256-bit URSK input key.
+ * @param ranging_config Serialized ranging configuration bytes (may be NULL if rc_len is 0).
+ * @param rc_len Length of ranging_config in bytes.
+ * @param sts_index0 Initial STS index for this session.
+ * @param n_slot_per_round Slots per ranging cycle.
+ * @return 0 on success; propagated error from derivation otherwise.
+ */
 int ccc_shim_bind_from_ursk(const uint8_t ursk[CCC_URSK_LEN], const uint8_t *ranging_config,
 			    size_t rc_len, uint32_t sts_index0, uint16_t n_slot_per_round)
 {
@@ -89,11 +110,22 @@ uint32_t ccc_shim_sts_index0(void)
 	return g.sts_index0;
 }
 
+/**
+ * @brief Suspend or resume the per-frame IV wrap without unbinding.
+ * @param suspend True to suspend, false to resume.
+ */
 void ccc_shim_suspend(bool suspend)
 {
 	g.suspend = suspend;
 }
 
+/**
+ * @brief Map a per-frame STS index to its CCC dURSK (per-cycle) and STS-V (per-PPDU).
+ * @param sts_index STS index in the ranging schedule.
+ * @param dursk Output buffer receiving dURSK.
+ * @param sts_v Output buffer receiving STS-V.
+ * @return 0 on success; -EINVAL if shim is not active or output pointers are NULL.
+ */
 int ccc_shim_sts_for_index(uint32_t sts_index, uint8_t dursk[CCC_DURSK_LEN],
 			   uint8_t sts_v[CCC_STS_V_LEN])
 {
@@ -128,6 +160,12 @@ int ccc_shim_sts_for_index(uint32_t sts_index, uint8_t dursk[CCC_DURSK_LEN],
 	return ccc_derive_sts_v(g.salted_hash, sts_index, sts_v);
 }
 
+/**
+ * @brief Derive dUDSK (per-cycle Final_Data key) for the ranging cycle containing sts_index.
+ * @param sts_index STS index in the ranging schedule.
+ * @param dudsk Output buffer receiving dUDSK.
+ * @return 0 on success; -EINVAL if shim is not active or dudsk is NULL.
+ */
 int ccc_shim_dudsk_for_index(uint32_t sts_index, uint8_t dudsk[CCC_DUDSK_LEN])
 {
 	uint32_t base;
@@ -147,6 +185,13 @@ int ccc_shim_dudsk_for_index(uint32_t sts_index, uint8_t dudsk[CCC_DUDSK_LEN])
 	return ccc_derive_dudsk(ursk_kt, g.salted_hash, dudsk);
 }
 
+/**
+ * @brief Map a ranging-slot offset (STS_Index0 plus slot) to its CCC dURSK and STS-V.
+ * @param slot Slot offset from STS_Index0.
+ * @param dursk Output buffer receiving dURSK.
+ * @param sts_v Output buffer receiving STS-V.
+ * @return 0 on success; -EINVAL if shim is not active.
+ */
 int ccc_shim_sts_for_slot(uint32_t slot, uint8_t dursk[CCC_DURSK_LEN], uint8_t sts_v[CCC_STS_V_LEN])
 {
 	if (!g.active) {
@@ -157,6 +202,11 @@ int ccc_shim_sts_for_slot(uint32_t slot, uint8_t dursk[CCC_DURSK_LEN], uint8_t s
 	return ccc_shim_sts_for_index(g.sts_index0 + slot, dursk, sts_v);
 }
 
+/**
+ * @brief Extract the STS index from a DW3000 STS IV (index at bytes 7..4).
+ * @param iv16 16-byte STS IV.
+ * @return STS index.
+ */
 uint32_t ccc_shim_index_from_iv(const uint8_t iv16[16])
 {
 	/* Bench-confirmed layout (2026-07-06) — see ccc_shim.h. */
@@ -164,6 +214,14 @@ uint32_t ccc_shim_index_from_iv(const uint8_t iv16[16])
 	       (uint32_t)iv16[4];
 }
 
+/**
+ * @brief Map the blob's raw provisioned STS index to a CCC-schedule STS index, with origin and
+ * stride auto-calibrated from the first two indices.
+ * @param blob_idx Blob provisioned STS index.
+ * @param block Output pointer receiving the ranging-cycle block index (may be NULL).
+ * @param sub Output pointer receiving the intra-block sub-offset (may be NULL).
+ * @return CCC-space STS index.
+ */
 uint32_t ccc_shim_blob_to_ccc_index(uint32_t blob_idx, uint32_t *block, uint32_t *sub)
 {
 	uint32_t rel, blk, off;
@@ -206,6 +264,10 @@ uint32_t ccc_shim_blob_to_ccc_index(uint32_t blob_idx, uint32_t *block, uint32_t
 	return g.sts_index0 + blk * (uint32_t)g.n_slot_per_round + ccc_shim_slot_from_sub(off);
 }
 
+/**
+ * @brief Pin the substituted STS to one fixed CCC index (bench validation).
+ * @param ccc_index CCC index to pin for all subsequent frames.
+ */
 void ccc_shim_pin_index(uint32_t ccc_index)
 {
 	g.pin_index = ccc_index;

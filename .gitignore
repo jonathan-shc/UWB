@@ -4,6 +4,15 @@
 workspace/
 /workspace
 
+# Rendered documentation site — regenerate with `make docs`, never commit.
+/site/
+
+# Machine-local hooks (doc generation), kept out of tree. See docs.sh.
+/tools/*.local
+
+# Python bytecode from the docs helpers
+__pycache__/
+
 # Build output
 /build/
 build/

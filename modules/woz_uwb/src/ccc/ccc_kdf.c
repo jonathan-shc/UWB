@@ -83,14 +83,7 @@ static void cmac_subkey(const uint8_t l[AES_BLOCK_LEN], uint8_t out[AES_BLOCK_LE
 }
 
 /**
- * @brief AES-CMAC over msg (msg may be NULL iff msg_len is 0).
- * @param key AES key bytes.
- * @param key_bits AES key size in bits.
- * @param msg Message to authenticate; may be NULL only if msg_len is 0.
- * @param msg_len Length of msg in bytes.
- * @param tag Output buffer receiving the CMAC tag.
- * @return 0 on success; -EINVAL for invalid arguments; propagated error from AES encryption
- * otherwise.
+ * @brief AES-CMAC authentication tag over message.
  */
 int ccc_aes_cmac(const uint8_t *key, size_t key_bits, const uint8_t *msg, size_t msg_len,
 		 uint8_t tag[CCC_CMAC_TAG_LEN])
@@ -220,9 +213,6 @@ static const uint8_t CTX_ZERO3[3] = {0x00, 0x00, 0x00};
 
 /**
  * @brief Derive mUPSK1, the SP0 Pre-POLL AES-CCM* key.
- * @param ursk 256-bit URSK input key.
- * @param out Output buffer receiving mUPSK1.
- * @return 0 on success; -EINVAL if ursk or out is NULL.
  */
 int ccc_derive_mupsk1(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MUPSK1_LEN])
 {
@@ -235,10 +225,6 @@ int ccc_derive_mupsk1(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MUPSK1_L
 
 /**
  * @brief Derive mUPSK2, the seed for the UWB-address KDF.
- * @param ursk 256-bit URSK input key.
- * @param out Output buffer receiving mUPSK2.
- * @return 0 on success; -EINVAL if ursk or out is NULL; propagated error from the underlying KDF
- * block otherwise.
  */
 int ccc_derive_mupsk2(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MUPSK2_LEN])
 {
@@ -259,10 +245,6 @@ int ccc_derive_mupsk2(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MUPSK2_L
 
 /**
  * @brief Derive mURSK, the ranging-key seed feeding URSK_KT.
- * @param ursk 256-bit URSK input key.
- * @param out Output buffer receiving mURSK.
- * @return 0 on success; -EINVAL if ursk or out is NULL; propagated error from the underlying KDF
- * block otherwise.
  */
 int ccc_derive_mursk(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MURSK_LEN])
 {
@@ -282,12 +264,6 @@ int ccc_derive_mursk(const uint8_t ursk[CCC_URSK_LEN], uint8_t out[CCC_MURSK_LEN
 
 /**
  * @brief Derive SaltedHash from the serialized ranging configuration.
- * @param ursk 256-bit URSK input key.
- * @param ranging_config Serialized ranging configuration bytes (may be omitted if rc_len is 0).
- * @param rc_len Length of ranging_config in bytes.
- * @param out Output buffer receiving SaltedHash.
- * @return 0 on success; -EINVAL for invalid arguments; propagated error from the underlying KDF or
- * CMAC otherwise.
  */
 int ccc_derive_salted_hash(const uint8_t ursk[CCC_URSK_LEN], const uint8_t *ranging_config,
 			   size_t rc_len, uint8_t out[CCC_SALTED_HASH_LEN])
@@ -314,11 +290,6 @@ int ccc_derive_salted_hash(const uint8_t ursk[CCC_URSK_LEN], const uint8_t *rang
 
 /**
  * @brief Derive URSK_KT, generated once per ranging cycle and keyed by the STS index.
- * @param mursk mURSK input key.
- * @param sts_index STS index for the current ranging cycle, expanded bitwise into the KDF context.
- * @param out Output buffer receiving URSK_KT.
- * @return 0 on success; -EINVAL if mursk or out is NULL; propagated error from the underlying KDF
- * block otherwise.
  */
 int ccc_derive_ursk_kt(const uint8_t mursk[CCC_MURSK_LEN], uint32_t sts_index,
 		       uint8_t out[CCC_URSK_KT_LEN])
@@ -365,11 +336,6 @@ static int derive_dkey(const uint8_t ursk_kt[CCC_URSK_KT_LEN], const uint8_t lab
 
 /**
  * @brief Derive dURSK, per-cycle STS key material.
- * @param ursk_kt URSK_KT input key for the current ranging cycle.
- * @param salted_hash SaltedHash of the ranging configuration.
- * @param out Output buffer receiving dURSK.
- * @return 0 on success; -EINVAL if any argument is NULL; propagated error from the underlying
- * derivation otherwise.
  */
 int ccc_derive_dursk(const uint8_t ursk_kt[CCC_URSK_KT_LEN],
 		     const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint8_t out[CCC_DURSK_LEN])
@@ -382,11 +348,6 @@ int ccc_derive_dursk(const uint8_t ursk_kt[CCC_URSK_KT_LEN],
 
 /**
  * @brief Derive dUDSK, per-cycle SP0 timestamp-frame key.
- * @param ursk_kt URSK_KT input key for the current ranging cycle.
- * @param salted_hash SaltedHash of the ranging configuration.
- * @param out Output buffer receiving dUDSK.
- * @return 0 on success; -EINVAL if any argument is NULL; propagated error from the underlying
- * derivation otherwise.
  */
 int ccc_derive_dudsk(const uint8_t ursk_kt[CCC_URSK_KT_LEN],
 		     const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint8_t out[CCC_DUDSK_LEN])
@@ -399,10 +360,6 @@ int ccc_derive_dudsk(const uint8_t ursk_kt[CCC_URSK_KT_LEN],
 
 /**
  * @brief Derive STS-V (phyHrpUwbStsV), the per-PPDU STS IV for the DW3000.
- * @param salted_hash SaltedHash of the ranging configuration; out may alias this buffer.
- * @param sts_index STS index added (mod 2^32) into the big-endian word at bytes 8..11.
- * @param out Output buffer receiving STS-V.
- * @return 0 on success; -EINVAL if salted_hash or out is NULL.
  */
 int ccc_derive_sts_v(const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint32_t sts_index,
 		     uint8_t out[CCC_STS_V_LEN])
@@ -419,11 +376,6 @@ int ccc_derive_sts_v(const uint8_t salted_hash[CCC_SALTED_HASH_LEN], uint32_t st
 
 /**
  * @brief Derive UAD, the raw UWB-address derivation output.
- * @param mupsk2 mUPSK2 input key.
- * @param sts_index0 Initial STS index, encoded big-endian into the KDF context.
- * @param out Output buffer receiving UAD.
- * @return 0 on success; -EINVAL if mupsk2 or out is NULL; propagated error from the underlying KDF
- * block otherwise.
  */
 int ccc_derive_uad(const uint8_t mupsk2[CCC_MUPSK2_LEN], uint32_t sts_index0,
 		   uint8_t out[CCC_UAD_LEN])
@@ -467,11 +419,6 @@ static void remap_if_reserved(uint8_t *addr, size_t len)
 /**
  * @brief Split UAD into the UWB addresses (KeySource, destination short address, source long
  * address).
- * @param uad UAD bytes to split.
- * @param keysource Output buffer receiving the KeySource address.
- * @param dest_short_addr Output buffer receiving the destination short address.
- * @param src_long_addr Output buffer receiving the source long address.
- * @return 0 on success; -EINVAL if uad or any output pointer is NULL.
  */
 int ccc_uad_addresses(const uint8_t uad[CCC_UAD_LEN], uint8_t keysource[CCC_KEYSOURCE_LEN],
 		      uint8_t dest_short_addr[CCC_DEST_SHORT_ADDR_LEN],

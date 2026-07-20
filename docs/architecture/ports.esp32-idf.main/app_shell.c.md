@@ -26,11 +26,6 @@ Prints the shell's startup banner: app name, version, IDF version, and a one-lin
 
 **called by** `app_shell_start`  ·  **calls** `col`
 
-### `static const struct woz_uwb_aliro_cfg demo_cfg =`
-`ports/esp32-idf/main/app_shell.c:57`
-
-Demo Aliro UWB responder configuration used by the shell's aliro-start command.
-
 ### `static void lock_init(void)`
 `ports/esp32-idf/main/app_shell.c:75`
 

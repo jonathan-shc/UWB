@@ -29,7 +29,9 @@ uint16_t ccc_hop_round_index(uint32_t block_index, uint32_t hop_key_rw, uint32_t
 /** Vendor Specific Information message ID for Final_Data. */
 #define CCC_MSG_ID_FINAL_DATA  0x02u
 
-/** The per-frame-variable fields of an SP0 MHR (fixed fields are built in by ccc_build_mhr). */
+/**
+ * @brief The per-frame-variable fields of an SP0 MHR (fixed fields are built in by ccc_build_mhr).
+ */
 struct ccc_mhr_fields {
 	uint16_t dest_short_addr;              /**< Destination Short Address. */
 	uint32_t frame_counter;                /**< Aux Security Header frame counter. */
@@ -44,7 +46,9 @@ int ccc_build_mhr(const struct ccc_mhr_fields *f, uint8_t out[CCC_MHR_LEN]);
 /** Parse and validate a 23-byte SP0 MHR, extracting the variable fields (-EINVAL on mismatch). */
 int ccc_parse_mhr(const uint8_t in[CCC_MHR_LEN], struct ccc_mhr_fields *f);
 
-/** Pre-POLL request message parameters. */
+/**
+ * @brief Pre-POLL request message parameters.
+ */
 struct ccc_pre_poll {
 	uint32_t uwb_session_id; /**< ID of the UWB ranging session. */
 	uint32_t poll_sts_index; /**< STS index of the succeeding POLL message. */
@@ -59,7 +63,9 @@ int ccc_pre_poll_pack(const struct ccc_pre_poll *p, uint8_t out[CCC_PRE_POLL_LEN
 /** Parse a 13-byte Pre-POLL payload. */
 int ccc_pre_poll_parse(const uint8_t in[CCC_PRE_POLL_LEN], struct ccc_pre_poll *p);
 
-/** One responder's timestamp record in a Final_Data message. */
+/**
+ * @brief One responder's timestamp record in a Final_Data message.
+ */
 struct ccc_responder_ts {
 	uint8_t responder_index;       /**< Index of the responder this record refers to. */
 	uint32_t timestamp;            /**< POLL→RESPONSE time difference at the initiator. */
@@ -67,7 +73,9 @@ struct ccc_responder_ts {
 	uint8_t ranging_status;        /**< Per-responder ranging status. */
 };
 
-/** Final_Data message parameters. */
+/**
+ * @brief Final_Data message parameters.
+ */
 struct ccc_final_data {
 	uint32_t uwb_session_id;      /**< ID of the UWB ranging session. */
 	uint16_t ranging_block;       /**< Index of the current ranging block. */
@@ -102,7 +110,9 @@ enum ccc_slot {
 	CCC_SLOT_FINAL_DATA, /**< SP0 data packet, initiator. */
 };
 
-/** Per-session ranging schedule parameters (negotiated in setup). */
+/**
+ * @brief Per-session ranging schedule parameters (negotiated in setup).
+ */
 struct ccc_ran_params {
 	uint32_t sts_index0;        /**< STS_Index0 — ranging round 0 of block 0. */
 	uint16_t n_slot_per_round;  /**< N_Slot_per_Round. */
@@ -112,7 +122,9 @@ struct ccc_ran_params {
 	enum ccc_hop_mode hop_mode; /**< Hopping mode. */
 };
 
-/** The initiator's next-block hop decision, carried in Final_Data. */
+/**
+ * @brief The initiator's next-block hop decision, carried in Final_Data.
+ */
 struct ccc_hop_decision {
 	uint8_t hop_flag;     /**< Hop_Flag for the next ranging block. */
 	uint16_t round_index; /**< Round_Index for the next ranging block. */
@@ -130,7 +142,9 @@ struct ccc_hop_decision ccc_initiator_next_hop(const struct ccc_ran_params *p, u
 
 /* ── Double-sided two-way ranging ─────────────────────────────────────────── */
 
-/** The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32). */
+/**
+ * @brief The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32).
+ */
 struct ccc_ds_twr {
 	uint32_t t_round1; /**< Initiator POLL tx → RESPONSE rx (t4 − t1). */
 	uint32_t t_reply1; /**< Responder POLL rx → RESPONSE tx (t3 − t2). */

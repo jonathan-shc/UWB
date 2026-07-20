@@ -36,8 +36,10 @@ void __real_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv);
 /** @brief Count of intercepted IVs; the first @ref CCC_SHIM_LOG_FRAMES are logged. */
 static uint32_t g_log_frames;
 
-// Reset the frame logging counter to zero, used for re-enabling diagnostics after the first N
-// frames.
+/**
+ * @brief Reset the frame logging counter to zero, used for re-enabling diagnostics after the first
+ * N frames.
+ */
 void ccc_shim_wrap_log_reset(void)
 {
 	g_log_frames = 0u;
@@ -57,8 +59,12 @@ static void pack_key(dwt_sts_cp_key_t *out, const uint8_t dursk[CCC_DURSK_LEN])
 	out->key3 = sys_get_le32(&rev[12]);
 }
 
-/** Pack a 16-byte STS-V into the DW3000 STS-IV image (whole-16 reverse then per-word LE, same as
- * pack_key). */
+/**
+ * @brief Pack a 16-byte STS-V into the DW3000 STS-IV register image (whole-16 reverse then per-word
+ * LE).
+ * @param out DW3000 STS-IV register structure (iv0, iv1, iv2, iv3).
+ * @param sts_v 16-byte STS-V value.
+ */
 static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 {
 	uint8_t rev[CCC_STS_V_LEN];
@@ -72,9 +78,11 @@ static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 	out->iv3 = sys_get_le32(&rev[12]);
 }
 
-// Intercept a DW3000 STS IV configuration, mapping the FiRa blob index to CCC index space, deriving
-// the dURSK and STS-V, and configuring the radio with CCC secrets. Logs key and IV register
-// contents if tracing is enabled. Falls through to the real dwt_configurestsiv if shim is inactive.
+/**
+ * @brief Intercept DW3000 STS IV configuration, deriving dURSK and STS-V from CCC secrets and
+ * configuring the radio; falls through to real dwt_configurestsiv if shim is inactive.
+ * @param pStsIv DW3000 STS-IV register structure (also holds the FiRa blob index).
+ */
 void __wrap_dwt_configurestsiv(dwt_sts_cp_iv_t *pStsIv)
 {
 	if (ccc_shim_active() && pStsIv != NULL) {

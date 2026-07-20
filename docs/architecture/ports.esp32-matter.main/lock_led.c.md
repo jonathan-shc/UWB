@@ -17,8 +17,3 @@ Locked extinguishes the indicator. Unlocked lights blue when the UWB
 approach path drove it and green otherwise, so an approach-unlock is
 distinguishable from a Home-app tap at a glance. @p aliro is ignored
 when @p locked is true.
-
-### `struct lock_led_rgb c =`
-`ports/esp32-matter/main/lock_led.c:13`
-
-A colour for the single indicator pixel. All-zero means dark.

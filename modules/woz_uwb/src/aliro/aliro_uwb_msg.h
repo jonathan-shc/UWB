@@ -25,13 +25,9 @@ enum aliro_uwb_err aliro_uwb_msg_process_supplementary(struct aliro_uwb_session 
 struct aliro_uwb_message *aliro_uwb_msg_build_m1(struct aliro_uwb_session *session);
 struct aliro_uwb_message *
 aliro_uwb_msg_build_suspend_resume_request(struct aliro_uwb_session *session, bool suspend);
-struct aliro_uwb_message
-	*
-	/**
-	 * @brief Build a general-error message for the given session.
-	 * @param session Session for which the error message is built.
-	 */
-	aliro_uwb_msg_build_general_error(struct aliro_uwb_session *session, uint8_t error_code);
+/** Build a general-error message for the given session. */
+struct aliro_uwb_message *aliro_uwb_msg_build_general_error(struct aliro_uwb_session *session,
+							    uint8_t error_code);
 
 /**
  * @brief Release a message built by this layer.

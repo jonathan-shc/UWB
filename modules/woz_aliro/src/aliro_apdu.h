@@ -108,24 +108,26 @@ int aliro_apdu_wrap(uint8_t ins, const uint8_t *tlv, size_t tlv_len, uint8_t *ou
  * *sw (0x9000 = OK) and shrinks *len by 2. Returns -1 if fewer than 2 bytes. */
 int aliro_apdu_strip_sw(const uint8_t *buf, size_t *len, uint16_t *sw);
 
+/* Fields parsed from an AUTH0Response APDU: the device's mandatory ephemeral
+ * public key, plus the optional cryptogram sent when the device recognises the
+ * reader and offers the fast path. */
 struct aliro_auth0_response {
 	uint8_t device_eph_pub[65]; /* tag 0x86, mandatory */
 	int have_cryptogram;        /* tag 0x9D present */
 	uint8_t cryptogram[64];
 };
-int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len,
-				    // Response payload for an Aliro AUTH0 APDU exchange.
-				    struct aliro_auth0_response *r);
+int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len, struct aliro_auth0_response *r);
 
+/* Fields parsed from an AUTH1Response APDU: the device's mandatory signature
+ * over the transcript, plus the device public key and signaling bitmap it sends
+ * when the standard (non-fast) path is taken. */
 struct aliro_auth1_response {
 	int have_device_pub; /* tag 0x5A */
 	uint8_t device_pub[65];
 	uint8_t device_sig[64]; /* tag 0x9E, mandatory */
 	uint16_t signaling;     /* 2-byte signaling bitmap */
 };
-int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len,
-				    // Response payload for an Aliro AUTH1 APDU exchange.
-				    struct aliro_auth1_response *r);
+int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len, struct aliro_auth1_response *r);
 
 /* ---- 4-byte L2CAP envelope: [type&0x3F][opcode][len_be16][payload] ---- */
 #define ALIRO_ENVELOPE_HDR 4u
