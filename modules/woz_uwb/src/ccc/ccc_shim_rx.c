@@ -414,6 +414,23 @@ static uint64_t ts5_to_u64(const uint8_t t[5])
 	       ((uint64_t)t[3] << 24) | ((uint64_t)t[4] << 32);
 }
 
+/* The negotiated slot the controller (iPhone) assumes for its single-sided ToF: M3 sends
+ * 400 * chaps_per_slot RSTU (the iPhone session negotiates chaps=6 => 2400 RSTU), 1 RSTU =
+ * 208 hi32 ticks, so 2400 * 208 = 499200 hi32 (127795200 DTU). A peer with no reverse
+ * timestamp report assumes the responder replied exactly one such slot after the POLL. */
+#define CCC_SLOT_NOMINAL_HI32 499200u
+#define CCC_SLOT_NOMINAL_DTU  (CCC_SLOT_NOMINAL_HI32 * 256u) /* 127795200 */
+/* Reader reply-path excess (TX antenna + processing), hi32 ticks. Measured: reply1 came out
+ * ~499263 (63 over nominal) and the controller's computed range sat a constant ~+37 m high at
+ * every true distance (8 cm..3 m) = ~62 hi32 too much reply. The reader's own DS-TWR cancels
+ * it; a single-sided peer does not, so pre-subtract it. Re-tune vs the phone_d diagnostic. */
+#define CCC_RESP_ANT_DLY_HI32 62u
+/* RESPONSE RMARKER offset from the POLL RX, hi32 = nominal slot minus the reply-path delay, so
+ * the on-air RMARKER lands on the slot boundary the peer assumes. NOT the empirical
+ * CCC_RX_SLOT_HI32 (that is for tolerant RX-window arming). Moving this does not change the
+ * reader's own distance -- DS-TWR is invariant to the reply/round split. */
+#define CCC_RESP_SLOT_HI32    (CCC_SLOT_NOMINAL_HI32 - CCC_RESP_ANT_DLY_HI32)
+
 /** Decode a received Final_Data (SP0, msg_id=02): dUDSK-decrypt and parse the initiator's ranging
  * timestamps; not time-critical. */
 static void final_data_decode(const uint8_t *frame, uint16_t datalength)
@@ -537,9 +554,14 @@ static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 			bool sts_ok =
 				fira_session_sts_quality_ok(g_final_sts_verdict, g_final_sts_index);
 
-			DIAGK("DIST tof=%d d=%dmm rep1=%u rnd2=%u rnd1=%u rep2=%u\n", (int)tof,
-			      d_mm, (unsigned)t_reply1, (unsigned)t_round2, (unsigned)tw.t_round1,
-			      (unsigned)tw.t_reply2);
+			/* Controller-side (single-sided) range this block: the peer assumes the
+			 * responder replied one nominal slot after the POLL; should read ~= d.
+			 * A large fixed offset is uncompensated reply delay. */
+			int64_t ph_dtu = (int64_t)tw.t_round1 - CCC_SLOT_NOMINAL_DTU;
+			int ph_d_mm = (int)((ph_dtu * 4692 / 2) / 1000);
+			DIAGK("DIST tof=%d d=%dmm phone_d=%dmm rep1=%u rnd2=%u rnd1=%u rep2=%u\n",
+			      (int)tof, d_mm, ph_d_mm, (unsigned)t_reply1, (unsigned)t_round2,
+			      (unsigned)tw.t_round1, (unsigned)tw.t_reply2);
 			DIAGK("GATE sts=%d verdict=%d sts_ok=%d\n", (int)g_final_sts_index,
 			      (int)g_final_sts_verdict, (int)sts_ok);
 #if defined(CONFIG_WOZ_PRETTY_SHELL)
@@ -964,7 +986,7 @@ static int tx_response_sp3(uint32_t poll_ip, uint32_t resp_idx)
 	dwt_configurestsloadiv();      /* reset the HW STS counter to our V */
 	/* STS mode stays SP3/ND (the POLL arm set it) — the Response is the same RFRAME. */
 	dx = poll_ip +
-	     CCC_RX_SLOT_HI32; /* RMARKER = POLL + 1 slot (hi32, same domain as poll_ip) */
+	     CCC_RESP_SLOT_HI32; /* RMARKER = POLL + one negotiated slot, antenna-compensated */
 	dwt_setdelayedtrxtime(dx);
 	dwt_writetxdata(sizeof(g_resp_payload), g_resp_payload, 0u);
 	dwt_writetxfctrl(sizeof(g_resp_payload) + 2u, 0u, 1u); /* +FCS; ranging=1 (STS) */
