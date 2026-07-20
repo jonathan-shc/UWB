@@ -1,61 +1,81 @@
 # DWM3000EVB → ESP32-S3 bring-up checklist
 
-One page. When you're ready, this is match-the-table, not think-hard. Pin map is
-the source of truth in `components/woz_uwb/port/board_pins.h` — if you change it
-there, change it here.
+One page, match-the-table. The pin map's source of truth is
+`components/woz_uwb/port/board_pins.h`; if you change it there, change it here.
 
 ## 1. Wire it (11 connections)
 
-Power the EVB from the ESP32-S3 board's **3V3** pin (NOT 5V — the DW3000 is a
-3.3 V part). Share a common ground. USB-power the board during bring-up.
+Power the EVB from the ESP32-S3 board's **3V3** pin, not 5 V — the DW3000 is a 3.3 V
+part. Share a common ground and USB-power the board during bring-up.
 
-| DWM3000EVB (Arduino pin) | signal   | → | ESP32-S3 |
-|--------------------------|----------|---|----------|
-| D13                      | SCLK     | → | GPIO12   |
-| D11                      | MOSI     | → | GPIO11   |
-| D12                      | MISO     | → | GPIO13   |
-| D10                      | CS       | → | GPIO10   |
-| D8                       | IRQ      | → | GPIO5    |
-| D7                       | RSTn     | → | GPIO4    |
-| D9                       | WAKEUP   | → | GPIO6    |
-| 3V3                      | power    | → | 3V3      |
-| GND                      | ground   | → | GND      |
-| D1                       | SPI-POL  | → | GND (mode-0 strap) |
-| D0                       | SPI-PHA  | → | GND (mode-0 strap) |
+| DWM3000EVB (Arduino pin) | Signal | → | ESP32-S3 |
+|---|---|---|---|
+| D13 | SCLK | → | GPIO12 |
+| D11 | MOSI | → | GPIO11 |
+| D12 | MISO | → | GPIO13 |
+| D10 | CS | → | GPIO10 |
+| D8 | IRQ | → | GPIO5 |
+| D7 | RSTn | → | GPIO4 |
+| D9 | WAKEUP | → | GPIO6 |
+| 3V3 | power | → | 3V3 |
+| GND | ground | → | GND |
+| D1 | SPI-POL | → | GND (mode-0 strap) |
+| D0 | SPI-PHA | → | GND (mode-0 strap) |
 
-Mode-0 strap = the DW3000 SPI must run CPOL=0/CPHA=0. Tie D0 and D1 to GND unless
-the EVB manual says the shield already fixes the mode (some revisions do — then
-leave D0/D1 unconnected). Verify against the EVB manual before soldering.
+Mode-0 strap: the DW3000 SPI must run CPOL=0/CPHA=0. Tie D0 and D1 to GND unless your
+EVB revision already fixes the mode on the shield — check the EVB manual before
+soldering.
 
-Camera detached, so GPIO 4/5/6/10/11/12/13 are free. If any of those aren't
-broken out on your board's headers, tell me — SPI2 routes through the S3 GPIO
-matrix, so I remap to whatever pins you do have.
+GPIO 4, 5, 6, and 10-13 are clear of the octal PSRAM pins. SPI2 routes through the S3
+GPIO matrix, so any of these can be remapped in `board_pins.h` if your board does not
+break them out.
 
-## 2. Build + flash
+### Check the EVB power-select jumper
 
-    . ~/esp/esp-idf/export.sh
-    cd ports/esp32-idf
-    idf.py set-target esp32s3      # once, if not already set
-    idf.py build
-    idf.py -p <PORT> flash monitor
+Do this before anything else. Correct wiring is not enough if the EVB's own power-select
+jumper picks the wrong source: SPI then fails silently, with no valid device ID and a
+responder that never listens, and it looks exactly like a software fault. This cost days
+of debugging once. Check the jumper first.
 
-Find `<PORT>`: `ls /dev/cu.usb*` (macOS). It's usually `/dev/cu.usbserial-*` or
-`/dev/cu.usbmodem*`.
+## 2. Build and flash
+
+```bash
+cd ports/esp32-idf
+idf.py set-target esp32s3   # once, if not already set
+make build
+make flash
+make monitor
+```
+
+ESP-IDF is expected at `~/esp/esp-idf`; override with `IDF_EXPORT=`. The port is
+auto-detected and SEGGER/J-Link ports are refused; `make ports` lists what is attached
+and how each is classified.
 
 ## 3. What good output looks like
 
-The bring-up app binds a dummy URSK and starts the CCC DS-TWR responder, then
-logs the start result and polls for a range:
+The bench app brings the radio up, binds a canned URSK, and starts the CCC DS-TWR
+responder:
 
     I (xxx) woz_esp32s3: woz_uwb_start_aliro() = 0 (DW3000 up, responder listening)
 
-- `= 0` → SPI + DW3000 + CCC init path came up. The engine is talking to the
-  chip. This is the Phase-1 pass criterion. No peer = no range lines, expected.
-- `= <nonzero> (FAILED -- check wiring/SPI)` → the DW3000 didn't answer. First
-  moves: recheck CS/SCLK/MOSI/MISO, confirm the mode-0 strap, then drop the clock
-  to slow-only by setting `WOZ_DW3000_SPI_FAST_HZ` = `2000000` in `board_pins.h`.
+- `= 0` — SPI, DW3000, and the CCC init path all came up. The engine is talking to the
+  chip. With no peer present there are no range lines, which is expected.
+- `= <nonzero> (FAILED -- check wiring/SPI)` — the DW3000 did not answer. In order:
+  recheck the power-select jumper, then CS/SCLK/MOSI/MISO, then the mode-0 strap, then
+  drop to slow-only by setting `WOZ_DW3000_SPI_FAST_HZ` to `2000000` in `board_pins.h`.
 
-## 4. If it comes up: prove a real range
+## 4. Prove a real range
 
-Needs a peer driving the DS-TWR exchange — an Aliro-capable iPhone (Wallet key),
-or a second DW3000 board as initiator. Then `range: NN cm` lines appear.
+Ranging needs a peer to drive the DS-TWR exchange: an Aliro-capable iPhone with a key
+provisioned for this reader, or a second DW3000 board acting as initiator. With a peer,
+`range: NN cm` lines appear and `status` reports a trusted range.
+
+For the full approach-unlock path — commissioning, a key in the phone's wallet, and the
+Wallet unlock animation — use the Matter app in [`../esp32-matter`](../esp32-matter)
+instead. This bench app has no Matter layer, so nothing provisions a real credential
+into a phone for it.
+
+No antenna calibration was needed on this hardware. If distances come out negative or
+absurd, read
+[`../docs/esp-32-gotchas.md`](../docs/esp-32-gotchas.md) §6.4 before reaching for a
+calibration constant — it was a timestamp-pairing bug, not a physical offset.

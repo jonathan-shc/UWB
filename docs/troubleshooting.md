@@ -4,6 +4,11 @@ Common issues, grouped by where they show up. Deeper protocol background is in
 [`protocol-research.md`](protocol-research.md) (on-air behavior) and
 [`protocol-notes.md`](protocol-notes.md) (firmware time and credential behavior).
 
+Everything below the ESP32 section is about the primary nRF5340 DK build. For the
+ESP32-S3 ports, start with [ESP32-S3 ports](#esp32-s3-ports) and then the much longer
+[gotchas log](../ports/docs/esp-32-gotchas.md), which records every trap hit during that
+bring-up with its symptom and fix.
+
 ## Build and flash
 
 **`make build` can't find the toolchain.** The NCS v3.3.0 toolchain is a one-time
@@ -70,6 +75,55 @@ common ground with the host board.
 lines match the overlay, and the reset and IRQ lines are wired. `make selftest` builds a
 boot self-test that exercises the radio bring-up with no phone present, which isolates a
 wiring problem from a protocol one.
+
+**The DWM3000EVB has its own power-select jumper.** Wiring the rails correctly is not
+enough if that jumper selects the wrong source: SPI then fails silently, with no valid
+device ID and a responder that never listens. Check it before suspecting software.
+
+## ESP32-S3 ports
+
+Full detail lives in [`ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md);
+this is the short triage list.
+
+**`dwt_probe failed: -1` the first time a phone reaches M4.** The DW3000 was never
+brought up at boot, so the first SPI touch happens inside a NimBLE host callback, where
+the shallow stack and missing init make probing fail. Bring the radio up once from a
+dedicated startup task instead; both ports now do this.
+
+**The bolt moves but the Wallet never animates.** Driving the lock is not the signal iOS
+watches. The reader must send the Reader-Status-Changed grant message over the BleSK
+channel; without it iOS shows only a plain Matter accessory notification. Neither the
+phone's own computed distance nor the advertisement tag is the gate.
+
+**The phone disconnects about 1.8 s after a successful EXCHANGE (reason 531).** The
+reader did not send Reader-Status-Access-Protocol-Completed. It is mandatory, not
+optional.
+
+**`GeneralError URSK_Unavailable` at M1.** The ranging session id is derived from the
+AUTH0 transaction id, not chosen by the reader. A hardcoded session id names a session
+the phone has no key for. This is never a wrong-URSK-value problem: M1 carries no
+URSK-derived material, so a value mismatch would surface later, at M2-M4 STS.
+
+**`protocol 0 unsupported` fed to the ranging engine.** Ranging SDUs ride their own GCM
+channel keyed from BleSK, with fresh per-direction counters, not the credential-auth
+channel. Seeing the raw envelope type as a protocol number means the channel split was
+missed.
+
+**Ranging setup completes, POLL and Response look clean, but no distance is ever
+computed.** On ESP32 this is usually a real-time fault, not a logic fault: a per-round
+blocking log in a path with a 2 ms deadline starves the DW3000 ISR task, so the Final
+callback dispatches too late to catch the phone's Final_Data. Throttle hot-path logging
+first, then look at SPI transaction cost.
+
+**Negative or absurd distances.** Suspect cross-round timestamp mixing before antenna
+calibration. If the Final_Data of one round is decoded after the next round has
+overwritten the shared timestamps, the arithmetic produces plausible-looking but wrong
+values that still pass the integrity gate. Snapshot the intervals at Final capture. No
+antenna calibration was needed on this hardware.
+
+**Approach unlock works, then the bolt relocks 5 s later while the phone is still
+there.** A fixed auto-relock timer fights approach unlock. Set `AutoRelockTime = 0` and
+drive relock from proximity with hysteresis.
 
 ## Still stuck
 

@@ -1,11 +1,13 @@
 # aliro_ble — Aliro BLE transport (NimBLE), clean-room reimplementation
 
-Phase 2 of the ESP32-S3 port (see `docs/porting-esp32.md`). This component is the
-BLE side of the Aliro reader: it advertises the Aliro service, lets a phone
-negotiate the BLE-UWB protocol version, and carries the Aliro transaction over an
-L2CAP connection-oriented channel. Its output (a negotiated URSK + ranging
-parameters, produced by the Phase-3 handshake) enters the already-working UWB
-engine through `woz_uwb_start_aliro()`.
+The wire contract this component implements. For what the component is and how to
+use it, see [`README.md`](README.md).
+
+This is the BLE side of the Aliro reader: it advertises the Aliro service, lets a
+phone negotiate the BLE-UWB protocol version, and carries the Aliro transaction over
+an L2CAP connection-oriented channel. The transaction that rides on it ends with a
+ranging key and negotiated parameters entering the UWB engine through
+`woz_uwb_start_aliro()`.
 
 ## Provenance (clean-room)
 
@@ -47,15 +49,17 @@ GATT service `0xFFF2` (16-bit Aliro service UUID), two characteristics:
 
 ## L2CAP transaction
 
-- Reader registers an L2CAP CoC server on a dynamic PSM in `0x0080..0x00FF` and
-  publishes that value as the SPSM in the READ characteristic above.
+- Reader registers an L2CAP CoC server on a PSM in the reader range
+  `0x0080..0x00FF` and publishes that value as the SPSM in the READ characteristic
+  above.
 - SDU MTU: >= 267 TX / >= 264 RX.
 - Inbound SDUs are handed to the Aliro message handler as `(conn, data, len)`;
-  replies go out via a `send(conn, data, len)`. The Phase-3 M1-M4 handshake sits
-  on top of exactly those two calls and nothing else in this component.
+  replies go out via a `send(conn, data, len)`. The whole credential-auth and
+  M1-M4 exchange sits on top of exactly those two calls and nothing else in this
+  component.
 
 ## Seam to the engine
 
-On a completed handshake, Phase 3 fills a `struct woz_uwb_aliro_cfg` (URSK +
-channel/sync-code/slots/STS index) and calls `woz_uwb_start_aliro()`. This
+On a completed handshake the reader fills a `struct woz_uwb_aliro_cfg` (URSK +
+channel/sync-code/slots/STS index) and the engine starts the responder. This
 component knows nothing about UWB; it only moves bytes.
