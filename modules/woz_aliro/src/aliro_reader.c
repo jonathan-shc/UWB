@@ -1049,9 +1049,9 @@ int aliro_reader_trust_clear(void)
 
 	struct aliro_trust_store cand;
 
-	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	woz_mutex_lock(&s_prov_lock);
 	cand = s_trust;
-	xSemaphoreGive(s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 
 	if (cand.count == 0) {
 		return 1;
@@ -1060,9 +1060,9 @@ int aliro_reader_trust_clear(void)
 	if (aliro_prov_store(&s_id, &cand) != 0) {
 		return -1; /* not committed; s_trust unchanged */
 	}
-	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
-	xSemaphoreGive(s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 	return 0;
 }
 
