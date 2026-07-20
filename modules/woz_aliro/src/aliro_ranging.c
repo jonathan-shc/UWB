@@ -18,7 +18,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <zephyr/logging/log.h>
+#include "woz_log.h"
 
 #include "aliro_ble.h"
 #include "aliro_crypto.h"

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <zephyr/kernel.h>
+#include "woz_port.h"
 
 #include "fira_session.h"
 
@@ -68,7 +68,7 @@ bool fira_session_last_range(int32_t *cm_out, uint16_t *addr_out, uint8_t *nlos_
 		*block_out = g_last_range_block;
 	}
 	if (age_ms_out) {
-		*age_ms_out = k_uptime_get() - g_last_range_ms;
+		*age_ms_out = woz_uptime_ms() - g_last_range_ms;
 	}
 	return true;
 }
@@ -122,6 +122,6 @@ void fira_session_set_ccc_range_cm(int32_t cm, uint32_t block)
 	g_last_range_addr = 0u;
 	g_last_range_nlos = 0u;
 	g_last_range_block = block;
-	g_last_range_ms = k_uptime_get();
+	g_last_range_ms = woz_uptime_ms();
 }
 #endif /* CONFIG_WOZ_ALIRO */

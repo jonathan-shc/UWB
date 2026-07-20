@@ -12,8 +12,8 @@
 #include "woz_alloc.h"
 #include <string.h>
 
-#include <zephyr/logging/log.h>
-#include <zephyr/sys/util.h>
+#include "woz_log.h"
+#include "woz_util.h"
 
 LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
 

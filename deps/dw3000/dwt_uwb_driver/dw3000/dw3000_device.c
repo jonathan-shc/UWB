@@ -26,8 +26,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include <zephyr/sys/printk.h> /* DIAG: RF-arm trace (temporary) */
-#include <zephyr/sys/util.h>   /* IS_ENABLED — gate the DIAG printk under PRETTY */
+#include "woz_log.h"           /* DIAG: RF-arm trace (temporary) */
+#include "woz_util.h"          /* IS_ENABLED — gate the DIAG printk under PRETTY */
 
 #define OPTSPEED __attribute__((optimize("O3")))
 

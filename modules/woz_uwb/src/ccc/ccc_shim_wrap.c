@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <zephyr/logging/log.h>
-#include <zephyr/sys/byteorder.h>
+#include "woz_log.h"
+#include "woz_bytes.h"
 
 #include <deca_device_api.h>
 

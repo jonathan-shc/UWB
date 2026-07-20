@@ -3,8 +3,8 @@
 #include "uwb_isr.h"
 
 #include <stdint.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
+#include "woz_port.h"
+#include "woz_log.h"
 
 #include <deca_device_api.h>
 

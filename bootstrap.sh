@@ -55,9 +55,20 @@ apply_to() {   # $1 = repo, remaining args = patch files
     || { echo "ERROR: $repo not pristine — refusing to patch"; exit 1; }
   git -C "$repo" apply --whitespace=nowarn "$@"
 }
-apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch"
+# HA=1 also applies the Home Assistant data-model patches: the DoorLock
+# LockOperation event and the UWB-proximity occupancy endpoint. Off by default
+# because they change the Matter data model of an already-commissioned lock, and
+# that has not been validated on hardware. They are a pair, not independent: the
+# occupancy patch is cut against a tree with the LockOperation one applied, so
+# applying it alone will not apply cleanly. Pair with HA=1 ./build.sh.
+ha_patches=()
+if [ "${HA:-0}" = 1 ]; then
+  ha_patches=("$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch")
+fi
+
+apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" ${ha_patches[@]+"${ha_patches[@]}"}
 apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
-echo "    ✓ pristine upstream + 10 patches (add-on ×8, nrf, matter)"
+echo "    ✓ pristine upstream + $((10 + ${#ha_patches[@]})) patches (add-on ×$((8 + ${#ha_patches[@]})), nrf, matter)"
 
 echo "==> ready. Build with:  $TREE/build.sh build"

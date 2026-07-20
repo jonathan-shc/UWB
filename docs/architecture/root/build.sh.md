@@ -15,6 +15,8 @@ UWB_SELFTEST=1 ./build.sh build   # one-shot boot self-test, no iPhone (diagnost
 PRETTY=1 ./build.sh build         # curated/clean console (reversible; default verbose)
 UWB_CHIP=dw3720 ./build.sh build  # select the plugged-in UWB chip (default: dw3000)
 
+**discussed in** [`docs/porting.md`](../../porting.md)
+
 ## API
 
 ### `launch()`

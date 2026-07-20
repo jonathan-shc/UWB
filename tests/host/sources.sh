@@ -70,4 +70,6 @@ INCS=(
 # The Aliro path is Kconfig-gated in-tree; the normal build has it on.
 # _DEFAULT_SOURCE: glibc hides clock_gettime/CLOCK_MONOTONIC under strict
 # -std=c11 without it (feature_test_macros(7)); Darwin headers ignore it.
-DEFS=(-DCONFIG_WOZ_ALIRO=1 -D_DEFAULT_SOURCE)
+# WOZ_PORT_HOST selects the libc backend in woz_port.h / woz_log.h; without it
+# those headers #error rather than guess a platform.
+DEFS=(-DCONFIG_WOZ_ALIRO=1 -D_DEFAULT_SOURCE -DWOZ_PORT_HOST)

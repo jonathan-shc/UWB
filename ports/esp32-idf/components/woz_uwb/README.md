@@ -1,25 +1,23 @@
 # `woz_uwb` — the shared engine, on ESP-IDF
 
 This component contains almost no code of its own. Its job is to let
-`modules/woz_uwb/src` and `deps/dw3000` — written for Zephyr, and shipped on the nRF5340
-build — compile for the ESP32-S3 **unchanged**. Everything here is the two seams that
-make that possible.
+`modules/woz_uwb/src` and `deps/dw3000` — the same sources the nRF5340 build ships —
+compile for the ESP32-S3. Everything here is the hardware seam that makes that possible.
 
-Not editing the shared sources is the point. They are the layer the nRF has already
+Keeping one engine is the point. The shared sources are the layer the nRF has already
 proven correct; forking them for ESP32 would mean two engines to keep honest.
 
-## `compat/zephyr/` — the API seam
+## The API seam lives in the engine, not here
 
-A small fake `<zephyr/*>` tree that resolves first on the include path:
+There is no `<zephyr/*>` compatibility tree any more. The engine takes its whole OS
+surface from `modules/woz_uwb/src/facade/woz_port.h` — eight functions (heap, monotonic
+clock, two sleeps, cycle counter) — and its logging from `woz_log.h`. Both select an
+ESP-IDF backend on `ESP_PLATFORM`: FreeRTOS, `esp_timer`, `esp_rom_delay_us`,
+`esp_cpu_get_cycle_count`, and `esp_log`. The pure byte and bit helpers are platform-free
+and sit alongside them in `woz_bytes.h` / `woz_util.h`.
 
-| Header | Backed by |
-|---|---|
-| `kernel.h` | FreeRTOS, `esp_timer`, `esp_rom_delay_us`, `esp_cpu_get_cycle_count` |
-| `logging/log.h` | `esp_log`, mapping each module's log macros to a per-file tag |
-| `sys/byteorder.h`, `sys/util.h`, `sys/printk.h` | plain C |
-
-It is the on-silicon twin of the host-test shim in `tests/host/shim/`. Where they differ,
-one of them is wrong.
+`test/test_port_headers.c` exercises those headers on the host, and
+[`docs/porting.md`](../../../../docs/porting.md) describes what a new target owes them.
 
 ## `port/` — the hardware seam
 

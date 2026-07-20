@@ -26,8 +26,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
+#include "woz_port.h"
+#include "woz_log.h"
 
 #include "aliro_ble.h"
 #include "aliro_apdu.h"
@@ -54,6 +54,12 @@ static bool s_loaded;
  * verified against). Captured for the `aliro-trust` bench command. */
 static uint8_t s_last_cred_pub[ALIRO_CRED_PUB_LEN];
 static bool s_have_last_cred;
+
+/* The credential key of the most recent session that passed the trust check, as
+ * opposed to s_last_cred_pub which is every key presented. Attribution only: the
+ * Matter LockOperation event names the user this key belongs to. */
+static uint8_t s_auth_cred_pub[ALIRO_CRED_PUB_LEN];
+static bool s_have_auth_cred;
 
 /* Reader group key X = the X coordinate of pub(sign_priv). This is salt field 1
  * (reader_group_identifier_key.x) in the §8.3.1.13 key schedule; both sides must
@@ -85,11 +91,12 @@ static void compute_reader_group_x(void)
 	}
 }
 
-/* Guards s_trust + s_last_cred_pub/s_have_last_cred, which the BLE-host task
- * (on_auth1_response) and the REPL task (the aliro-prov/aliro-trust commands)
- * both touch. s_id/s_loaded are set once at boot before the REPL starts, so they
- * need no lock. Created in load_provisioning() (runs single-threaded at boot). */
-static struct k_mutex s_prov_lock;
+/* Guards s_trust + s_last_cred_pub/s_have_last_cred + s_auth_cred_pub/
+ * s_have_auth_cred, which the BLE-host task (on_auth1_response), the REPL task
+ * (the aliro-prov/aliro-trust commands) and the reader task (the attribution
+ * lookup) all touch. s_id/s_loaded are set once at boot before the REPL starts,
+ * so they need no lock. Created in load_provisioning() (single-threaded boot). */
+static woz_mutex_t s_prov_lock;
 static bool s_prov_lock_ready;
 
 enum txn_phase {
@@ -179,7 +186,7 @@ static struct aliro_session *session_alloc(uint16_t conn_handle)
 static void load_provisioning(void)
 {
 	if (!s_prov_lock_ready) {
-		k_mutex_init(&s_prov_lock);
+		woz_mutex_init(&s_prov_lock);
 		s_prov_lock_ready = true;
 	}
 	if (s_loaded) {
@@ -443,11 +450,11 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	 * and take the trust decision, under the lock the REPL commands share. The
 	 * raw-key allowlist is the interim seam; real issuer-chain validation plugs
 	 * in here (Phase 4). */
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	memcpy(s_last_cred_pub, cred_pub, ALIRO_CRED_PUB_LEN);
 	s_have_last_cred = true;
 	int tv = aliro_prov_trust_check(&s_trust, cred_pub);
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 
 	if (tv == 0) {
 		LOG_INF("[conn %u] credential key TRUSTED", s->conn_handle);
@@ -461,6 +468,13 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 		s->phase = PH_FAILED;
 		return;
 	}
+
+	/* Accepted: remember which key it was, so the unlock this session goes on to
+	 * grant can be attributed to the Matter user that owns it. */
+	woz_mutex_lock(&s_prov_lock);
+	memcpy(s_auth_cred_pub, cred_pub, ALIRO_CRED_PUB_LEN);
+	s_have_auth_cred = true;
+	woz_mutex_unlock(&s_prov_lock);
 
 	/* EXCHANGE: seal the URSK-ready trigger and frame it. */
 	uint8_t ex[16], ct[16], tag[ALIRO_GCM_TAG_LEN], payload[32];
@@ -604,6 +618,25 @@ static void reader_status_send_on_host(bool unsecured)
 void aliro_reader_notify_unlock(bool unsecured)
 {
 	aliro_ble_post_reader_status(reader_status_send_on_host, unsecured);
+}
+
+// Copies the credential public key that most recently passed the trust check into out.
+// Returns true if a credential has authenticated since boot (out written), false otherwise
+// (out untouched). Safe to call from any task.
+bool aliro_reader_authenticated_credential(uint8_t out[ALIRO_CRED_PUB_LEN])
+{
+	bool have;
+
+	load_provisioning(); /* the Matter task can reach here before the reader started */
+
+	woz_mutex_lock(&s_prov_lock);
+	have = s_have_auth_cred;
+	if (have) {
+		memcpy(out, s_auth_cred_pub, ALIRO_CRED_PUB_LEN);
+	}
+	woz_mutex_unlock(&s_prov_lock);
+
+	return have;
 }
 
 /* Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
@@ -908,11 +941,11 @@ void aliro_reader_prov_print(void)
 	uint8_t last[ALIRO_CRED_PUB_LEN];
 	bool have;
 
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	ts = s_trust;
 	have = s_have_last_cred;
 	memcpy(last, s_last_cred_pub, ALIRO_CRED_PUB_LEN);
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 
 	printf("identity  : %s\n", s_id.is_dev ? "DEV (bench)" : "provisioned");
 	printf("reader_id : ");
@@ -952,11 +985,11 @@ int aliro_reader_trust_last(void)
 	uint8_t last[ALIRO_CRED_PUB_LEN];
 	bool have;
 
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	cand = s_trust;
 	have = s_have_last_cred;
 	memcpy(last, s_last_cred_pub, ALIRO_CRED_PUB_LEN);
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 
 	if (!have) {
 		return 1; /* nothing presented yet */
@@ -972,9 +1005,9 @@ int aliro_reader_trust_last(void)
 	if (aliro_prov_store(&s_id, &cand) != 0) {
 		return -1; /* not committed; s_trust unchanged */
 	}
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 	return 0;
 }
 
@@ -1003,16 +1036,16 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	memcpy(id.grk, grk, ALIRO_GRK_LEN);
 	id.is_dev = false;
 
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	ts = s_trust; /* keep any anchors already added */
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 
 	if (aliro_prov_store(&id, &ts) != 0) {
 		return -1; /* not committed; s_id unchanged */
 	}
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	s_id = id;
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
 	LOG_INF("Matter-provisioned reader identity stored");
 	return 0;
@@ -1029,10 +1062,10 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 	struct aliro_reader_identity id;
 	struct aliro_trust_store cand;
 
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	id = s_id;
 	cand = s_trust;
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 
 	int add = aliro_prov_trust_add(&cand, cred_pub);
 
@@ -1045,9 +1078,9 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 	if (aliro_prov_store(&id, &cand) != 0) {
 		return -1; /* not committed; s_trust unchanged */
 	}
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	s_trust = cand;
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 	LOG_INF("Matter-provisioned trust anchor stored (%u total)", cand.count);
 	return 0;
 }
@@ -1067,10 +1100,10 @@ int aliro_reader_provision_clear(void)
 	if (aliro_prov_store(&id, &ts) != 0) {
 		return -1;
 	}
-	k_mutex_lock(&s_prov_lock, K_FOREVER);
+	woz_mutex_lock(&s_prov_lock);
 	s_id = id;
 	s_trust = ts;
-	k_mutex_unlock(&s_prov_lock);
+	woz_mutex_unlock(&s_prov_lock);
 	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
 	LOG_INF("reader provisioning cleared (reverted to dev identity)");
 	return 0;

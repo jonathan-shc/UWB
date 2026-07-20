@@ -14,11 +14,8 @@ idf_component_register(
 		"${ALIRO}/src/aliro_ranging.c"
 		"aliro_prov_nvs.c"
 	INCLUDE_DIRS "${ALIRO}/include"
-	PRIV_INCLUDE_DIRS
-		"${ALIRO}/src"
-		# aliro_reader.c/aliro_ranging.c are written to the Zephyr k_*/LOG_* API
-		# (shared spelling with the nRF build). The woz_uwb compat headers back
-		# those with FreeRTOS/esp_log here, so this must resolve first.
-		"${CMAKE_CURRENT_LIST_DIR}/../woz_uwb/compat"
+	PRIV_INCLUDE_DIRS "${ALIRO}/src"
+	# woz_port.h / woz_log.h (the platform contract aliro_reader.c and
+	# aliro_ranging.c are written to) come from woz_uwb's public facade dir.
 	REQUIRES aliro_ble woz_uwb aliro_crypto nvs_flash
 )
