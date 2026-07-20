@@ -42,7 +42,7 @@ ENV := $(strip \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws fuzz cbmc flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -91,6 +91,19 @@ coverage:
 ## test-san: host suite rebuilt under ASan + UBSan  ·  memory-bug gate
 test-san:
 	@SAN=1 $(REPO_ROOT)/tests/host/run.sh
+
+## fuzz: fuzz the wire-facing parsers  ·  parser-hardening gate
+##   Coverage-guided libFuzzer where available (CI), else a portable corpus
+##   replay under ASan/UBSan (Apple clang ships no libFuzzer). Env: FUZZ_SECONDS=N,
+##   FUZZ_STANDALONE=1. Args (via bash) restrict to named targets.
+fuzz:
+	@$(REPO_ROOT)/tests/host/fuzz.sh
+
+## cbmc: bounded model-check the wire parsers  ·  memory-safety proof
+##   Proves no out-of-bounds / bad-pointer access for all inputs up to each
+##   harness bound. Needs cbmc on PATH (brew install cbmc / apt install cbmc).
+cbmc:
+	@$(REPO_ROOT)/tests/host/cbmc.sh
 
 ## test-ws: hermetic tests for per-worktree workspace auto-seeding
 ##   Runs in a temp dir with a stub bootstrap — no west, no hardware, and it
