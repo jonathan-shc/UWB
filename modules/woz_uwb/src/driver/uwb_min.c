@@ -45,7 +45,7 @@ static int uwb_probe_ensure(void)
 		dw3000_spi_wakeup();
 		k_msleep(2); /* > DW3000 wakeup latency */
 		uint8_t devid_hdr = 0x00;
-		uint8_t devid_buf[4] = { 0 };
+		uint8_t devid_buf[4] = {0};
 
 		dw3000_spi_read(1, &devid_hdr, sizeof(devid_buf), devid_buf);
 		raw_devid = ((uint32_t)devid_buf[3] << 24) | ((uint32_t)devid_buf[2] << 16) |
