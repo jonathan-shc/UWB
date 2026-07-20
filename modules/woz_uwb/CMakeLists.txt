@@ -1,6 +1,8 @@
 # Woz UWB engine as a Zephyr module for the Nordic door-lock add-on.
-# Provides the -Wl,--wrap=dwt_* intercepts for the CCC STS substitution; the
-# DS-TWR responder runs on deps/dw3000 (ccc_shim_rx.c).
+# The CCC STS substitution rides one link-time intercept, -Wl,--wrap=dwt_rxenable
+# (ccc_shim_rx.c), which programs the CCC key/IV on every RX-arm. The other
+# --wrap=dwt_* flags below are diagnostics (uwb_rxdiag.c) or have no live caller
+# and are dropped by --gc-sections. The DS-TWR responder runs on deps/dw3000.
 # Contributes nothing unless CONFIG_WOZ_UWB=y (stock build byte-identical).
 
 if(CONFIG_WOZ_UWB)
