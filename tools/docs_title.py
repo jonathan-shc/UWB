@@ -3,8 +3,12 @@
 
 The page generator takes the project name from the basename of the directory it
 runs in, and offers no setting to override it. In a linked worktree that name is
-the worktree's (`pro-docs`), not the project's (`openaliro`), which would put the
-wrong title on every page and in the committed docs/ tree.
+the worktree directory's, not the repository's, which would put the wrong title
+on every page and in the committed docs/ tree.
+
+Deliberately no example checkout name here: this docstring is itself published,
+and the rewrite below would substitute any literal it contained, leaving a
+sentence that compares a name against itself.
 
 This rewrites the checkout's name to the repository's wherever the generator
 emitted it. The repository name comes from the common git directory, which every
