@@ -47,6 +47,30 @@
 
 static const char *TAG = "app_main";
 uint16_t door_lock_endpoint_id = 0;
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+/* Kept so `status` can report the reader task's stack high-water mark. */
+TaskHandle_t aliro_reader_task_handle = nullptr;
+
+/* Bisect switch, currently off. With this cluster present, Home ran a full
+ * commissioning to CommissioningComplete and then sent RemoveFabric, i.e. it accepted
+ * the device and then rejected it. The cluster sits in Apple's own MEI space, so that
+ * is the first thing to rule out. Set to 1 to put it back. */
+#define APPROACH_DIRECTION_CLUSTER 0
+
+#if APPROACH_DIRECTION_CLUSTER
+/* Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349 (Apple),
+ * cluster 0xFC03. Attribute 0x0000 is a uint8 direction bitmask.
+ *
+ * Only the composite default of 7 is established (three directions, all permitted,
+ * matching Home's "unlock when you approach from any direction"). Which individual bit
+ * means Left versus Right is inferred, not confirmed, and nothing here depends on it.
+ *
+ * Note Home was observed reading cluster 0x1349FC00 attribute 0x0001, not this one. */
+constexpr uint32_t kApproachDirectionClusterId = 0x1349FC03;
+constexpr uint32_t kApproachDirectionAttributeId = 0x0000;
+constexpr uint8_t kApproachDirectionAll = 0x07;
+#endif
+#endif
 
 using namespace esp_matter;
 using namespace esp_matter::attribute;
@@ -144,7 +168,11 @@ static void start_aliro_reader_once(void)
 		return;
 	}
 	started = true;
-	xTaskCreate(aliro_reader_task, "aliro_reader", 8192, nullptr, 5, nullptr);
+	/* 12 KiB, not the previous 8: aliro_reader_start_attached() runs a deep chain
+	 * (NimBLE GATT/L2CAP registration, NVS reads, P-256 setup) before the poll loop
+	 * begins. `status` reports the high-water mark so the real headroom is measurable
+	 * rather than assumed. */
+	xTaskCreate(aliro_reader_task, "aliro_reader", 12288, nullptr, 5, &aliro_reader_task_handle);
 	ESP_LOGI(TAG, "Aliro reader (attach mode) task started");
 }
 #endif // CONFIG_ENABLE_ALIRO_BLE_UWB
@@ -322,6 +350,32 @@ extern "C" void app_main()
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 	cluster::door_lock::feature::aliro_provisioning::add(door_lock_cluster);
 	cluster::door_lock::feature::aliro_bleuwb::add(door_lock_cluster);
+
+#if APPROACH_DIRECTION_CLUSTER
+	/* Approach Direction. Manufacturer-specific cluster in *Apple's* vendor space
+	 * (MEI 0x1349 = Apple per CHIPVendorIdentifiers.hpp, cluster 0xFC03), not in the
+	 * standard DoorLock cluster, which is why no Aliro attribute carries it. Apple's
+	 * Home app renders the Left/Front/Right screen when a lock exposes this.
+	 *
+	 * Attribute 0x0000 is a uint8 bitmask, default 7 = all three directions allowed,
+	 * matching Home's "unlock when you approach from any direction". Writable and
+	 * nonvolatile so the user's choice survives a reboot.
+	 *
+	 * Nothing gates unlock on this yet: a single-antenna DW3110 cannot measure the
+	 * angle, so the value is stored and reported but not enforced.
+	 */
+	cluster_t *approach_dir_cluster =
+		cluster::create(endpoint, kApproachDirectionClusterId, CLUSTER_FLAG_SERVER);
+	if (approach_dir_cluster != nullptr) {
+		attribute::create(approach_dir_cluster, kApproachDirectionAttributeId,
+				  ATTRIBUTE_FLAG_WRITABLE | ATTRIBUTE_FLAG_NONVOLATILE,
+				  esp_matter_uint8(kApproachDirectionAll));
+		ESP_LOGI(TAG, "Approach Direction cluster 0x%08X created",
+			 (unsigned)kApproachDirectionClusterId);
+	} else {
+		ESP_LOGE(TAG, "Failed to create Approach Direction cluster");
+	}
+#endif /* APPROACH_DIRECTION_CLUSTER */
 #endif
 	// 0 disables CHIP's fixed auto-relock timer (DoorLockServer skips scheduling when
 	// AutoRelockTime == 0). Relock is driven by proximity instead: the reader task

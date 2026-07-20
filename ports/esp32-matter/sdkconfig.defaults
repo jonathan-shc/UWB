@@ -17,6 +17,13 @@ CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
 # default overflows that stack mid-transaction; the software P-256 path needs more.
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=16384
 
+# Trap stack overflows where they happen, not at the next context switch. The canary
+# check (FREERTOS_CHECK_STACKOVERFLOW_CANARY) only runs on a switch, so a task that
+# overruns and then returns through the clobbered frame crashes with a corrupted
+# backtrace and no task name. The watchpoint panics on the first write into the last
+# 32 bytes of any task stack and names the culprit.
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
+
 #enable lwip ipv6 autoconfig
 CONFIG_LWIP_IPV6_AUTOCONFIG=y
 
