@@ -1,3 +1,5 @@
+// Lock status LED color mapping: derives the RGB color for the lock indicator from the
+// current locked and Aliro-ranging state.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

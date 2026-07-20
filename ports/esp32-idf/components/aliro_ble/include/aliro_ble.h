@@ -1,10 +1,15 @@
+// Aliro BLE-UWB reader transport: GATT service definition, advertised feature flags, and transport
+// callbacks connecting the BLE peripheral role to the Aliro protocol handler in aliro_reader.
+// Callers configure the transport via aliro_ble_prepare (which builds the READ characteristic
+// payload without touching NimBLE), then register the GATT service returned by
+// aliro_ble_service_def with the host's combined service table.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * aliro_ble — Aliro BLE transport (NimBLE) for the ESP32-S3 port. Phase 2.
+ * aliro_ble — Aliro BLE transport (NimBLE) for the ESP32-S3 port.
  * Advertises the Aliro GATT service, negotiates the BLE-UWB protocol version,
- * and (from 2.2) carries the Aliro transaction over an L2CAP CoC. Clean-room
+ * and carries the Aliro transaction over an L2CAP CoC. Clean-room
  * reimplementation; see SPEC.md for the wire protocol and provenance.
  */
 #pragma once

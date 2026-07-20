@@ -1,3 +1,4 @@
+// ESP32-IDF console shell for the standalone Aliro UWB responder bench app: registers status, range, aliro-start/stop, provisioning, trust, and clear commands and runs the linenoise-based REPL.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -25,11 +26,13 @@
 #define C_BAD   "\x1b[31m"   /* red */
 #define C_RST   "\x1b[0m"
 
+// Returns the given ANSI color code, or an empty string when linenoise is in dumb-terminal mode.
 static const char *col(const char *c)
 {
 	return linenoiseIsDumbMode() ? "" : c;
 }
 
+// Prints the shell's startup banner: app name, version, IDF version, and a one-line usage hint.
 static void print_banner(void)
 {
 	const esp_app_desc_t *app = esp_app_get_description();
@@ -50,6 +53,7 @@ static const uint8_t demo_ursk[32] = {
 	0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00,
 };
 
+// Demo Aliro UWB responder configuration used by the shell's aliro-start command.
 static const struct woz_uwb_aliro_cfg demo_cfg = {
 	.session_id = 0x02b02fd4u,
 	.channel = 9u,
@@ -67,6 +71,7 @@ static const struct woz_uwb_aliro_cfg demo_cfg = {
 static SemaphoreHandle_t s_lock;
 static bool s_up;
 
+// Lazily creates the s_lock mutex on first call; subsequent calls are a no-op. Not thread-safe against concurrent first calls.
 static void lock_init(void)
 {
 	if (s_lock == NULL) {
@@ -112,6 +117,7 @@ bool app_responder_up(void)
  * thread-safe facade accessors or the mutex-guarded lifecycle helpers, so they
  * never touch the DW3000 bus concurrently with the responder. */
 
+// Shell command handler: prints the demo responder's up/down status and the last measured and last trusted UWB ranges in cm, or "none" if unavailable. Always returns 0.
 static int cmd_status(int argc, char **argv)
 {
 	(void)argc;
@@ -132,6 +138,7 @@ static int cmd_status(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: prints the last measured UWB range in cm via woz_uwb_last_range_cm, or "no range yet" if none is available. Always returns 0.
 static int cmd_range(int argc, char **argv)
 {
 	(void)argc;
@@ -145,6 +152,7 @@ static int cmd_range(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: starts the Aliro UWB responder via app_responder_start. Prints "busy" if a responder is already running (rc == 1), otherwise reports ok/FAILED with the return code. Always returns 0 to the shell.
 static int cmd_aliro_start(int argc, char **argv)
 {
 	(void)argc;
@@ -158,6 +166,7 @@ static int cmd_aliro_start(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: stops the Aliro UWB responder via app_responder_stop and prints confirmation. Always returns 0.
 static int cmd_aliro_stop(int argc, char **argv)
 {
 	(void)argc;
@@ -167,6 +176,7 @@ static int cmd_aliro_stop(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: prints the current Aliro reader provisioning state. Always returns 0.
 static int cmd_aliro_prov(int argc, char **argv)
 {
 	(void)argc;
@@ -175,6 +185,7 @@ static int cmd_aliro_prov(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: clears the terminal screen via linenoiseClearScreen. Always returns 0.
 static int cmd_clear(int argc, char **argv)
 {
 	(void)argc;
@@ -183,6 +194,7 @@ static int cmd_clear(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via aliro_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
 static int cmd_aliro_trust(int argc, char **argv)
 {
 	(void)argc;

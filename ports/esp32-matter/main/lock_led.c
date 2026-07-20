@@ -1,3 +1,7 @@
+// Lock-state indicator LED: maps lock state (and Aliro activity) to an RGB colour for the single
+// status pixel.
+// Locked always extinguishes the indicator; unlocked shows blue during active UWB/Aliro engagement
+// and a different colour otherwise, per lock_led_color.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

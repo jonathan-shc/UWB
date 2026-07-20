@@ -1,3 +1,9 @@
+// Matter application main: door lock endpoint setup, Matter lifecycle event handling, and (when
+// CONFIG_ENABLE_ALIRO_BLE_UWB is set) startup/coexistence wiring for the Aliro BLE+UWB reader
+// alongside the Matter BLE commissioning transport.
+// Owns the Aliro reader background task (started once on commissioning-complete or at boot if
+// already commissioned) and the Matter attribute/identify/device-event callbacks required by
+// esp-matter's node/cluster framework.
 /*
    This example code is in the Public Domain (or CC0 licensed, at your option.)
 
@@ -70,6 +76,15 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 #define ALIRO_UNLOCK_RANGE_CM 100 // approach threshold: unlock at/under this (bench-tunable)
 #define ALIRO_RELOCK_RANGE_CM 150 // depart threshold: relock past this (hysteresis > unlock)
 
+// Background task that starts the Aliro reader and drives approach-based lock/unlock from UWB range.
+// Delays 1 s at startup to let Matter's BLE host finish syncing before the reader takes over the
+// shared legacy advertiser, then calls aliro_reader_start_attached().
+// Runs forever as the sole auto-lock driver (the fixed Matter auto-relock is disabled): unlocks when
+// a trusted peer's range is within ALIRO_UNLOCK_RANGE_CM, holds while present, and relocks when the
+// peer moves past ALIRO_RELOCK_RANGE_CM or disconnects. Uses hysteresis (relock band wider than
+// unlock band) to avoid chatter on range jitter. Sends the phone a "Reader Status Changed" BLE
+// notification on each transition so the Wallet unlock animation fires; the notification is a no-op
+// if the ranging session has already dropped. Polls every 200 ms.
 static void aliro_reader_task(void *arg)
 {
 	// Give Matter's host time to finish syncing and stop advertising before we
@@ -120,6 +135,8 @@ static void aliro_reader_task(void *arg)
 	}
 }
 
+// Start the Aliro reader task exactly once, idempotent across repeated calls (e.g. from multiple
+// event callbacks). Spawns aliro_reader_task on its own FreeRTOS task; logs the outcome.
 static void start_aliro_reader_once(void)
 {
 	static bool started = false;
@@ -132,6 +149,10 @@ static void start_aliro_reader_once(void)
 }
 #endif // CONFIG_ENABLE_ALIRO_BLE_UWB
 
+// Matter device-event callback: logs commissioning/fabric/BLE lifecycle events and, when Aliro
+// BLE+UWB support is enabled, starts the Aliro reader once commissioning completes (Matter releases
+// the BLE advertiser at that point). On the last fabric being removed, reopens a DNS-SD-only
+// commissioning window if one is not already open.
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 {
 	switch (event->Type) {
@@ -245,6 +266,13 @@ static esp_err_t app_attribute_update_cb(attribute::callback_type_t type, uint16
 	return err;
 }
 
+// Application entry point: initializes NVS, the lock LED, power management, and the Matter node
+// with a door lock endpoint (adding Aliro provisioning/BLE-UWB clusters and delegate when enabled).
+// Registers the Aliro reader's GATT service with the BLE host before esp_matter::start so it
+// coexists with CHIPoBLE. Starts Matter, prints onboarding codes, and if already commissioned (e.g.
+// after a reboot) starts the Aliro reader immediately; otherwise the reader starts on the
+// kCommissioningComplete event. Finally launches the interactive console (app_shell_start), which
+// must not run alongside esp_matter::console::init since both read the same console UART.
 extern "C" void app_main()
 {
 	esp_err_t err = ESP_OK;
@@ -321,6 +349,8 @@ extern "C" void app_main()
 		const struct ble_gatt_svc_def *aliro_svc =
 			static_cast<const struct ble_gatt_svc_def *>(aliro_reader_ble_prepare());
 		if (aliro_svc != nullptr) {
+			// Local vector wrapping the Aliro GATT service definition for registration with the BLE host's
+			// combined service table.
 			std::vector<struct ble_gatt_svc_def> svcs = {*aliro_svc};
 			CHIP_ERROR e =
 				chip::DeviceLayer::Internal::BLEMgrImpl().ConfigureExtraServices(

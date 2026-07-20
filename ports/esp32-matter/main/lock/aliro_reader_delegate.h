@@ -1,3 +1,6 @@
+// Declares AliroReaderDelegate, the Aliro (Apple Home Key) reader-provisioning and BLE-UWB half of
+// the Matter DoorLock cluster delegate, bridging controller commands to the on-device reader
+// identity, trust store, and BLE advertising state.
 /*
  *
  *    Copyright (c) 2026 Project CHIP Authors
@@ -39,11 +42,10 @@
  * "number of keys supported" getters the server consults to validate those
  * credential writes.
  *
- * State is in-memory only: Apple provisions the reader within one setup session,
- * so a read-back within that session sees the values written. Persisting the
- * provisioned identity across reboot (so a Wallet key stays valid, and the UWB
- * reader can start after a power cycle) is wired into aliro_prov when the reader
- * components are merged in.
+ * The provisioned identity is persisted, not in-memory only: SetAliroReaderConfig
+ * hands it to aliro_reader_provision_identity, which stores it through aliro_prov
+ * in NVS and refreshes advertising. That is what keeps a Wallet key valid and lets
+ * the UWB reader start after a power cycle.
  */
 class AliroReaderDelegate: public chip::app::Clusters::DoorLock::Delegate
 {

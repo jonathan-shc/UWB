@@ -21,6 +21,7 @@
 
 void __real_dwt_configurestsmode(uint8_t stsMode);
 
+// Wrapped __real_dwt_configurestsmode with no added behavior; forwards stsMode unchanged.
 void __wrap_dwt_configurestsmode(uint8_t stsMode)
 {
 	__real_dwt_configurestsmode(stsMode);
@@ -56,6 +57,7 @@ static void shim_rxok(const dwt_cb_data_t *d)
 	}
 }
 
+// RX-timeout callback shim; forwards the event to g_blob_rxto if a handler is registered, otherwise no-op.
 static void shim_rxto(const dwt_cb_data_t *d)
 {
 	if (g_blob_rxto != NULL) {
@@ -63,6 +65,7 @@ static void shim_rxto(const dwt_cb_data_t *d)
 	}
 }
 
+// RX-error callback shim; forwards the event to g_blob_rxerr if a handler is registered, otherwise no-op.
 static void shim_rxerr(const dwt_cb_data_t *d)
 {
 	if (g_blob_rxerr != NULL) {
@@ -70,6 +73,7 @@ static void shim_rxerr(const dwt_cb_data_t *d)
 	}
 }
 
+// TX-done callback shim; forwards the event to g_blob_txdone if a handler is registered, otherwise no-op.
 static void shim_txdone(const dwt_cb_data_t *d)
 {
 	if (g_blob_txdone != NULL) {

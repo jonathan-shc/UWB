@@ -1,3 +1,9 @@
+// Aliro reader engine: drives the Access Protocol (AUTH0/AUTH1/EXCHANGE) handshake over BLE,
+// manages reader identity and credential trust provisioning in NVS, and arms UWB ranging once
+// a session is authenticated. Maintains a fixed-size table of per-connection sessions tracking
+// transaction phase and secure-channel state, and exposes start/attach entry points for both
+// standalone and Matter-attached BLE transports, plus provisioning and diagnostic APIs used by
+// Matter commissioning and the bench console.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -95,6 +101,7 @@ enum txn_phase {
 	PH_FAILED,
 };
 
+// Returns a human-readable name for a transaction phase enum value, or "?" for an unrecognized value.
 static const char *phase_str(enum txn_phase p)
 {
 	switch (p) {
@@ -139,6 +146,8 @@ static struct aliro_session {
 	size_t a5_len;
 } s_sessions[ALIRO_MAX_SESSIONS];
 
+// Finds the active session matching the given BLE connection handle.
+// Returns a pointer to the matching session, or NULL if no active session has that conn_handle.
 static struct aliro_session *session_find(uint16_t conn_handle)
 {
 	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
@@ -149,6 +158,8 @@ static struct aliro_session *session_find(uint16_t conn_handle)
 	return NULL;
 }
 
+// Allocates and returns the first inactive slot in the fixed-size session table for a new connection, initializing it to phase PH_IDLE.
+// Returns NULL if all ALIRO_MAX_SESSIONS slots are already active.
 static struct aliro_session *session_alloc(uint16_t conn_handle)
 {
 	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
@@ -163,6 +174,8 @@ static struct aliro_session *session_alloc(uint16_t conn_handle)
 	return NULL;
 }
 
+// Loads the reader's provisioning state (identity, trust anchors) from NVS into the module-level s_id/s_trust, lazily creating the provisioning mutex on first call.
+// Idempotent: does nothing on subsequent calls once s_loaded is set. Logs whether a dev-default or real identity was loaded and its source (NVS vs. dev default), then recomputes the reader group X coordinate.
 static void load_provisioning(void)
 {
 	if (s_prov_lock == NULL) {
@@ -244,8 +257,11 @@ static void start_auth(struct aliro_session *s)
 	s->phase = PH_SENT_AUTH0;
 }
 
+// Handles an inbound AUTH0Response: strips the APDU status word, parses the device's ephemeral public key, performs ECDH with the reader's ephemeral private key, derives the KDF intermediate z, signs the reader-usage transcript, and sends AUTH1.
+// On any failure (short/malformed APDU, parse failure, ECDH failure, signing failure) sets s->phase to PH_FAILED and returns without sending. On success sets s->phase to PH_SENT_AUTH1 after sending the AUTH1 command. Logs (does not fail on) an unexpected status word other than 0x9000.
 static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t len)
 {
+	// Holds the fields parsed from an AUTH0Response APDU while it is being processed by the reader's response handler.
 	struct aliro_auth0_response r;
 	uint16_t sw;
 
@@ -295,8 +311,11 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 	s->phase = PH_SENT_AUTH1;
 }
 
+// Handles an inbound AUTH1Response: derives the AP and BLE-ranging secure channel keys and URSK from the ECDH intermediate, decrypts and parses the response, verifies the device's signature, checks trust, and sends EXCHANGE.
+// Requires the reader group X coordinate to already be available (s_have_group_x); fails otherwise. Derives the session salt and 160-byte key block, splits it into the AP channel keys and URSK, and separately derives the BLE ranging-channel keys from the block's BleSK segment using a versions-based salt; both secure channels are initialized with counters starting at 1. Decrypts the AUTH1Response body via AES-GCM and fails on tag mismatch (indicating a key/counter/framing error), oversized ciphertext, or parse failure. Verifies the device's signature over the device-usage transcript using the presented device public key if available, else the device's ephemeral public key; a bad signature fails the session. Records the presented credential key under s_prov_lock and checks it against the trust store: an untrusted key fails the session unless the reader identity is the dev default (which accepts and warns). On success, seals and sends the EXCHANGE command, sets s->phase to PH_SENT_EXCHANGE, and logs the derived URSK; on any failure path sets s->phase to PH_FAILED and returns without sending EXCHANGE.
 static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t len)
 {
+	// Holds the fields parsed from an AUTH1Response APDU while it is being processed by the reader's response handler.
 	struct aliro_auth1_response r;
 	uint16_t sw;
 
@@ -583,6 +602,8 @@ static void reader_status_send_on_host(bool unsecured)
 		 unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
 }
 
+// Sends a Reader-Status BLE notification reporting the lock's unsecured/secured state to the connected device.
+// unsecured is true if the reader/lock is currently unsecured (unlocked), false if secured.
 void aliro_reader_notify_unlock(bool unsecured)
 {
 	aliro_ble_post_reader_status(reader_status_send_on_host, unsecured);
@@ -704,6 +725,8 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 
 /* ---- aliro_ble transport callbacks ---- */
 
+// BLE connection-established callback: allocates a session slot for the new connection.
+// Logs an error and returns without effect if no free session slot is available.
 static void on_connected(uint16_t conn_handle)
 {
 	struct aliro_session *s = session_alloc(conn_handle);
@@ -715,6 +738,9 @@ static void on_connected(uint16_t conn_handle)
 	ESP_LOGI(TAG, "[conn %u] Aliro session created", conn_handle);
 }
 
+// BLE disconnection callback: marks the connection's session inactive (if one exists) and
+// stops any UWB ranging associated with the connection.
+// Logs the session's message count and final transaction phase before deactivating it.
 static void on_disconnected(uint16_t conn_handle)
 {
 	struct aliro_session *s = session_find(conn_handle);
@@ -727,6 +753,9 @@ static void on_disconnected(uint16_t conn_handle)
 	aliro_ranging_stop(conn_handle);
 }
 
+// BLE data-received callback: looks up the session for conn_handle and feeds the data into its
+// transaction state machine.
+// Logs a warning and drops the data if no active session exists for conn_handle.
 static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
 {
 	struct aliro_session *s = session_find(conn_handle);
@@ -777,6 +806,8 @@ static int reader_engine_init(void)
 	return 0;
 }
 
+// Starts the Aliro reader: initializes the engine (crypto, provisioning, UWB ranging) and brings up the BLE transport using the default advertising config.
+// Returns 0 on success; returns -1 if engine initialization fails, or the underlying aliro_ble_start result otherwise.
 int aliro_reader_start(void)
 {
 	if (reader_engine_init() != 0) {
@@ -792,6 +823,8 @@ int aliro_reader_start(void)
 
 /* ---- attach mode: share a host another stack (e.g. Matter) owns ---------- */
 
+// Prepares the BLE transport and returns the Aliro GATT service definition for external registration, without starting the transport.
+// Returns NULL if aliro_ble_prepare fails; on success returns the pointer from aliro_ble_service_def(), owned by the BLE layer.
 const void *aliro_reader_ble_prepare(void)
 {
 	struct aliro_ble_config cfg = make_ble_cfg();
@@ -803,6 +836,9 @@ const void *aliro_reader_ble_prepare(void)
 	return aliro_ble_service_def();
 }
 
+// Starts the Aliro reader in "attached" transport mode: initializes the engine, applies provisioned resolvable advertising parameters if a real GRK is present, then starts the attached BLE transport.
+// Unlike aliro_reader_start, this applies GRK-based advertising params (group/subgroup ID from reader_id, GRK) before starting, when the reader has already been provisioned; falls back to unresolvable advertising if no GRK is set yet.
+// Returns 0 on success; returns -1 if engine initialization fails, or the underlying aliro_ble_start_attached result otherwise.
 int aliro_reader_start_attached(void)
 {
 	if (reader_engine_init() != 0) {
@@ -834,6 +870,8 @@ int aliro_reader_start_attached(void)
 	return rc;
 }
 
+// Refreshes the BLE advertisement to include the resolvable service data once a real GroupResolvingKey (GRK) is available.
+// Handles the case where Matter provisioning (SetAliroReaderConfig) lands after advertising has already started with only the bare 0xFFF2 UUID (dev default, all-zero GRK), which the phone cannot resolve. No-ops if the GRK in s_id is still all-zero. On a nonzero GRK, derives the two-byte subgroup ID from reader_id[16..17] and calls aliro_ble_set_adv_params + aliro_ble_readvertise to make the reader approach-resolvable.
 void aliro_reader_refresh_adv(void)
 {
 	/* Matter provisioning (SetAliroReaderConfig) can land after the reader has
@@ -861,6 +899,10 @@ void aliro_reader_refresh_adv(void)
 
 /* ---- bench provisioning helpers (aliro-prov / aliro-trust) ------------- */
 
+// Print the reader's provisioning state (identity, trust anchors, last presented credential)
+// to the console for diagnostics.
+// Loads provisioning first, then snapshots the shared state under s_prov_lock before printing
+// so UART I/O does not hold the lock during the BLE task's trust check.
 void aliro_reader_prov_print(void)
 {
 	load_provisioning();
@@ -901,6 +943,10 @@ void aliro_reader_prov_print(void)
 	}
 }
 
+// Add the most recently presented credential's public key to the trust store and persist it.
+// Returns 1 if no credential has been presented yet or it is already trusted (nothing
+// persisted), -1 if the store is full or the NVS write fails (in-memory trust store left
+// unchanged on failure), 0 if newly added and committed.
 int aliro_reader_trust_last(void)
 {
 	load_provisioning();
@@ -943,6 +989,11 @@ int aliro_reader_trust_last(void)
  * s_id/s_trust the reader loads, and persist through aliro_prov, so a snapshot-
  * then-store keeps NVS and the in-memory copy consistent under s_prov_lock. */
 
+// Store a Matter-provisioned reader identity (reader ID, signing private key, GRK), keeping
+// any trust anchors already present, and persist it to NVS.
+// Returns -1 if the NVS write fails, in which case in-memory identity (s_id) is unchanged;
+// returns 0 on success, after which the reader group key salt is recomputed via
+// compute_reader_group_x since the signing key changed.
 int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN],
 				    const uint8_t sign_priv[ALIRO_READER_PRIV_LEN],
 				    const uint8_t grk[ALIRO_GRK_LEN])
@@ -972,6 +1023,10 @@ int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN]
 	return 0;
 }
 
+// Add a Matter-provisioned credential public key to the reader's trust store and persist it.
+// Returns 0 if newly added and stored, 1 if the credential was already trusted (nothing
+// persisted), -1 if the store is full, cred_pub is not a valid P-256 point, or the NVS write
+// fails. On failure the in-memory trust store (s_trust) is left unchanged.
 int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 {
 	load_provisioning();
@@ -1002,6 +1057,10 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
 	return 0;
 }
 
+// Revert the reader's provisioning to the default dev identity and empty trust store, and
+// persist that state to NVS.
+// Returns -1 if the NVS write fails, in which case in-memory state is unchanged; returns 0 on
+// success, after which the reader group key salt is recomputed via compute_reader_group_x.
 int aliro_reader_provision_clear(void)
 {
 	load_provisioning();

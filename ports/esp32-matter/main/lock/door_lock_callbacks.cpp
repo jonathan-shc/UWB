@@ -1,3 +1,6 @@
+// Matter DoorLock cluster plugin callbacks: wires the ESP32 port's BoltLockManager into the
+// Matter DoorLock cluster's lock/unlock commands, user and credential storage, schedule
+// storage, cluster init, and auto-relock notification hooks.
 /*
    This example code is in the Public Domain (or CC0 licensed, at your option.)
 
@@ -15,11 +18,16 @@
 
 static const char *TAG = "doorlock_callback";
 
+// Log that the door lock example has initialized. Performs no other setup.
 void door_lock_init()
 {
 	ESP_LOGI(TAG, "doorlock example init");
 }
 
+// Matter DoorLock cluster init callback: initializes the cluster server for the
+// endpoint, forces its LockState attribute to Locked, and syncs the bolt
+// manager's lock state from BoltLockMgr().InitLockState(), logging an error if
+// that sync fails.
 void emberAfDoorLockClusterInitCallback(EndpointId endpoint)
 {
 	DoorLockServer::Instance().InitServer(endpoint);
@@ -30,6 +38,11 @@ void emberAfDoorLockClusterInitCallback(EndpointId endpoint)
 	}
 }
 
+// Matter DoorLock plugin hook for a remote Lock command.
+// Validates the supplied PIN via BoltLockMgr().ValidatePIN, writing any failure
+// reason to err. On success, locks the bolt with OperationSourceEnum::kRemote.
+// Returns the validation result; on false, err holds the failure reason and the
+// lock is left untouched.
 bool emberAfPluginDoorLockOnDoorLockCommand(chip::EndpointId endpointId,
 					    const Nullable<chip::FabricIndex> &fabricIdx,
 					    const Nullable<chip::NodeId> &nodeId,
@@ -45,6 +58,11 @@ bool emberAfPluginDoorLockOnDoorLockCommand(chip::EndpointId endpointId,
 	return status;
 }
 
+// Matter DoorLock plugin hook for a remote Unlock command.
+// Validates the supplied PIN via BoltLockMgr().ValidatePIN, writing any failure
+// reason to err. On success, unlocks the bolt with
+// OperationSourceEnum::kRemote. Returns the validation result; on false, err
+// holds the failure reason and the lock is left untouched.
 bool emberAfPluginDoorLockOnDoorUnlockCommand(chip::EndpointId endpointId,
 					      const Nullable<chip::FabricIndex> &fabricIdx,
 					      const Nullable<chip::NodeId> &nodeId,
@@ -60,6 +78,8 @@ bool emberAfPluginDoorLockOnDoorUnlockCommand(chip::EndpointId endpointId,
 	return status;
 }
 
+// Matter DoorLock plugin hook: fetch a stored credential by index and type for
+// an endpoint. Delegates to BoltLockMgr().GetCredential; returns true if found.
 bool emberAfPluginDoorLockGetCredential(chip::EndpointId endpointId, uint16_t credentialIndex,
 					CredentialTypeEnum credentialType,
 					EmberAfPluginDoorLockCredentialInfo &credential)
@@ -67,6 +87,14 @@ bool emberAfPluginDoorLockGetCredential(chip::EndpointId endpointId, uint16_t cr
 	return BoltLockMgr().GetCredential(endpointId, credentialIndex, credentialType, credential);
 }
 
+// Matter DoorLock plugin hook: store a credential for an endpoint via
+// BoltLockMgr().SetCredential.
+// When CONFIG_ENABLE_ALIRO_BLE_UWB is enabled and the write succeeds with an
+// Occupied status, a 65-byte Aliro endpoint key (evictable or non-evictable),
+// the raw key is additionally mirrored into the Aliro reader's trust store via
+// aliro_reader_provision_add_trust, so the reader accepts ranging auth from the
+// Wallet credential Apple just installed. Returns the underlying
+// SetCredential result regardless of whether the mirror step ran.
 bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t credentialIndex,
 					chip::FabricIndex creator, chip::FabricIndex modifier,
 					DlCredentialStatus credentialStatus,
@@ -91,12 +119,17 @@ bool emberAfPluginDoorLockSetCredential(chip::EndpointId endpointId, uint16_t cr
 	return ok;
 }
 
+// Matter DoorLock plugin hook: fetch a stored user by index for an endpoint.
+// Delegates to BoltLockMgr().GetUser; returns true if found.
 bool emberAfPluginDoorLockGetUser(chip::EndpointId endpointId, uint16_t userIndex,
 				  EmberAfPluginDoorLockUserInfo &user)
 {
 	return BoltLockMgr().GetUser(endpointId, userIndex, user);
 }
 
+// Matter DoorLock plugin hook: store a user record for an endpoint, including
+// name, unique ID, status, type, credential rule, and its list of credentials.
+// Delegates to BoltLockMgr().SetUser.
 bool emberAfPluginDoorLockSetUser(chip::EndpointId endpointId, uint16_t userIndex,
 				  chip::FabricIndex creator, chip::FabricIndex modifier,
 				  const chip::CharSpan &userName, uint32_t uniqueId,
@@ -124,6 +157,8 @@ DlStatus emberAfPluginDoorLockGetSchedule(chip::EndpointId endpointId, uint8_t y
 	return BoltLockMgr().GetYeardaySchedule(endpointId, yearDayIndex, userIndex, schedule);
 }
 
+// Matter DoorLock plugin hook: fetch a holiday schedule entry by index for an
+// endpoint. Delegates to BoltLockMgr().GetHolidaySchedule.
 DlStatus emberAfPluginDoorLockGetSchedule(chip::EndpointId endpointId, uint8_t holidayIndex,
 					  EmberAfPluginDoorLockHolidaySchedule &holidaySchedule)
 {
@@ -148,6 +183,8 @@ DlStatus emberAfPluginDoorLockSetSchedule(chip::EndpointId endpointId, uint8_t y
 						localStartTime, localEndTime);
 }
 
+// Matter DoorLock plugin hook: store a holiday schedule entry for an endpoint.
+// Delegates to BoltLockMgr().SetHolidaySchedule.
 DlStatus emberAfPluginDoorLockSetSchedule(chip::EndpointId endpointId, uint8_t holidayIndex,
 					  DlScheduleStatus status, uint32_t localStartTime,
 					  uint32_t localEndTime, OperatingModeEnum operatingMode)
@@ -156,6 +193,8 @@ DlStatus emberAfPluginDoorLockSetSchedule(chip::EndpointId endpointId, uint8_t h
 						localEndTime, operatingMode);
 }
 
+// Matter DoorLock plugin hook invoked on auto-relock; logs the event only, no
+// lock-state change is performed here.
 void emberAfPluginDoorLockOnAutoRelock(chip::EndpointId endpointId)
 {
 	ESP_LOGI(TAG, "Door auto relock");

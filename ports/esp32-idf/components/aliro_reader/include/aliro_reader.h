@@ -2,14 +2,15 @@
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
  *
- * aliro_reader — Aliro reader session/transaction layer (Phase 2.3+). Owns the
- * per-connection Aliro transaction on top of the aliro_ble transport: session
- * lifecycle, inbound message dispatch, diagnostics, and the hook that hands a
- * derived credential (URSK + ranging params) to the UWB engine.
+ * aliro_reader — Aliro reader session/transaction layer. Owns the per-connection
+ * Aliro transaction on top of the aliro_ble transport: session lifecycle, the
+ * credential-auth exchange (AUTH0/AUTH1/EXCHANGE), the reader identity and
+ * credential trust gate, the M1-M4 ranging setup, and the handoff of the derived
+ * URSK plus negotiated ranging parameters to the UWB engine.
  *
- * The M1-M4 cryptographic handshake and URSK derivation are Phase 3 and are
- * NOT implemented here; this layer observes/logs the transaction and marks the
- * exact seam where the crypto lands. See components/aliro_ble/SPEC.md.
+ * Crypto lives in the aliro_crypto component; the wire codec in aliro_apdu.c and
+ * the ranging setup in aliro_ranging.c. See README.md for the flow and
+ * components/aliro_ble/SPEC.md for the transport contract.
  */
 #pragma once
 

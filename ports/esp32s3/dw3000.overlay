@@ -9,7 +9,7 @@
  *   SCLK GPIO12   MOSI GPIO11   MISO GPIO13   CS GPIO10
  *   RSTn GPIO4    IRQ  GPIO5    WAKEUP GPIO6
  *
- * See ports/esp32s3/README.md and docs/porting.md.
+ * Superseded by ports/esp32-idf; kept as a pin reference. See ports/README.md.
  */
 #include <zephyr/dt-bindings/pinctrl/esp32s3-pinctrl.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>

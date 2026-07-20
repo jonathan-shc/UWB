@@ -1,12 +1,13 @@
-# ESP32-S3 Aliro Port — Gotchas & Observations
+# ESP32-S3 Aliro port — gotchas and observations
 
-Hard-won, non-obvious findings from porting the reverse-engineered Aliro (Apple Home
-Key) UWB door-lock reader to ESP32-S3 (ESP-IDF v5.5 + esp-matter + NimBLE + DWM3000).
-Each entry is a trap we actually hit, why it bites, and how to avoid or apply it.
+Hard-won, non-obvious findings from porting the Aliro UWB door-lock reader to ESP32-S3
+(ESP-IDF + esp-matter + NimBLE + DWM3000EVB). Each entry is a trap actually hit on the
+bench: what it looks like, why it bites, and how to avoid or apply it.
 
-Branch: `worktree-esp32`. Ports live under `ports/esp32-idf` (reader/crypto components)
-and `ports/esp32-matter` (the Matter door-lock app that hosts the reader). The ranging
-engine is the ported Qorvo stack at `modules/woz_uwb/src/aliro`.
+Ports live under [`ports/esp32-idf`](../esp32-idf) (reader / crypto / BLE components and
+the standalone bring-up app) and [`ports/esp32-matter`](../esp32-matter) (the Matter
+door-lock app that hosts the reader). The ranging engine is `modules/woz_uwb`, shared
+byte-for-byte with the nRF5340 build.
 
 > Verification convention below: **VERIFIED** = confirmed on silicon or byte-exact
 > against the reference binary/KAT; **BENCH-GATED** = built + host-tested but not yet
@@ -31,10 +32,11 @@ found" even though the board is plugged in.
 
 ### 1.2 Never flash the SEGGER/J-Link (nRF) port
 **VERIFIED.** With both an nRF5340DK and the ESP32-S3 attached, port auto-detection can
-see the J-Link (Segger, USB vendor 4966). Flashing esptool to it is wrong and can
-disrupt the nRF. The Makefile guards against vendor 4966; the ESP32-S3's CH-family USB
-bridge is vendor `0x6790` (`/dev/cu.usbmodem…`) and is the safe target. Keep the guard;
-don't bypass it.
+see the J-Link (SEGGER, USB vendor `0x1366`). Flashing esptool to it is wrong and can
+disrupt the nRF. The Makefile refuses that vendor and only auto-selects the ESP devkit's
+bridges — WCH CH343/CH9102 (`0x1A86`) or Espressif native USB (`0x303A`), both
+`/dev/cu.usbmodem…`. `ioreg` reports vendor ids in decimal, which is why the Makefile
+compares against `4966` / `6790` / `12346`. Keep the guard; don't bypass it.
 
 ### 1.3 `make flash` port-holder guard
 `make flash` refuses if another process holds the port (a stuck `monitor`), with a clear
@@ -246,8 +248,8 @@ it — both reference and port ignore it. It is not a step we skip; don't chase 
 
 ### 5.10 THE Wallet animation gate: send Reader-Status-Changed on grant (step 23)
 **VERIFIED byte-exact (disassembly + live iPhone).** Driving the bolt is not enough: iOS
-plays the HomeKey Wallet unlock animation only when the reader tells the phone it granted
-access over the BleSK channel — the "Reader Status Changed" message, Aliro transaction
+plays the Wallet unlock animation only when the reader tells the phone it granted access
+over the BleSK channel — the "Reader Status Changed" message, Aliro transaction
 step 23 (the grant-phase sibling of 5.3's AP-Completed). Without it the port unlocked the
 bolt locally, Matter saw the state change and posted a Matter *accessory* notification, but
 the Wallet never animated. The phone's own computed distance is **not** the gate.
@@ -374,7 +376,7 @@ snapshot (6.4) and STS-key cache (6.7) are both guarded, verified by the host su
 
 ## 7. Reader state-machine & diagnostics
 
-### 6.1 The GeneralError short-circuit must not fire during ranging
+### 7.1 The GeneralError short-circuit must not fire during ranging
 **VERIFIED.** The reader had a blanket rule: a proto-2 / id-0 Notification-Event mid-auth
 is a device GeneralError, so read `payload[2]` as the code. During `PH_ESTABLISHED` those
 events are **BleSK-encrypted**, so `payload[2]` is a ciphertext byte — the reader was
@@ -383,7 +385,7 @@ the session before decrypting the real event. Guard the short-circuit to
 pre-ranging phases; in `PH_ESTABLISHED` always BleSK-open + dump + feed the engine. This
 is what finally surfaced the real `general error 3`. (`aliro_reader.c` ~line 583)
 
-### 6.2 Read the *decrypted* error, and log it
+### 7.2 Read the *decrypted* error, and log it
 General-error codes: `0 UNKNOWN, 1 RESOURCE_UNAVAILABLE, 2 WRONG_PARAMS, 3
 URSK_UNAVAILABLE`. `WRONG_PARAMS (2)` points at M1 attribute values; `URSK_UNAVAILABLE
 (3)` points at the session-id / URSK-install path (§5). The codes are only meaningful
@@ -393,21 +395,21 @@ once the SDU is opened.
 
 ## 8. Provisioning & identity
 
-### 7.1 A per-boot random reader key changes the reader's identity every reboot
+### 8.1 A per-boot random reader key changes the reader's identity every reboot
 **VERIFIED.** The reader originally generated a random dev P-256 key at boot, so its
 reader-id (and therefore the salt's reader_group_key) changed each power cycle — the
 phone's stored credential no longer matched. Fixed by a **fixed, non-secret dev
 identity** loaded from NVS (`aliro_prov` namespace, key `blob`): reader-id = signing
 pub.X. (commit `ca937e2`)
 
-### 7.2 DEV identity is dev-open + loud, not a bypass
+### 8.2 DEV identity is dev-open + loud, not a bypass
 With a DEV identity and no trust anchors, the reader accepts the presented credential
 **and logs a warning**; it is an interim seam for real issuer-chain validation, not a
 silent allow. Bench commands: `aliro-prov` (show id / trust / last cred), `aliro-trust`
 (persist the last-presented credential key). Phase-4 Matter `SetAliroReaderConfig` writes
 the same blob.
 
-### 7.3 Zephyr-reserved NVS id wiped external NVS (cross-port cousin)
+### 8.3 Zephyr-reserved NVS id wiped external NVS (cross-port cousin)
 On the nRF side, a rollback unique-id mirror at Zephyr-reserved NVS id `0xFFFF` wiped
 external NVS every boot (fixed `0xFFFF → 0xFFFE`). If ESP32 external-NVS credentials ever
 vanish across reboot, suspect an id collision with a reserved slot.
@@ -437,7 +439,7 @@ vanish across reboot, suspect an id collision with a reserved slot.
 
 ## 10. Current status — approach-unlock works end to end
 
-- **VERIFIED on a live iPhone (2026-07-20):** the full HomeKey Wallet approach-unlock — the
+- **VERIFIED on a live iPhone (2026-07-20):** the full Aliro approach-unlock — the Wallet
   unlock animation plays as you walk up, then relocks on departure. The final gate was the
   reader→phone Reader-Status-Changed grant message (5.10); before it the bolt moved and
   Matter reported it, but the Wallet stayed silent.
@@ -452,9 +454,18 @@ vanish across reboot, suspect an id collision with a reserved slot.
   medians/filters it enough to unlock cleanly); auto-relock time (6.8); the phone's
   `general error 0` at end-of-session is post-unlock and benign.
 
-### Commit map (worktree-esp32, newest first)
+### Commit map (newest first)
 | Commit | What |
 |---|---|
+| `cf0c73d` | document the Reader-Status-Changed grant (message 23) gotcha |
+| `ba612c8` | tell the phone the grant so the Wallet unlock animation plays (§5.10) |
+| `7b892b6` | land the DS-TWR RESPONSE on the phone's negotiated slot |
+| `6ba874b` | capture DS-TWR ranging bring-up gotchas (unlock working) |
+| `677cfd1` | throttle hot-path ranging logs so DS-TWR closes and unlocks (§6.5, §6.6) |
+| `d9051c8` | DMA-disable SPI, fence ESP-only ranging tweaks from nRF (§6.2, §6.4, §6.7, §6.9) |
+| `1ef8946` | real-time DS-TWR responder — POLL→Response→Final→distance on silicon |
+| `a517d71` | DW3000 radio bring-up (boot probe + wakeup-settle) + tooling (§2.2) |
+| `84c2875` | Aliro ranging session-id + BleSK channel — M1-M4 green on silicon (§5.1, §5.5) |
 | `f628beb` | ranging-setup diagnostic (hold M1, decrypt post-EXCHANGE SDUs) |
 | `5f91235` | AUTH1 secure-channel decrypt — credential-auth green on silicon |
 | `cef8255` | correct AUTH0 phase encoding — full ECDH auth accepted |
@@ -474,5 +485,6 @@ vanish across reboot, suspect an id collision with a reserved slot.
 | `19b6239` | Phase 3.5 M1–M4 ranging-setup wiring (negotiated params) |
 | `ca937e2` | Phase 3.4 reader provisioning seam (identity + credential trust) |
 
-Earlier Phase-3.1/3.2/3.3 crypto & auth work (key schedule, wire codec, URSK handoff)
-landed before this range and now sits on `main`; its gotchas are captured in §4.
+Earlier Phase-3.1/3.2/3.3 crypto and auth work (key schedule, wire codec, URSK handoff)
+landed before this range; its gotchas are captured in §4. Everything above is merged to
+`main`.
