@@ -10,14 +10,24 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** A single type/length/value attribute overlaid on the message bytes. */
+/**
+ * @brief A single type/length/value attribute overlaid on message bytes.
+ * @param id Attribute identifier.
+ * @param length Length of value in bytes.
+ * @param value Variable-length attribute value.
+ */
 struct aliro_uwb_msg_attribute {
 	uint8_t id;
 	uint8_t length;
 	uint8_t value[];
 };
 
-/** Cursor walking the attributes of one message payload. */
+/**
+ * @brief Cursor walking the attributes of one message payload.
+ * @param length Total length of the message in bytes.
+ * @param offset Current parse offset in bytes.
+ * @param data Message bytes being walked.
+ */
 struct aliro_uwb_msg_parser {
 	size_t length;
 	size_t offset;

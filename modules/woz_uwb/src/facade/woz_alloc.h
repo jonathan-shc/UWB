@@ -13,26 +13,40 @@
 
 #include "woz_port.h"
 
-// Allocate size bytes; wrapper around woz_malloc.
+/**
+ * @brief Allocate size bytes.
+ * @param size Number of bytes to allocate.
+ * @return Pointer to allocated memory, or NULL on failure.
+ */
 static inline void *qmalloc(size_t size)
 {
 	return woz_malloc(size);
 }
 
-// Allocate and zero-initialize nb_items elements of item_size bytes each; wrapper around
-// woz_calloc.
+/**
+ * @brief Allocate and zero-initialize nb_items elements of item_size bytes each.
+ * @param nb_items Number of items.
+ * @param item_size Bytes per item.
+ * @return Pointer to allocated and zeroed memory, or NULL on failure.
+ */
 static inline void *qcalloc(size_t nb_items, size_t item_size)
 {
 	return woz_calloc(nb_items, item_size);
 }
 
-// Deallocate memory previously allocated by qmalloc or qcalloc; wrapper around woz_free.
+/**
+ * @brief Deallocate memory previously allocated by qmalloc or qcalloc.
+ * @param ptr Pointer to memory to free (may be NULL).
+ */
 static inline void qfree(void *ptr)
 {
 	woz_free(ptr);
 }
 
-/** Monotonic microseconds since boot. */
+/**
+ * @brief Monotonic microseconds since boot.
+ * @return Microseconds elapsed since system start.
+ */
 static inline int64_t qrtc_get_us(void)
 {
 	return woz_uptime_us();

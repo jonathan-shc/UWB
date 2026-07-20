@@ -8,11 +8,17 @@
 ## API
 
 ### `struct aliro_uwb_msg_attribute`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:14`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:19`
 
-A single type/length/value attribute overlaid on the message bytes.
+@brief A single type/length/value attribute overlaid on message bytes.
+@param id Attribute identifier.
+@param length Length of value in bytes.
+@param value Variable-length attribute value.
 
 ### `struct aliro_uwb_msg_parser`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:21`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:31`
 
-Cursor walking the attributes of one message payload.
+@brief Cursor walking the attributes of one message payload.
+@param length Total length of the message in bytes.
+@param offset Current parse offset in bytes.
+@param data Message bytes being walked.

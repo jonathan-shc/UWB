@@ -9,6 +9,7 @@ ccc_ran_params.
 ## API
 
 ### `struct ccc_ran_session`
-`modules/woz_uwb/src/ccc/ccc_session.h:16`
+`modules/woz_uwb/src/ccc/ccc_session.h:18`
 
-An Aliro ranging session: the URSK + the M1-M4 setup parameters; the interface to the CCC MAC.
+@brief An Aliro ranging session: the URSK + the M1-M4 setup parameters; the interface to the CCC
+MAC.

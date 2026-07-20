@@ -154,18 +154,37 @@ static inline void woz_mutex_unlock(woz_mutex_t *m)
 #include <stdlib.h>
 #include <time.h>
 
+/**
+ * @brief Allocate size bytes.
+ * @param size Number of bytes to allocate.
+ * @return Pointer to allocated memory, or NULL on failure.
+ */
 static inline void *woz_malloc(size_t size)
 {
 	return malloc(size);
 }
+/**
+ * @brief Allocate and zero-initialize n elements of size bytes each.
+ * @param n Number of elements.
+ * @param size Bytes per element.
+ * @return Pointer to allocated and zeroed memory, or NULL on failure.
+ */
 static inline void *woz_calloc(size_t n, size_t size)
 {
 	return calloc(n, size);
 }
+/**
+ * @brief Deallocate memory.
+ * @param ptr Pointer to memory to free (may be NULL).
+ */
 static inline void woz_free(void *ptr)
 {
 	free(ptr);
 }
+/**
+ * @brief Monotonic microseconds since boot.
+ * @return Microseconds elapsed since system start.
+ */
 static inline int64_t woz_uptime_us(void)
 {
 	struct timespec ts;
@@ -173,31 +192,62 @@ static inline int64_t woz_uptime_us(void)
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
+/**
+ * @brief Monotonic milliseconds since boot.
+ * @return Milliseconds elapsed since system start.
+ */
 static inline int64_t woz_uptime_ms(void)
 {
 	return woz_uptime_us() / 1000;
 }
+/**
+ * @brief Sleep for a given number of milliseconds (host-test stub).
+ * @param ms milliseconds to sleep; ignored in deterministic host tests.
+ */
 static inline void woz_sleep_ms(int32_t ms)
 {
 	(void)ms; /* host tests are deterministic; nothing to wait for */
 }
+/**
+ * @brief Sleep for a given number of microseconds (host-test stub).
+ * @param us microseconds to sleep; ignored in deterministic host tests.
+ */
 static inline void woz_sleep_us(int64_t us)
 {
 	(void)us;
 }
+/**
+ * @brief Retrieve a 32-bit cycle counter with microsecond resolution.
+ * @return current uptime in microseconds, cast to uint32_t.
+ */
 static inline uint32_t woz_cycle_get_32(void)
 {
 	return (uint32_t)woz_uptime_us(); /* us resolution is plenty for the probe */
 }
-typedef int woz_mutex_t; /* host tests are single-threaded */
+/**
+ * @brief Opaque mutex type for host tests (single-threaded, no-op).
+ */
+typedef int woz_mutex_t;
+/**
+ * @brief Initialize a mutex (host-test stub).
+ * @param m pointer to mutex to initialize; no-op in single-threaded tests.
+ */
 static inline void woz_mutex_init(woz_mutex_t *m)
 {
 	(void)m;
 }
+/**
+ * @brief Acquire a mutex (host-test stub).
+ * @param m pointer to mutex to lock; no-op in single-threaded tests.
+ */
 static inline void woz_mutex_lock(woz_mutex_t *m)
 {
 	(void)m;
 }
+/**
+ * @brief Release a mutex (host-test stub).
+ * @param m pointer to mutex to unlock; no-op in single-threaded tests.
+ */
 static inline void woz_mutex_unlock(woz_mutex_t *m)
 {
 	(void)m;

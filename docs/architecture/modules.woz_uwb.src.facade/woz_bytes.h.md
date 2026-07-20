@@ -8,41 +8,57 @@
 ## API
 
 ### `static inline uint16_t sys_get_le16(const uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:28`
+`modules/woz_uwb/src/facade/woz_bytes.h:32`
 
-Read a 16-bit little-endian value from a byte buffer.
+@brief Read a 16-bit little-endian value from a byte buffer.
+@param p Pointer to the byte buffer.
+@return The 16-bit value in native byte order.
 
 ### `static inline uint32_t sys_get_le32(const uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:34`
+`modules/woz_uwb/src/facade/woz_bytes.h:42`
 
-Read a 32-bit little-endian value from a byte buffer.
+@brief Read a 32-bit little-endian value from a byte buffer.
+@param p Pointer to the byte buffer.
+@return The 32-bit value in native byte order.
 
 ### `static inline uint16_t sys_get_be16(const uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:41`
+`modules/woz_uwb/src/facade/woz_bytes.h:53`
 
-Read a 16-bit big-endian value from a byte buffer.
+@brief Read a 16-bit big-endian value from a byte buffer.
+@param p Pointer to the byte buffer.
+@return The 16-bit value in native byte order.
 
 ### `static inline uint32_t sys_get_be32(const uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:47`
+`modules/woz_uwb/src/facade/woz_bytes.h:63`
 
-Read a 32-bit big-endian value from a byte buffer.
+@brief Read a 32-bit big-endian value from a byte buffer.
+@param p Pointer to the byte buffer.
+@return The 32-bit value in native byte order.
 
 ### `static inline void sys_put_le16(uint16_t v, uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:54`
+`modules/woz_uwb/src/facade/woz_bytes.h:74`
 
-Write a 16-bit value to a byte buffer in little-endian order.
+@brief Write a 16-bit value to a byte buffer in little-endian order.
+@param v The value to write.
+@param p Pointer to the byte buffer.
 
 ### `static inline void sys_put_le32(uint32_t v, uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:61`
+`modules/woz_uwb/src/facade/woz_bytes.h:85`
 
-Write a 32-bit value to a byte buffer in little-endian order.
+@brief Write a 32-bit value to a byte buffer in little-endian order.
+@param v The value to write.
+@param p Pointer to the byte buffer.
 
 ### `static inline void sys_put_be16(uint16_t v, uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:70`
+`modules/woz_uwb/src/facade/woz_bytes.h:98`
 
-Write a 16-bit value to a byte buffer in big-endian order.
+@brief Write a 16-bit value to a byte buffer in big-endian order.
+@param v The value to write.
+@param p Pointer to the byte buffer.
 
 ### `static inline void sys_put_be32(uint32_t v, uint8_t *p)`
-`modules/woz_uwb/src/facade/woz_bytes.h:77`
+`modules/woz_uwb/src/facade/woz_bytes.h:109`
 
-Write a 32-bit value to a byte buffer in big-endian order.
+@brief Write a 32-bit value to a byte buffer in big-endian order.
+@param v The value to write.
+@param p Pointer to the byte buffer.

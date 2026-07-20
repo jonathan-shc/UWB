@@ -8,11 +8,13 @@
 ## API
 
 ### `static void uwb_selftest_work(struct k_work *work)`
-`modules/woz_uwb/src/driver/uwb_selftest.c:24`
+`modules/woz_uwb/src/driver/uwb_selftest.c:27`
 
-One-shot worker: run the Aliro UWB start path and log the outcome.
+@brief One-shot worker: run the Aliro UWB start path and log the outcome.
+@param work Kernel work item (unused).
 
 ### `static int uwb_selftest_init(void)`
-`modules/woz_uwb/src/driver/uwb_selftest.c:53`
+`modules/woz_uwb/src/driver/uwb_selftest.c:59`
 
-Arm the one-shot self-test at application init.
+@brief Arm the one-shot self-test at application init.
+@return 0 on success.

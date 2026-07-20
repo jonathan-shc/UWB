@@ -48,7 +48,9 @@ struct aliro_uwb_preferred_hopping_configs {
 	size_t count;
 };
 
-/** Reader-side selection preferences (borrowed for the adapter's lifetime). */
+/**
+ * @brief Reader-side selection preferences (borrowed for the adapter's lifetime).
+ */
 struct aliro_uwb_adapter_reader_config {
 	/** Lower bound on the selected RAN multiplier (T_Block = N x 96 ms). */
 	uint8_t min_ran_multiplier;

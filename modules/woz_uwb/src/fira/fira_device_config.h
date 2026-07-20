@@ -48,7 +48,9 @@ struct fira_device_configure_s {
 	uint8_t Static_STS_IV[6]; /**< Static-STS vUpper64 IV (low bytes). */
 };
 
-// Typedef alias for struct fira_device_configure_s; holds FiRa device configuration parameters.
+/**
+ * @brief FiRa device configuration parameters.
+ */
 typedef struct fira_device_configure_s fira_device_configure_t;
 
 #endif /* WOZ_UWB_FIRA_DEVICE_CONFIG_H_ */

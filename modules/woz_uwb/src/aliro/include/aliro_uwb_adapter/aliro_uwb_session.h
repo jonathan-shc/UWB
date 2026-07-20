@@ -16,7 +16,11 @@ extern "C" {
 /** Opaque per-session context. */
 struct aliro_uwb_session;
 
-/** Framed Aliro BLE message (header + TLV payload). */
+/**
+ * @brief Framed Aliro BLE message with 4-byte header followed by TLV payload.
+ * @param len Number of valid bytes in @p data.
+ * @param data Message bytes (4-byte header followed by TLV attributes).
+ */
 struct aliro_uwb_message {
 	/** Number of valid bytes in @p data. */
 	size_t len;
@@ -36,7 +40,15 @@ enum aliro_uwb_session_event_type {
 		CHERRY_CCC_EVENT_TYPE_SESSION_DIAGNOSTIC_REPORT,
 };
 
-/** Session event handed to the client. */
+/**
+ * @brief Session event handed to the client, carrying status, error, or distance reports.
+ * @param session Opaque per-session context.
+ * @param type Event type (status, error, controller report, controlee report, or diagnostics).
+ * @param cherry_event Underlying Cherry event object.
+ * @param data Union holding the event payload: session status, error code and diagnostic context,
+ * controller distance and timestamp estimate, controlee distance and timestamp estimate, or
+ * diagnostic report snapshot.
+ */
 struct aliro_uwb_session_event {
 	/**
 	 * @brief Opaque per-session context.

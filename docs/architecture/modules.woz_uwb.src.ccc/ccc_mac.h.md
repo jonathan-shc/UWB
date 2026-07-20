@@ -8,36 +8,36 @@
 ## API
 
 ### `struct ccc_mhr_fields`
-`modules/woz_uwb/src/ccc/ccc_mac.h:33`
+`modules/woz_uwb/src/ccc/ccc_mac.h:35`
 
-The per-frame-variable fields of an SP0 MHR (fixed fields are built in by ccc_build_mhr).
+@brief The per-frame-variable fields of an SP0 MHR (fixed fields are built in by ccc_build_mhr).
 
 ### `struct ccc_pre_poll`
-`modules/woz_uwb/src/ccc/ccc_mac.h:48`
+`modules/woz_uwb/src/ccc/ccc_mac.h:52`
 
-Pre-POLL request message parameters.
+@brief Pre-POLL request message parameters.
 
 ### `struct ccc_responder_ts`
-`modules/woz_uwb/src/ccc/ccc_mac.h:63`
+`modules/woz_uwb/src/ccc/ccc_mac.h:69`
 
-One responder's timestamp record in a Final_Data message.
+@brief One responder's timestamp record in a Final_Data message.
 
 ### `struct ccc_final_data`
-`modules/woz_uwb/src/ccc/ccc_mac.h:71`
+`modules/woz_uwb/src/ccc/ccc_mac.h:79`
 
-Final_Data message parameters.
+@brief Final_Data message parameters.
 
 ### `struct ccc_ran_params`
-`modules/woz_uwb/src/ccc/ccc_mac.h:106`
-
-Per-session ranging schedule parameters (negotiated in setup).
-
-### `struct ccc_hop_decision`
 `modules/woz_uwb/src/ccc/ccc_mac.h:116`
 
-The initiator's next-block hop decision, carried in Final_Data.
+@brief Per-session ranging schedule parameters (negotiated in setup).
+
+### `struct ccc_hop_decision`
+`modules/woz_uwb/src/ccc/ccc_mac.h:128`
+
+@brief The initiator's next-block hop decision, carried in Final_Data.
 
 ### `struct ccc_ds_twr`
-`modules/woz_uwb/src/ccc/ccc_mac.h:134`
+`modules/woz_uwb/src/ccc/ccc_mac.h:148`
 
-The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32).
+@brief The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32).

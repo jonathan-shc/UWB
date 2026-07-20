@@ -24,44 +24,44 @@ change.
 @brief Payload of a SESSION_ERROR event, giving the error status that triggered it.
 
 ### `struct cherry_ccc_event`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:108`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:110`
 
-CCC notification delivered to the adapter.
+@brief CCC notification delivered to the adapter.
 
 ### `struct cherry_ccc_aliro_session_config`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:155`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:159`
 
-Negotiated Aliro ranging params (filled in-place across M1-M4).
+@brief Negotiated Aliro ranging params (filled in-place across M1-M4).
 
 ### `static inline void *cherry_ccc_session_get_user_data(struct cherry_ccc_session *session)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:188`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:192`
 
 @brief Fetch the CCC session's user_data via its base session.
 @param session CCC session to query.
 @return The user_data pointer associated with the session's base.
 
 ### `static inline void cherry_ccc_session_destroy(struct cherry_ccc_session *session)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:204`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:208`
 
 @brief Destroy a CCC session, delegating to the base session.
 @param session CCC session to destroy.
 
 ### `static inline enum cherry_err cherry_ccc_session_start(struct cherry_ccc_session *session)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:215`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:219`
 
 @brief Start a CCC session, delegating to the base session.
 @param session CCC session to start.
 @return Error code from cherry_session_start.
 
 ### `static inline enum cherry_err cherry_ccc_session_stop(struct cherry_ccc_session *session)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:226`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:230`
 
 @brief Stop a CCC session, delegating to the base session.
 @param session CCC session to stop.
 @return Error code from cherry_session_stop.
 
 ### `static inline enum cherry_err cherry_ccc_session_set_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:239`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:243`
 
 @brief Select round-1 antennas for a CCC session, delegating to the base session.
 @param session CCC session to configure.
@@ -70,6 +70,6 @@ Negotiated Aliro ranging params (filled in-place across M1-M4).
 @return Error code from cherry_session_set_antennas.
 
 ### `cherry_ccc_session_set_diagnostics`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:272`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:276`
 
 @brief Opaque CCC session being configured, defined by the shim.

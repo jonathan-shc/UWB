@@ -14,6 +14,7 @@
 adapter.
 
 ### `struct aliro_uwb_session`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:51`
+`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:54`
 
-Per-approach ranging-setup session.
+@brief Per-approach ranging-setup session record holding the CCC state machine and derived keys
+for one Aliro exchange.

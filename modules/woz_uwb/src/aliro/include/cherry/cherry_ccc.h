@@ -104,7 +104,9 @@ struct cherry_ccc_controller_session_report;
  */
 struct cherry_ccc_controlee_session_report;
 
-/** CCC notification delivered to the adapter. */
+/**
+ * @brief CCC notification delivered to the adapter.
+ */
 struct cherry_ccc_event {
 	enum cherry_ccc_event_type type;
 	/**
@@ -151,7 +153,9 @@ enum cherry_ccc_hopping_mode {
 	CHERRY_CCC_HOPPING_MODE_ADAPTATIVE_DEFAULT = 0xA3,
 };
 
-/** Negotiated Aliro ranging params (filled in-place across M1-M4). */
+/**
+ * @brief Negotiated Aliro ranging params (filled in-place across M1-M4).
+ */
 struct cherry_ccc_aliro_session_config {
 	uint32_t session_id;
 	uint16_t uwb_config_id;

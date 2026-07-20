@@ -47,7 +47,10 @@ enum aliro_uwb_session_state {
 	RESUME_REQ_SENT,
 };
 
-/** Per-approach ranging-setup session. */
+/**
+ * @brief Per-approach ranging-setup session record holding the CCC state machine and derived keys
+ * for one Aliro exchange.
+ */
 struct aliro_uwb_session {
 	/**
 	 * @brief Session-independent reader state shared by this per-approach session.

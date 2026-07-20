@@ -81,8 +81,11 @@ static void rxdiag_ev_log(const char *cls, const dwt_cb_data_t *d)
 /** @brief Decode-cost probe: last try_prepoll() duration, hi32 (~4 ns) units. */
 uint32_t g_ccc_dbg_decode;
 
-// RX-good callback shim: log RX diagnostics, invoke the armed CCC callback if set (SP3 POLL arm),
-// then decode the Pre-POLL frame off the critical path to warm the next block's STS.
+/**
+ * @brief RX-good callback shim: log RX diagnostics, invoke the armed CCC callback, then decode the
+ * Pre-POLL frame off the critical path.
+ * @param d DW3000 RX callback data (may be NULL on POLL event).
+ */
 static void shim_rxok(const dwt_cb_data_t *d)
 {
 	bool await = ccc_shim_rx_awaiting_poll();

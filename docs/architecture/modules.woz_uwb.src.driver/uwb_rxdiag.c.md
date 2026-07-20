@@ -22,78 +22,79 @@
 **called by** `shim_rxerr`, `shim_rxok`, `shim_rxto`
 
 ### `static void shim_rxok(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:86`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:89`
 
-RX-good callback shim: log RX diagnostics, invoke the armed CCC callback if set (SP3 POLL arm),
-then decode the Pre-POLL frame off the critical path to warm the next block's STS.
+@brief RX-good callback shim: log RX diagnostics, invoke the armed CCC callback, then decode the
+Pre-POLL frame off the critical path.
+@param d DW3000 RX callback data (may be NULL on POLL event).
 
 **calls** `cad_mark`, `rxdiag_ev_log`
 
 ### `static void shim_rxto(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:114`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:117`
 
 @brief RX-timeout shim: tally, then run the blob's handler.
 
 **calls** `rxdiag_ev_log`
 
 ### `static void shim_rxerr(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:124`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:127`
 
 @brief RX-error shim: tally + latch status (STS/CIA bits), then chain.
 
 **calls** `cad_mark`, `rxdiag_ev_log`
 
 ### `static void shim_txdone(const dwt_cb_data_t *d)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:138`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:141`
 
 @brief TX-done shim: tally, then run the blob's handler.
 
 ### `void __wrap_dwt_setcallbacks(dwt_callbacks_s *callbacks)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:147`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:150`
 
 @brief Intercept the callback registration and insert counting shims.
 
 ### `int32_t __wrap_dwt_configure(dwt_config_t *config)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:175`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:178`
 
 @brief Log every full PHY configuration the blob issues.
 
 ### `void __wrap_dwt_configurestsmode(uint8_t stsMode)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:192`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:195`
 
 @brief Log every STS-mode (CP_SPC) write the blob issues, then pass through.
 
 ### `static void rxdiag_log(struct k_work *work)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:208`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:211`
 
 @brief Periodic ranging heartbeat (every 2 s); re-arms itself while streaming.
 
 ### `void uwb_rxdiag_get_counts(uint32_t *rxok, uint32_t *rxerr, uint32_t *rxto, uint32_t *txdone, uint32_t *last_err, uint32_t *last_ok)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:273`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:276`
 
 @brief Snapshot the running RX/TX event tallies; out-params optional (NULL to skip).
 
 ### `void uwb_rxdiag_stream_set(bool on)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:296`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:299`
 
 @brief Arm or cancel the periodic ranging heartbeat (backs `aliro log on|off`).
 
 ### `bool uwb_rxdiag_stream_get(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:306`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:309`
 
 @brief Whether the periodic ranging heartbeat is currently armed.
 
 ### `void uwb_rxdiag_rng_set(bool on)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:311`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:314`
 
 @brief Arm or cancel the per-block distance stream (backs `aliro frames on|off`).
 
 ### `bool uwb_rxdiag_rng_get(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:316`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:319`
 
 @brief Whether the per-block distance stream is currently armed.
 
 ### `static int rxdiag_init(void)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:322`
+`modules/woz_uwb/src/driver/uwb_rxdiag.c:325`
 
 @brief Arm the periodic heartbeat at application init.

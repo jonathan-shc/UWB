@@ -10,7 +10,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** Accumulates bytes into a heap-allocated message. */
+/**
+ * @brief Accumulates bytes into a heap-allocated Aliro UWB message.
+ * @param message Aliro UWB message under construction, holding encoded M1-M4 attributes and
+ * payload.
+ * @param capacity Capacity of the message buffer.
+ */
 struct aliro_uwb_msg_builder {
 	/**
 	 * @brief Aliro UWB message under construction, holding encoded M1-M4 attributes and

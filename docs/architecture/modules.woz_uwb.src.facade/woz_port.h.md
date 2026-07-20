@@ -7,23 +7,82 @@
 
 ## API
 
+### `static inline void *woz_malloc(size_t size)`
+`modules/woz_uwb/src/facade/woz_port.h:162`
+
+@brief Allocate size bytes.
+@param size Number of bytes to allocate.
+@return Pointer to allocated memory, or NULL on failure.
+
+### `static inline void *woz_calloc(size_t n, size_t size)`
+`modules/woz_uwb/src/facade/woz_port.h:172`
+
+@brief Allocate and zero-initialize n elements of size bytes each.
+@param n Number of elements.
+@param size Bytes per element.
+@return Pointer to allocated and zeroed memory, or NULL on failure.
+
+### `static inline void woz_free(void *ptr)`
+`modules/woz_uwb/src/facade/woz_port.h:180`
+
+@brief Deallocate memory.
+@param ptr Pointer to memory to free (may be NULL).
+
+### `static inline int64_t woz_uptime_us(void)`
+`modules/woz_uwb/src/facade/woz_port.h:188`
+
+@brief Monotonic microseconds since boot.
+@return Microseconds elapsed since system start.
+
+**called by** `woz_cycle_get_32`, `woz_uptime_ms`
+
+### `static inline int64_t woz_uptime_ms(void)`
+`modules/woz_uwb/src/facade/woz_port.h:199`
+
+@brief Monotonic milliseconds since boot.
+@return Milliseconds elapsed since system start.
+
+**calls** `woz_uptime_us`
+
+### `static inline void woz_sleep_ms(int32_t ms)`
+`modules/woz_uwb/src/facade/woz_port.h:207`
+
+@brief Sleep for a given number of milliseconds (host-test stub).
+@param ms milliseconds to sleep; ignored in deterministic host tests.
+
+### `static inline void woz_sleep_us(int64_t us)`
+`modules/woz_uwb/src/facade/woz_port.h:215`
+
+@brief Sleep for a given number of microseconds (host-test stub).
+@param us microseconds to sleep; ignored in deterministic host tests.
+
+### `static inline uint32_t woz_cycle_get_32(void)`
+`modules/woz_uwb/src/facade/woz_port.h:223`
+
+@brief Retrieve a 32-bit cycle counter with microsecond resolution.
+@return current uptime in microseconds, cast to uint32_t.
+
+**calls** `woz_uptime_us`
+
+### `typedef int woz_mutex_t`
+`modules/woz_uwb/src/facade/woz_port.h:230`
+
+@brief Opaque mutex type for host tests (single-threaded, no-op).
+
 ### `static inline void woz_mutex_init(woz_mutex_t *m)`
-`modules/woz_uwb/src/facade/woz_port.h:193`
+`modules/woz_uwb/src/facade/woz_port.h:235`
 
-host tests are single-threaded
+@brief Initialize a mutex (host-test stub).
+@param m pointer to mutex to initialize; no-op in single-threaded tests.
 
-<details><summary>Undocumented (11)</summary>
+### `static inline void woz_mutex_lock(woz_mutex_t *m)`
+`modules/woz_uwb/src/facade/woz_port.h:243`
 
-- `woz_malloc`
-- `woz_calloc`
-- `woz_free`
-- `woz_uptime_us`
-- `woz_uptime_ms`
-- `woz_sleep_ms`
-- `woz_sleep_us`
-- `woz_cycle_get_32`
-- `woz_mutex_t`
-- `woz_mutex_lock`
-- `woz_mutex_unlock`
+@brief Acquire a mutex (host-test stub).
+@param m pointer to mutex to lock; no-op in single-threaded tests.
 
-</details>
+### `static inline void woz_mutex_unlock(woz_mutex_t *m)`
+`modules/woz_uwb/src/facade/woz_port.h:251`
+
+@brief Release a mutex (host-test stub).
+@param m pointer to mutex to unlock; no-op in single-threaded tests.

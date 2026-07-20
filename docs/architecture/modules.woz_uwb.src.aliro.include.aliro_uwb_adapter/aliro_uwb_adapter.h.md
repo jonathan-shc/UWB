@@ -13,6 +13,6 @@
 @brief Ordered hopping preferences (at least one default sequence required).
 
 ### `struct aliro_uwb_adapter_reader_config`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:52`
+`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:54`
 
-Reader-side selection preferences (borrowed for the adapter's lifetime).
+@brief Reader-side selection preferences (borrowed for the adapter's lifetime).

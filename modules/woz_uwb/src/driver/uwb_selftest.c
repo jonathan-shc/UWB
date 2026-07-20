@@ -20,7 +20,10 @@ static const uint8_t uwb_selftest_ursk[32] = {
 	0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00,
 };
 
-/** One-shot worker: run the Aliro UWB start path and log the outcome. */
+/**
+ * @brief One-shot worker: run the Aliro UWB start path and log the outcome.
+ * @param work Kernel work item (unused).
+ */
 static void uwb_selftest_work(struct k_work *work)
 {
 	// Configuration struct for the Aliro DS-TWR responder, containing ranging parameters
@@ -49,7 +52,10 @@ static void uwb_selftest_work(struct k_work *work)
 		rc == 0 ? "(reached ACTIVE)" : "(FAILED -- see DIAG above)");
 }
 
-/** Arm the one-shot self-test at application init. */
+/**
+ * @brief Arm the one-shot self-test at application init.
+ * @return 0 on success.
+ */
 static int uwb_selftest_init(void)
 {
 	k_work_init_delayable(&uwb_selftest_dwork, uwb_selftest_work);

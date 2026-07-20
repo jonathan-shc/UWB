@@ -8,6 +8,13 @@
 /** @brief Default-hopping modulus, 2^16 - 15 (prime). */
 #define CCC_HOP_MODULUS 65521u
 
+/**
+ * @brief Default hopping round index S(i) in [0, n_round) for a ranging block.
+ * @param block_index Block index i.
+ * @param hop_key_rw HOP_Key_RW value keying the hop calculation.
+ * @param n_round Total number of ranging rounds.
+ * @return Round index in [0, n_round).
+ */
 uint16_t ccc_hop_round_index(uint32_t block_index, uint32_t hop_key_rw, uint32_t n_round)
 {
 	/* t = ((i + HOP_Key_RW) & 0xFFFF)^2 mod (2^16 - 15); S = (t * N_Round) >> 16, a round in
@@ -66,6 +73,12 @@ static bool mhr_vendor_oui_ok(const uint8_t *p)
 	return oui == MHR_VENDOR_OUI || oui == MHR_VENDOR_OUI_ALIRO;
 }
 
+/**
+ * @brief Build the 23-byte SP0 MHR little-endian on the wire.
+ * @param f MHR fields (destination address, frame counter, key source, message ID, payload length).
+ * @param out Output buffer of at least CCC_MHR_LEN bytes.
+ * @return 0 on success, -EINVAL if inputs are null.
+ */
 int ccc_build_mhr(const struct ccc_mhr_fields *f, uint8_t out[CCC_MHR_LEN])
 {
 	if (f == NULL || out == NULL) {
@@ -87,6 +100,13 @@ int ccc_build_mhr(const struct ccc_mhr_fields *f, uint8_t out[CCC_MHR_LEN])
 	return 0;
 }
 
+/**
+ * @brief Parse and validate a 23-byte SP0 MHR, extracting variable fields.
+ * @param in Input buffer of exactly CCC_MHR_LEN bytes.
+ * @param f Output structure to hold parsed fields (destination address, frame counter, key source,
+ * message ID, payload length).
+ * @return 0 on success, -EINVAL on mismatch or null input.
+ */
 int ccc_parse_mhr(const uint8_t in[CCC_MHR_LEN], struct ccc_mhr_fields *f)
 {
 	if (in == NULL || f == NULL) {
@@ -105,6 +125,12 @@ int ccc_parse_mhr(const uint8_t in[CCC_MHR_LEN], struct ccc_mhr_fields *f)
 	return 0;
 }
 
+/**
+ * @brief Pack a Pre-POLL payload little-endian.
+ * @param p Pre-POLL structure (session ID, STS index, ranging block, hop flag, round index).
+ * @param out Output buffer of at least CCC_PRE_POLL_LEN bytes.
+ * @return 0 on success, -EINVAL if inputs are null.
+ */
 int ccc_pre_poll_pack(const struct ccc_pre_poll *p, uint8_t out[CCC_PRE_POLL_LEN])
 {
 	if (p == NULL || out == NULL) {
@@ -118,6 +144,13 @@ int ccc_pre_poll_pack(const struct ccc_pre_poll *p, uint8_t out[CCC_PRE_POLL_LEN
 	return 0;
 }
 
+/**
+ * @brief Parse a 13-byte Pre-POLL payload.
+ * @param in Input buffer of exactly CCC_PRE_POLL_LEN bytes.
+ * @param p Output structure to hold parsed fields (session ID, STS index, ranging block, hop flag,
+ * round index).
+ * @return 0 on success, -EINVAL if inputs are null.
+ */
 int ccc_pre_poll_parse(const uint8_t in[CCC_PRE_POLL_LEN], struct ccc_pre_poll *p)
 {
 	if (in == NULL || p == NULL) {
@@ -131,6 +164,16 @@ int ccc_pre_poll_parse(const uint8_t in[CCC_PRE_POLL_LEN], struct ccc_pre_poll *
 	return 0;
 }
 
+/**
+ * @brief Pack a Final_Data payload little-endian.
+ * @param f Final_Data structure (session ID, ranging block, hop flag, round index, STS index,
+ * timestamp, responder list).
+ * @param out Output buffer.
+ * @param cap Capacity of output buffer.
+ * @param len Output: number of bytes written.
+ * @return 0 on success, -EINVAL if inputs are null, responder count exceeds CCC_MAX_RESPONDERS, or
+ * buffer is too small.
+ */
 int ccc_final_data_pack(const struct ccc_final_data *f, uint8_t *out, size_t cap, size_t *len)
 {
 	size_t n;
@@ -160,6 +203,15 @@ int ccc_final_data_pack(const struct ccc_final_data *f, uint8_t *out, size_t cap
 	return 0;
 }
 
+/**
+ * @brief Parse a Final_Data payload.
+ * @param in Input buffer.
+ * @param len Length of input buffer.
+ * @param f Output structure to hold parsed fields (session ID, ranging block, hop flag, round
+ * index, STS index, timestamp, responder list).
+ * @return 0 on success, -EINVAL if inputs are null, input length is inconsistent with responder
+ * count, or responder count exceeds CCC_MAX_RESPONDERS.
+ */
 int ccc_final_data_parse(const uint8_t *in, size_t len, struct ccc_final_data *f)
 {
 	if (in == NULL || f == NULL || len < CCC_FINAL_DATA_HDR_LEN) {
@@ -207,6 +259,13 @@ static uint32_t slot_offset(const struct ccc_ran_params *p, enum ccc_slot slot, 
 	return 0u;
 }
 
+/**
+ * @brief The ranging round a block uses (block 0 uses round 0; continuous hopping uses S(i) for
+ * i>=1).
+ * @param p Ranging parameters.
+ * @param block Block index.
+ * @return Round index in [0, n_round).
+ */
 uint16_t ccc_block_round(const struct ccc_ran_params *p, uint32_t block)
 {
 	/* Ranging starts in round 0 of block 0; only blocks i >= 1 hop, and no hopping keeps every
@@ -217,6 +276,15 @@ uint16_t ccc_block_round(const struct ccc_ran_params *p, uint32_t block)
 	return ccc_hop_round_index(block, p->hop_key_rw, p->n_round);
 }
 
+/**
+ * @brief STS index for one slot of a ranging round (wraps mod 2^32).
+ * @param p Ranging parameters.
+ * @param block Block index.
+ * @param round Round index.
+ * @param slot Slot type (POLL, Response, or Final).
+ * @param responder Responder index.
+ * @return STS index for the slot.
+ */
 uint32_t ccc_slot_sts_index(const struct ccc_ran_params *p, uint32_t block, uint16_t round,
 			    enum ccc_slot slot, uint8_t responder)
 {
@@ -231,6 +299,13 @@ uint32_t ccc_slot_sts_index(const struct ccc_ran_params *p, uint32_t block, uint
 	return base + slot_offset(p, slot, responder);
 }
 
+/**
+ * @brief The initiator's hop decision for the block after block, written into its Final_Data.
+ * @param p Ranging parameters.
+ * @param block Block index.
+ * @return Hop decision (hop flag and next round index); both zero if hopping is disabled or params
+ * are null.
+ */
 struct ccc_hop_decision ccc_initiator_next_hop(const struct ccc_ran_params *p, uint32_t block)
 {
 	struct ccc_hop_decision d = {0u, 0u};
@@ -244,6 +319,11 @@ struct ccc_hop_decision ccc_initiator_next_hop(const struct ccc_ran_params *p, u
 
 /* ── Double-sided two-way ranging ─────────────────────────────────────────── */
 
+/**
+ * @brief DS-TWR one-way time-of-flight in timestamp ticks.
+ * @param t DS-TWR intervals (round-trip and reply times at both ends).
+ * @return Time-of-flight in ticks, or 0 if the denominator is 0 or input is null.
+ */
 uint32_t ccc_ds_twr_tof(const struct ccc_ds_twr *t)
 {
 	uint64_t num, den;

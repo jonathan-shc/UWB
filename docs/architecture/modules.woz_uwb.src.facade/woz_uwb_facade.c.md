@@ -20,35 +20,44 @@ so this compiles to a no-op there. See docs/porting.md.
 **called by** `woz_uwb_bind_ursk`, `woz_uwb_start_aliro`
 
 ### `int woz_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:38`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:44`
 
-Bind the CCC STS from the add-on-supplied plaintext URSK; returns 0 on success.
+@brief Bind the CCC STS from the add-on-supplied plaintext URSK; returns 0 on success.
+@param ursk Pointer to the URSK bytes.
+@param ursk_len Length of the URSK.
+@return 0 on success, -EINVAL if ursk is NULL.
 
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:46`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:59`
 
-Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
+@brief Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
+@param c Configuration struct (channel, sync_code_index, ursk, ranging_config, sts_index0,
+slot_per_round).
+@return 0 on success, -EINVAL if config is NULL or ursk is NULL, -EIO if radio initialization
+fails.
 
 **calls** `woz_hfclk_ensure_128mhz`
 
 ### `void woz_uwb_stop(void)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:72`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:88`
 
-Quiesce the radio and unbind the CCC STS shim.
+@brief Quiesce the radio and unbind the CCC STS shim.
 
 ### `bool woz_uwb_last_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:81`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:102`
 
-Latest distance in cm; true if a valid range has been seen.
+@brief Retrieve the last valid DS-TWR distance measurement in centimeters.
+@param cm_out Pointer to store the distance in cm.
+@return True if a valid range has been seen since initialization; false otherwise.
 
 ### `bool woz_uwb_trusted_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:86`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:115`
 
-Latest distance in cm, gated by the range-integrity consensus (layer 4):
-true only when a valid range has been seen AND it is trusted
-(fira_session_range_trusted()). This is the accessor the unlock decision
-must use so a single unverified/spoofed block cannot drive an unlock; raw
-telemetry keeps using woz_uwb_last_range_cm(). Without CONFIG_WOZ_ALIRO
-there is no trust concept and this matches woz_uwb_last_range_cm().
+@brief Retrieve the last valid DS-TWR distance in centimeters, gated by range-integrity
+consensus.
+@param cm_out Pointer to store the distance in cm.
+@return True only when a valid range has been seen AND it is trusted by the layer-4 consensus
+gate; false if no valid range exists or the range is not yet trusted. When CONFIG_WOZ_ALIRO is
+not defined, behaves identically to woz_uwb_last_range_cm().
