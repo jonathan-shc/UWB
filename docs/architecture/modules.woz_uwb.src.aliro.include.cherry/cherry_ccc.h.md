@@ -23,108 +23,53 @@ change.
 
 @brief Payload of a SESSION_ERROR event, giving the error status that triggered it.
 
-### `struct cherry_ccc_controller_session_report`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:100`
+### `struct cherry_ccc_event`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:110`
 
-@brief Opaque controller-side CCC session report; instances cross the API boundary only by
-pointer.
+@brief CCC notification delivered to the adapter.
 
-### `struct cherry_ccc_controlee_session_report`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:105`
+### `struct cherry_ccc_aliro_session_config`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:159`
 
-@brief Opaque CCC controlee (lock) session report structure, not defined outside the cherry
-library.
+@brief Negotiated Aliro ranging params (filled in-place across M1-M4).
 
-#### `struct cherry_ccc_session *session`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:113`
+### `static inline void *cherry_ccc_session_get_user_data(struct cherry_ccc_session *session)`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:192`
 
-@brief Opaque CCC session the event pertains to, defined by the shim.
+@brief Fetch the CCC session's user_data via its base session.
+@param session CCC session to query.
+@return The user_data pointer associated with the session's base.
 
-#### `struct cherry_ccc_session_event_session_status *status`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:118`
-
-@brief Payload pointer for a SESSION_STATUS event.
-
-#### `struct cherry_ccc_session_event_error *error`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:122`
-
-@brief Payload pointer for a SESSION_ERROR event.
-
-#### `struct cherry_ccc_controller_session_report *controller_report`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:127`
-
-@brief Pointer to the controller-side session report payload; report payloads
-cross the seam only by pointer on this lock.
-
-#### `struct cherry_ccc_controlee_session_report *controlee_report`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:132`
-
-@brief Pointer to the controlee session report payload, carrying a distance and
-timestamp snapshot.
-
-#### `struct cherry_common_diag_report *diagnostics`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:137`
-
-@brief Pointer to the diagnostic report snapshot (ranging samples, signal
-metrics) for this CCC event.
-
-### `struct cherry *ctx, cherry_ccc_cb_t callback, void *user_data,`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:177`
-
-@brief Cherry library context managing CCC session lifecycle and event dispatch.
-
-### `struct cherry_ccc_aliro_session_config *config);`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:181`
-
-@brief Negotiated Aliro ranging parameters, filled in-place across M1-M4.
-
-### `struct cherry_session *cherry_ccc_session_to_base(struct cherry_ccc_session *session)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:186`
-
-@brief Return the base session for a CCC session (the base is the first member).
-
-### `cherry_ccc_session_get_user_data`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:189`
-
-Convenience: fetch the CCC session's user_data via its base.
-
-### `void cherry_ccc_event_free(struct cherry_ccc_event *event)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:205`
-
-@brief Release a CCC event and any heap payload it owns.
-@param event Event to free.
-
-### `cherry_ccc_session_destroy`
+### `static inline void cherry_ccc_session_destroy(struct cherry_ccc_session *session)`
 `modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:208`
 
-Destroy a CCC session (delegates to the base).
+@brief Destroy a CCC session, delegating to the base session.
+@param session CCC session to destroy.
 
-### `cherry_ccc_session_start`
+### `static inline enum cherry_err cherry_ccc_session_start(struct cherry_ccc_session *session)`
 `modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:219`
 
-Start a CCC session (delegates to the base).
+@brief Start a CCC session, delegating to the base session.
+@param session CCC session to start.
+@return Error code from cherry_session_start.
 
-### `cherry_ccc_session_stop`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:231`
+### `static inline enum cherry_err cherry_ccc_session_stop(struct cherry_ccc_session *session)`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:230`
 
-Stop a CCC session (delegates to the base).
+@brief Stop a CCC session, delegating to the base session.
+@param session CCC session to stop.
+@return Error code from cherry_session_stop.
 
-### `cherry_ccc_session_set_antennas`
+### `static inline enum cherry_err cherry_ccc_session_set_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
 `modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:243`
 
-Select round-1 antennas for a CCC session (delegates to the base).
+@brief Select round-1 antennas for a CCC session, delegating to the base session.
+@param session CCC session to configure.
+@param tx_antenna_set Antenna set to use for transmission.
+@param rx_antenna_set Antenna set to use for reception.
+@return Error code from cherry_session_set_antennas.
 
 ### `cherry_ccc_session_set_diagnostics`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:280`
-
-Enable/disable diagnostics for a CCC session (delegates to the base).
-
-### `cherry_ccc_session_set_diagnostics(struct cherry_ccc_session *session, /** * @brief Diagnostic configuration for CCC session reporting (e.g., sampling interval, metrics to include). */ struct cherry_common_diag_cfg config)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:284`
+`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:276`
 
 @brief Opaque CCC session being configured, defined by the shim.
-
-### `struct cherry_common_diag_cfg config)`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h:288`
-
-@brief Diagnostic configuration for CCC session reporting (e.g., sampling interval, metrics to include).

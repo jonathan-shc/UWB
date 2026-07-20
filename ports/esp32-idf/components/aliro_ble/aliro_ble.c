@@ -282,7 +282,6 @@ static int reader_spsm_access(uint16_t conn_handle, uint16_t attr_handle,
 
 /* WRITE: [version be16][featLen u8][features]. Validate + log the negotiated version. */
 static int device_ver_access(uint16_t conn_handle, uint16_t attr_handle,
-			     // NimBLE GATT access context describing a characteristic read/write operation dispatched to an Aliro GATT characteristic access callback.
 			     struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
 	(void)attr_handle;

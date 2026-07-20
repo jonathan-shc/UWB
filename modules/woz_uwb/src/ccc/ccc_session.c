@@ -4,6 +4,10 @@
 
 #include <errno.h>
 
+/**
+ * @brief Rounds per ranging block, from N_RAN_S and the slot parameters (0 if the denominator is
+ * 0).
+ */
 uint16_t ccc_session_n_round(const struct ccc_ran_session *s)
 {
 	uint32_t denom;
@@ -19,10 +23,14 @@ uint16_t ccc_session_n_round(const struct ccc_ran_session *s)
 	return (uint16_t)((288u * (uint32_t)s->n_ran_s) / denom);
 }
 
-int ccc_session_to_ran_params(const struct ccc_ran_session *s,
-			      // RAN (Random Access Number) parameters: multiplier, index, and
-			      // preamble code, populated by CCC during session setup.
-			      struct ccc_ran_params *out)
+/**
+ * @brief Map an Aliro session onto the CCC MAC's ranging-schedule parameters.
+ * @param s Aliro session configuration.
+ * @param out Filled with the mapped CCC ranging parameters.
+ * @return 0 on success, -EINVAL if the session or output pointer is NULL, slot count is
+ * insufficient, or N_Round is zero.
+ */
+int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out)
 {
 	uint16_t n_round;
 

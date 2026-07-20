@@ -6,13 +6,13 @@
 
 LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
 
-struct aliro_uwb_msg_attribute
-	*
-	/**
-	 * @brief Parses the next TLV attribute from the message payload; returns NULL if offset
-	 * exceeds declared message length, clamping to prevent overrun.
-	 */
-	aliro_uwb_msg_next_attribute(struct aliro_uwb_msg_parser *parser)
+/**
+ * @brief Parses the next TLV attribute from the message payload; returns NULL if offset
+ * exceeds declared message length, clamping to prevent overrun.
+ * @param parser Parser cursor to advance.
+ * @return The next attribute, or NULL at end-of-payload or on overrun.
+ */
+struct aliro_uwb_msg_attribute *aliro_uwb_msg_next_attribute(struct aliro_uwb_msg_parser *parser)
 {
 	struct aliro_uwb_msg_attribute *attr;
 
@@ -124,12 +124,11 @@ bool aliro_uwb_msg_read_u32(const struct aliro_uwb_msg_attribute *attr, const ch
 }
 
 /**
- * @brief Decodes a 64-bit big-endian integer from an attribute; returns false on width mismatch or
- * parse error.
- * @param attr Attribute whose value bytes are decoded.
- * @param name Attribute name, used for error logging.
- * @param out Destination for the decoded value.
- * @return true on success, false on a size mismatch.
+ * @brief Decodes a 64-bit big-endian integer from an attribute.
+ * @param attr Attribute holding the encoded value.
+ * @param name Attribute name, used only in the mismatch log line.
+ * @param out Receives the decoded value on success.
+ * @return true on success, false on a width mismatch or parse error.
  */
 bool aliro_uwb_msg_read_u64(const struct aliro_uwb_msg_attribute *attr, const char *name,
 			    uint64_t *out)

@@ -10,14 +10,24 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** A single type/length/value attribute overlaid on the message bytes. */
+/**
+ * @brief A single type/length/value attribute overlaid on message bytes.
+ * @param id Attribute identifier.
+ * @param length Length of value in bytes.
+ * @param value Variable-length attribute value.
+ */
 struct aliro_uwb_msg_attribute {
 	uint8_t id;
 	uint8_t length;
 	uint8_t value[];
 };
 
-/** Cursor walking the attributes of one message payload. */
+/**
+ * @brief Cursor walking the attributes of one message payload.
+ * @param length Total length of the message in bytes.
+ * @param offset Current parse offset in bytes.
+ * @param data Message bytes being walked.
+ */
 struct aliro_uwb_msg_parser {
 	size_t length;
 	size_t offset;
@@ -33,13 +43,7 @@ struct aliro_uwb_msg_parser {
 	}
 
 /** Advance to the next attribute; NULL at end-of-payload or on overrun. */
-struct aliro_uwb_msg_attribute
-	*
-	/**
-	 * @brief Cursor walking the attributes of one message payload.
-	 * @param parser Parser cursor to advance to the next attribute.
-	 */
-	aliro_uwb_msg_next_attribute(struct aliro_uwb_msg_parser *parser);
+struct aliro_uwb_msg_attribute *aliro_uwb_msg_next_attribute(struct aliro_uwb_msg_parser *parser);
 
 /* Exact-length big-endian readers; return false on a size mismatch. */
 bool aliro_uwb_msg_read_u8(const struct aliro_uwb_msg_attribute *attr, const char *name,
@@ -48,9 +52,5 @@ bool aliro_uwb_msg_read_u16(const struct aliro_uwb_msg_attribute *attr, const ch
 			    uint16_t *out);
 bool aliro_uwb_msg_read_u32(const struct aliro_uwb_msg_attribute *attr, const char *name,
 			    uint32_t *out);
-/**
- * @brief A single type/length/value attribute overlaid on the message bytes.
- * @param attr Attribute to read as a 64-bit value.
- */
 bool aliro_uwb_msg_read_u64(const struct aliro_uwb_msg_attribute *attr, const char *name,
 			    uint64_t *out);

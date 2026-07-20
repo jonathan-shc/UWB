@@ -204,8 +204,10 @@ static uint32_t ccc_rx_cur_cand(void)
 }
 #endif /* CCC_RX_LOCK_SWEEP */
 
-// Reset all Per-POLL state: arm count, index tracking, STS warm cache, and optional lock-sweep
-// diagnostic counters; called on entry to a new Pre-POLL listen.
+/**
+ * @brief Reset all Per-POLL state: arm count, index tracking, STS warm cache, and optional
+ * lock-sweep diagnostic counters; called on entry to a new Pre-POLL listen.
+ */
 void ccc_shim_rx_log_reset(void)
 {
 	g_rx_arms = 0u;
@@ -239,15 +241,22 @@ void ccc_shim_rx_log_reset(void)
 #endif
 }
 
-// Returns true if the responder is awaiting the POLL frame after a successful Pre-POLL decode.
+/**
+ * @brief Returns true if the responder is awaiting the POLL frame after a successful Pre-POLL
+ * decode.
+ * @return true if awaiting POLL, false otherwise.
+ */
 bool ccc_shim_rx_awaiting_poll(void)
 {
 	return g_await_poll;
 }
 
-// Log one RX event for the optional lock-sweep diagnostic (CONFIG_CCC_RX_LOCK_SWEEP); tracks CPER
-// (STS correlation fail flag) and dwells candidate indices until lock achieved or full cycle
-// exhausted.
+/**
+ * @brief Log one RX event for the optional lock-sweep diagnostic (CONFIG_CCC_RX_LOCK_SWEEP); tracks
+ * CPER (STS correlation fail flag) and dwells candidate indices until lock achieved or full cycle
+ * exhausted.
+ * @param status DW3000 status register value.
+ */
 void ccc_shim_rx_notify_rx(uint32_t status)
 {
 #if CCC_RX_LOCK_SWEEP
@@ -292,9 +301,13 @@ void ccc_shim_rx_notify_rx(uint32_t status)
 /** BENCH: decode a live SP0 Pre-POLL (CCM*-decrypt with mUPSK1) to read Apple's exact POLL STS
  * index, learn the block stride, and warm the next block's STS. */
 #define CCC_RX_PREPOLL_LOG 16u
-// Decode a received Pre-POLL frame: verify MHR and message ID, decrypt SP0 payload, cache
-// UAD-derived keys, extract Poll_STS_Index and stride, and pre-warm the next block's STS triplet
-// (POLL, Response_0, Final) to eliminate KDF latency from the critical path.
+/**
+ * @brief Decode a received Pre-POLL frame: verify MHR and message ID, decrypt SP0 payload, cache
+ * UAD-derived keys, extract Poll_STS_Index and stride, and pre-warm the next block's STS triplet
+ * (POLL, Response_0, Final) to eliminate KDF latency from the critical path.
+ * @param frame Pointer to the received frame buffer.
+ * @param datalength Length of the frame in bytes.
+ */
 static void prepoll_decode(const uint8_t *frame, uint16_t datalength)
 {
 	struct ccc_mhr_fields mhr;
@@ -431,8 +444,12 @@ static uint64_t ts5_to_u64(const uint8_t t[5])
  * reader's own distance -- DS-TWR is invariant to the reply/round split. */
 #define CCC_RESP_SLOT_HI32    (CCC_SLOT_NOMINAL_HI32 - CCC_RESP_ANT_DLY_HI32)
 
-/** Decode a received Final_Data (SP0, msg_id=02): dUDSK-decrypt and parse the initiator's ranging
- * timestamps; not time-critical. */
+/**
+ * @brief Decode a received Final_Data (SP0, msg_id=02): dUDSK-decrypt and parse the initiator's
+ * ranging timestamps; not time-critical.
+ * @param frame Pointer to the received frame buffer.
+ * @param datalength Length of the frame in bytes.
+ */
 static void final_data_decode(const uint8_t *frame, uint16_t datalength)
 {
 	static uint32_t g_fd_logged;
@@ -651,8 +668,12 @@ static void pack_key(dwt_sts_cp_key_t *out, const uint8_t dursk[CCC_DURSK_LEN])
 	out->key3 = sys_get_le32(&rev[12]);
 }
 
-/** Pack a 16-byte STS-V into the DW3000 STS-IV image (whole-16 reverse then per-word LE, same as
- * pack_key). */
+/**
+ * @brief Pack a 16-byte STS-V into the DW3000 STS-IV image (whole-16 reverse then per-word LE, same
+ * as pack_key).
+ * @param out Pointer to the DW3000 STS-IV register image.
+ * @param sts_v 16-byte STS vector to pack.
+ */
 static void pack_iv(dwt_sts_cp_iv_t *out, const uint8_t sts_v[CCC_STS_V_LEN])
 {
 	uint8_t rev[CCC_STS_V_LEN];
@@ -1078,9 +1099,13 @@ static void resp_tx_done(const dwt_cb_data_t *cb)
 	}
 }
 
-// RX callback for Pre-POLL listen and POLL/Final results: re-arm SP0 by default, or arm SP3/ND for
-// POLL if a warmed index is ready, or fire the delayed-TX Response_0 and Final RX arm on valid POLL
-// CPER; log free-running timing and optionally defer Pre-POLL decode to warm the next block.
+/**
+ * @brief RX callback for Pre-POLL listen and POLL/Final results.
+ *
+ * Re-arms SP0 by default, or arms SP3/ND for POLL if a warmed index is ready, or fires the
+ * delayed-TX Response_0 and Final RX arm on valid POLL CPER; logs free-running timing and
+ * optionally defers Pre-POLL decode to warm the next block.
+ */
 static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 {
 	/* FREE-RUNNING TIMING+CONTENT DIAGNOSTIC (de-starved: re-arm first, log deferred): free-run

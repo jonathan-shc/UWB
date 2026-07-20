@@ -36,6 +36,15 @@ DoorLock::Delegate — Aliro reader-provisioning interface
 
 Copies the Aliro reader group identifier into groupIdentifier. If the reader is not configured, reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or whatever CopySpanToMutableSpan reports on failure.
 
+### `GetAliroReaderGroupSubIdentifier`
+`ports/esp32-matter/main/lock/aliro_reader_delegate.cpp:98`
+
+Copies the Aliro reader group sub-identifier into groupSubIdentifier.
+Lazily generates the sub-identifier on first call via EnsureSubIdentifier. Returns CHIP_NO_ERROR
+on success or whatever CopySpanToMutableSpan reports on failure.
+
+**calls** `EnsureSubIdentifier`
+
 ### `CHIP_ERROR AliroReaderDelegate::CopyProtocolVersionIntoSpan(uint16_t value, MutableByteSpan &out)`
 `ports/esp32-matter/main/lock/aliro_reader_delegate.cpp:106`
 
@@ -57,6 +66,16 @@ CopyProtocolVersionIntoSpan.
 `ports/esp32-matter/main/lock/aliro_reader_delegate.cpp:133`
 
 Copies the Aliro group resolving key into groupResolvingKey. If the reader is not configured, reduces the output span to size 0 instead of copying. Returns CHIP_NO_ERROR on success or whatever CopySpanToMutableSpan reports on failure.
+
+### `GetAliroSupportedBLEUWBProtocolVersionAtIndex`
+`ports/esp32-matter/main/lock/aliro_reader_delegate.cpp:146`
+
+Reports the Aliro BLE-UWB protocol version supported at index.
+Only index 0 is valid; returns CHIP_ERROR_PROVIDER_LIST_EXHAUSTED for any other index. On
+success, encodes kKnownProtocolVersion big-endian into protocolVersion via
+CopyProtocolVersionIntoSpan.
+
+**calls** `CopyProtocolVersionIntoSpan`
 
 ### `uint8_t AliroReaderDelegate::GetAliroBLEAdvertisingVersion()`
 `ports/esp32-matter/main/lock/aliro_reader_delegate.cpp:157`
@@ -96,10 +115,3 @@ checks pass.
 `ports/esp32-matter/main/lock/aliro_reader_delegate.cpp:243`
 
 Clears the stored Aliro reader configuration (signing/verification keys, group identifier, group resolving key) and marks the reader unconfigured. Also clears the persisted provisioning state via aliro_reader_provision_clear. Always returns CHIP_NO_ERROR.
-
-<details><summary>Undocumented (2)</summary>
-
-- `GetAliroReaderGroupSubIdentifier`
-- `GetAliroSupportedBLEUWBProtocolVersionAtIndex`
-
-</details>

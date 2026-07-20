@@ -13,49 +13,8 @@
 @brief Session-independent reader state shared across all ranging sessions for an Aliro UWB
 adapter.
 
-#### `struct cherry *cherry_ctx`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:20`
+### `struct aliro_uwb_session`
+`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:54`
 
-@brief Cherry library context managing CCC session lifecycle and event dispatch.
-
-#### `struct aliro_uwb_adapter_reader_config *config`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:25`
-
-@brief Reader adapter configuration supplied by the caller (e.g., ranging parameters,
-capabilities).
-
-#### `struct cherry_ccc_capabilities ccc_caps`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:30`
-
-@brief CCC device capabilities (supported channels, PRF, ranging mode) discovered during
-adapter initialization.
-
-#### `struct cherry_common_diag_cfg *diag_config`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:36`
-
-@brief Diagnostic configuration for CCC session reporting (e.g., ranging data, signal
-strength, diagnostics sampling).
-
-#### `struct aliro_uwb_adapter *aliro_ctx`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:55`
-
-@brief Session-independent reader state shared by this per-approach session.
-
-#### `struct cherry_ccc_session *ccc_session`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:67`
-
-@brief Cherry CCC session object managing DS-TWR state and M1-M4 message handling for
-this ranging session.
-
-#### `struct cherry_ccc_aliro_session_config ccc_aliro_config`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:72`
-
-@brief CCC Aliro session configuration encoding the M1-M4 setup parameters (MAC, time
-sync, STS seed, hopping sequence).
-
-### `enum aliro_uwb_err aliro_uwb_session_start(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_internal.h:85`
-
-@brief Start ranging for a per-approach session.
-@param session The per-approach ranging-setup session to start.
-@return Error code indicating whether the session started successfully.
+@brief Per-approach ranging-setup session record holding the CCC state machine and derived keys
+for one Aliro exchange.

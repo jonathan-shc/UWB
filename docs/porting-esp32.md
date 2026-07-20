@@ -8,7 +8,7 @@ attempted. The code lives in [`ports/esp32-idf`](../ports/esp32-idf) and
 This document keeps the original plan, written before any ESP32 code existed, and marks
 what the plan got right and wrong. The plan's own estimates are left unedited so the
 comparison is honest. For the bring-up detail that the plan could not have predicted, see
-[`ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md).
+[`docs/esp32-gotchas.md`](esp32-gotchas.md).
 
 Target hardware: ESP32-S3-WROOM (N16R8, 16 MB flash / 8 MB octal PSRAM, Wi-Fi + BLE, no
 802.15.4) plus a DWM3000EVB for UWB. No NFC reader was sourced.
@@ -144,7 +144,7 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
 - ESP32-S3-WROOM N16R8 dev board.
 - DWM3000EVB (DW3110) for UWB on SPI2, eleven jumpers. Current pin map:
   [`ports/esp32-idf/components/woz_uwb/port/board_pins.h`](../ports/esp32-idf/components/woz_uwb/port/board_pins.h),
-  wiring table in [`ports/esp32-idf/BRINGUP.md`](../ports/esp32-idf/BRINGUP.md).
+  wiring table in [`docs/esp32-bringup.md`](esp32-bringup.md).
 - No NFC reader. Phase 5 was not attempted; if you pick this up, note that PN532-class
   parts are assumed too limited for Express / ECP timing and the reference uses ST25R.
 - Matter over Wi-Fi on the S3 is not low-power like the nRF Thread sleepy end device.
@@ -169,7 +169,7 @@ The UWB engine (`modules/woz_uwb`) already compiles as pure C on host (`tests/ho
 
 ## 8. If you are doing this yourself
 
-Read [`ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md) first. It is the
+Read [`docs/esp32-gotchas.md`](esp32-gotchas.md) first. It is the
 document this plan should have been able to write in advance and could not: forty-odd
 specific traps, each with what it looks like on a console and what actually fixed it.
 Three cost more than a day each — an EVB power jumper, a ranging session id that is

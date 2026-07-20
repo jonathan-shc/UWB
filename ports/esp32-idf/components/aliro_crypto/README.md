@@ -35,7 +35,7 @@ only part that differs, and it is the part with no protocol logic in it.
   a fact that ruled out a lot of false leads during ranging debug.
 - **The salt transcript.** The HKDF salt is a structured transcript, and the tag does not
   verify until it is byte-exact. Two of its fields were the hardest single thing to pin
-  down in the whole port; see `ports/docs/esp-32-gotchas.md` §4.3.
+  down in the whole port; see `docs/esp32-gotchas.md` §4.3.
 - **Two independent AES-256-GCM channels.** The credential-auth channel and the ranging
   channel are separate, with separate keys and separate counters, both starting at 1.
   Assuming they were one channel, or that counters start at 0, produces clean builds that

@@ -46,7 +46,7 @@ that calls `dwt_isr()`, because that call does SPI and cannot run in ISR context
 ## Wiring
 
 Source of truth is `components/woz_uwb/port/board_pins.h`; the physical
-DWM3000EVB-to-header mapping is in [`BRINGUP.md`](BRINGUP.md).
+DWM3000EVB-to-header mapping is in [`docs/esp32-bringup.md`](../../docs/esp32-bringup.md).
 
     SPI2 / FSPI:  SCLK 12   MOSI 11   MISO 13   CS 10
     control:      RSTn  4   IRQ   5   WAKEUP 6
@@ -108,8 +108,8 @@ change — every bug in the gotchas log built cleanly first.
 
 ## Further reading
 
-- [`BRINGUP.md`](BRINGUP.md) — wire it up and confirm the radio answers.
-- [`../docs/esp-32-gotchas.md`](../docs/esp-32-gotchas.md) — every trap hit on the way to
+- [`docs/esp32-bringup.md`](../../docs/esp32-bringup.md) — wire it up and confirm the radio answers.
+- [`docs/esp32-gotchas.md`](../../docs/esp32-gotchas.md) — every trap hit on the way to
   a working unlock, with symptom and fix.
 - [`../esp32-matter/README.md`](../esp32-matter/README.md) — the same stack inside a
   Matter door lock.

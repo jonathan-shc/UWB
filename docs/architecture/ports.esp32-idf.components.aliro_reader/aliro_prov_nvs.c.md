@@ -5,7 +5,7 @@ NVS-backed persistence for Aliro reader provisioning: loads and stores the seria
 identity and trust store built by aliro_prov.c.
 Lazily initializes NVS on first use; safe to call alongside aliro_ble's own nvs_flash_init.
 
-**depends on** [`ports/esp32-idf/components/aliro_reader/aliro_prov.h`](aliro_prov.h.md)  ·  **discussed in** [`docs/porting-esp32-phase3.md`](../../porting-esp32-phase3.md), [`ports/esp32-idf/components/aliro_reader/README.md`](../../../ports/esp32-idf/components/aliro_reader/README.md)
+**discussed in** [`docs/porting-esp32-phase3.md`](../../porting-esp32-phase3.md), [`ports/esp32-idf/components/aliro_reader/README.md`](../../../ports/esp32-idf/components/aliro_reader/README.md)
 
 ```mermaid
 flowchart TD
@@ -33,14 +33,7 @@ on a successful load of previously stored provisioning.
 
 **calls** `ensure_nvs`
 
-### `int aliro_prov_store(const struct aliro_reader_identity *id, // Set of trusted Aliro credentials persisted to and loaded from NVS. const struct aliro_trust_store *ts)`
-`ports/esp32-idf/components/aliro_reader/aliro_prov_nvs.c:94`
-
-Serialize and persist the reader identity and trust store to NVS.
-Returns 0 on success. Returns -1 if serialization overflows the blob buffer, NVS init fails, the
-namespace can't be opened read-write, or the blob write/commit fails.
-
-### `int aliro_prov_store(const struct aliro_reader_identity *id, // Set of trusted Aliro credentials persisted to and loaded from NVS. const struct aliro_trust_store *ts)`
+### `int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)`
 `ports/esp32-idf/components/aliro_reader/aliro_prov_nvs.c:94`
 
 Serialize and persist the reader identity and trust store to NVS.
@@ -48,8 +41,3 @@ Returns 0 on success. Returns -1 if serialization overflows the blob buffer, NVS
 namespace can't be opened read-write, or the blob write/commit fails.
 
 **calls** `ensure_nvs`
-
-### `const struct aliro_trust_store *ts)`
-`ports/esp32-idf/components/aliro_reader/aliro_prov_nvs.c:96`
-
-Set of trusted Aliro credentials persisted to and loaded from NVS.

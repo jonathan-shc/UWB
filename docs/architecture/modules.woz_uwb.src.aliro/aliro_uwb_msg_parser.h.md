@@ -7,14 +7,18 @@
 
 ## API
 
-### `aliro_uwb_msg_next_attribute(struct aliro_uwb_msg_parser *parser)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:42`
+### `struct aliro_uwb_msg_attribute`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:19`
+
+@brief A single type/length/value attribute overlaid on message bytes.
+@param id Attribute identifier.
+@param length Length of value in bytes.
+@param value Variable-length attribute value.
+
+### `struct aliro_uwb_msg_parser`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:31`
 
 @brief Cursor walking the attributes of one message payload.
-@param parser Parser cursor to advance to the next attribute.
-
-### `bool aliro_uwb_msg_read_u64(const struct aliro_uwb_msg_attribute *attr, const char *name, uint64_t *out)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:55`
-
-@brief A single type/length/value attribute overlaid on the message bytes.
-@param attr Attribute to read as a 64-bit value.
+@param length Total length of the message in bytes.
+@param offset Current parse offset in bytes.
+@param data Message bytes being walked.

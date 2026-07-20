@@ -72,7 +72,12 @@ struct woz_sink {
 	size_t rem; /* bytes left, always keeps room for no NUL (we track length) */
 };
 
-// Sink callback for formatted output: append one character to the buffer if space remains.
+/**
+ * @brief Sink callback for formatted output: append one character to the buffer if space remains.
+ * @param c Character to append.
+ * @param ctx Pointer to woz_sink context.
+ * @return Character appended.
+ */
 static int woz_sink_out(int c, void *ctx)
 {
 	struct woz_sink *s = ctx;
@@ -84,8 +89,12 @@ static int woz_sink_out(int c, void *ctx)
 	return c;
 }
 
-// Append a null-terminated string to the sink buffer one character at a time, stopping at end of
-// string or exhausted buffer.
+/**
+ * @brief Append a null-terminated string to the sink buffer one character at a time, stopping at
+ * end of string or exhausted buffer space.
+ * @param s Sink context.
+ * @param str String to append (null-terminated).
+ */
 static void woz_sink_str(struct woz_sink *s, const char *str)
 {
 	while (*str != '\0' && s->rem > 0u) {
@@ -215,7 +224,10 @@ static void woz_msg_format(const struct log_output *output, struct log_msg *msg,
 			 output->control_block->ctx);
 }
 
-/* --- Init ------------------------------------------------------------------ */
+/**
+ * @brief Initialize the DWT cycle counter and log formatting on startup.
+ * @return 0 on success.
+ */
 static int woz_logfmt_init(void)
 {
 	/* Enable the DWT cycle counter. */

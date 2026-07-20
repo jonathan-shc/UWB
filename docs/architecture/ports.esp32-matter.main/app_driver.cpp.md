@@ -38,9 +38,3 @@ Set the lock status LED color to reflect lock and Aliro state.
 No-op if app_driver_led_init failed or was never called. Looks up the RGB
 color for the given (locked, aliro) combination and pushes it to the single
 pixel.
-
-### `struct lock_led_rgb c = lock_led_color(locked, aliro)`
-`ports/esp32-matter/main/app_driver.cpp:97`
-
-RGB color for the lock status LED corresponding to a given locked/Aliro state
-combination, as returned by lock_led_color.

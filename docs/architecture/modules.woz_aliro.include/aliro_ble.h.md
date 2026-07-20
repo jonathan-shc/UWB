@@ -22,24 +22,9 @@ parsed from the device WRITE). Serialized as one byte: bit0/1/2.
 
 Transport callbacks into the app / Phase-3 Aliro handler. All optional.
 
-#### `struct aliro_ble_features`
-`modules/woz_aliro/include/aliro_ble.h:47`
+### `struct aliro_ble_config`
+`modules/woz_aliro/include/aliro_ble.h:44`
 
-Aliro BLE-UWB supported-features flags (advertised in the READ char, and
-parsed from the device WRITE). Serialized as one byte: bit0/1/2.
-
-#### `struct aliro_ble_callbacks`
-`modules/woz_aliro/include/aliro_ble.h:48`
-
-Transport callbacks into the app / Phase-3 Aliro handler. All optional.
-
-### `int aliro_ble_prepare(const struct aliro_ble_config *cfg)`
-`modules/woz_aliro/include/aliro_ble.h:76`
-
-Capture config + build the READ payload; does NOT touch NimBLE. 0 on ok.
-
-### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`modules/woz_aliro/include/aliro_ble.h:80`
-
-The Aliro GATT service definition, to hand to the host owner's
-register-extra-services hook. Valid after aliro_ble_prepare().
+Reader configuration. `proto_versions` are host-order uint16s; they are the
+provisioned `aliroSupportedBLEUWBProtocolVersions` (Matter attr 133), NOT a
+transport constant, so the caller supplies them.

@@ -4,7 +4,7 @@
 live iPhone: the transaction completes, the derived ranging key is correct, and the
 ranging setup it feeds ends in an approach unlock. This page describes the design and why
 each piece exists; the traps hit proving it are in
-[`../ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md) §4 and §5.
+[`docs/esp32-gotchas.md`](esp32-gotchas.md) §4 and §5.
 
 Prerequisite reading: [`porting-esp32.md`](porting-esp32.md) (roadmap and retrospective)
 and [`protocol-research.md`](protocol-research.md) (the reverse-engineered protocol

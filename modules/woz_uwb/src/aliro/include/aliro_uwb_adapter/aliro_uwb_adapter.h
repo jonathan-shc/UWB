@@ -48,7 +48,9 @@ struct aliro_uwb_preferred_hopping_configs {
 	size_t count;
 };
 
-/** Reader-side selection preferences (borrowed for the adapter's lifetime). */
+/**
+ * @brief Reader-side selection preferences (borrowed for the adapter's lifetime).
+ */
 struct aliro_uwb_adapter_reader_config {
 	/** Lower bound on the selected RAN multiplier (T_Block = N x 96 ms). */
 	uint8_t min_ran_multiplier;
@@ -64,37 +66,25 @@ struct aliro_uwb_adapter_reader_config {
 	uint8_t r2_antennas[2];
 };
 
-/** Create a reader-mode adapter (NULL on bad params / allocation failure). */
-struct aliro_uwb_adapter
-	*
-	/**
-	 * @brief Cherry library context managing CCC and radar subsystems and event dispatch.
-	 * @param cherry_ctx Cherry library context to bind the new reader adapter to.
-	 */
-	aliro_uwb_adapter_create_reader(
-		// Opaque CCC context handle, threaded through to the CCC session API calls.
-		struct cherry *cherry_ctx,
-		/**
-		 * @brief Device capabilities (channels, PRF, supported algorithms) advertised by
-		 * the reader during CCC discovery.
-		 * @param caps Device capabilities to advertise during CCC discovery.
-		 */
-		struct cherry_core_event_device_capabilities *caps,
-		/**
-		 * @brief Reader-side selection preferences (borrowed for the adapter's lifetime).
-		 * @param config Reader adapter configuration borrowed for the adapter's lifetime.
-		 */
-		struct aliro_uwb_adapter_reader_config *config);
+/**
+ * @brief Create a reader-mode adapter.
+ * @param cherry_ctx Cherry library context to bind the new reader adapter to.
+ * @param caps Device capabilities to advertise during CCC discovery.
+ * @param config Reader adapter configuration, borrowed for the adapter's lifetime.
+ * @return New adapter, or NULL on bad parameters or allocation failure.
+ */
+struct aliro_uwb_adapter *
+aliro_uwb_adapter_create_reader(struct cherry *cherry_ctx,
+				struct cherry_core_event_device_capabilities *caps,
+				struct aliro_uwb_adapter_reader_config *config);
 
-/** Set diagnostics applied to new sessions. */
-void aliro_uwb_adapter_set_diagnostics(
-	struct aliro_uwb_adapter *aliro_ctx,
-	/**
-	 * @brief Diagnostic configuration for CCC reporting (ranging, signal metrics, session
-	 * status).
-	 * @param config Diagnostic configuration to apply for CCC reporting.
-	 */
-	struct cherry_common_diag_cfg config);
+/**
+ * @brief Set the diagnostics configuration applied to new sessions.
+ * @param aliro_ctx Adapter context to update.
+ * @param config Diagnostic configuration to apply for CCC reporting.
+ */
+void aliro_uwb_adapter_set_diagnostics(struct aliro_uwb_adapter *aliro_ctx,
+				       struct cherry_common_diag_cfg config);
 
 /**
  * @brief Release an adapter context.

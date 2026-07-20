@@ -6,7 +6,7 @@ Common issues, grouped by where they show up. Deeper protocol background is in
 
 Everything below the ESP32 section is about the primary nRF5340 DK build. For the
 ESP32-S3 ports, start with [ESP32-S3 ports](#esp32-s3-ports) and then the much longer
-[gotchas log](../ports/docs/esp-32-gotchas.md), which records every trap hit during that
+[gotchas log](esp32-gotchas.md), which records every trap hit during that
 bring-up with its symptom and fix.
 
 ## Build and flash
@@ -82,7 +82,7 @@ device ID and a responder that never listens. Check it before suspecting softwar
 
 ## ESP32-S3 ports
 
-Full detail lives in [`ports/docs/esp-32-gotchas.md`](../ports/docs/esp-32-gotchas.md);
+Full detail lives in [`docs/esp32-gotchas.md`](esp32-gotchas.md);
 this is the short triage list.
 
 **`dwt_probe failed: -1` the first time a phone reaches M4.** The DW3000 was never

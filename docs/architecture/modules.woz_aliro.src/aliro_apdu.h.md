@@ -9,17 +9,21 @@ handshake.
 
 ## API
 
-### `int aliro_tlv_w_finish(struct aliro_tlv_w *w, size_t *out_len)`
-`modules/woz_aliro/src/aliro_apdu.h:72`
+### `struct aliro_tlv_w`
+`modules/woz_aliro/src/aliro_apdu.h:61`
 
-zero length
+---- BER-TLV writer ----
 
-### `struct aliro_auth0_response *r);`
-`modules/woz_aliro/src/aliro_apdu.h:121`
+### `struct aliro_auth0_response`
+`modules/woz_aliro/src/aliro_apdu.h:114`
 
-Response payload for an Aliro AUTH0 APDU exchange.
+Fields parsed from an AUTH0Response APDU: the device's mandatory ephemeral
+public key, plus the optional cryptogram sent when the device recognises the
+reader and offers the fast path.
 
-### `struct aliro_auth1_response *r);`
-`modules/woz_aliro/src/aliro_apdu.h:131`
+### `struct aliro_auth1_response`
+`modules/woz_aliro/src/aliro_apdu.h:124`
 
-Response payload for an Aliro AUTH1 APDU exchange.
+Fields parsed from an AUTH1Response APDU: the device's mandatory signature
+over the transcript, plus the device public key and signaling bitmap it sends
+when the standard (non-fast) path is taken.

@@ -42,7 +42,7 @@ ENV := $(strip \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws docs fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -121,6 +121,14 @@ verify:
 ##   never touches this repo's own workspace/ or build/.
 test-ws:
 	@$(REPO_ROOT)/tests/tooling/ws_seed_test.sh
+
+##@ Docs
+## docs: build the documentation site  ->  site/index.html
+##   Subsystem tree + guides + search, then the Doxygen reference under site/api/,
+##   then a link pass that fails the build on any dead link. Needs doxygen and
+##   graphviz; no NCS toolchain or hardware.
+docs:
+	@$(REPO_ROOT)/docs.sh
 
 ##@ Flash
 ## flash: app-only flash

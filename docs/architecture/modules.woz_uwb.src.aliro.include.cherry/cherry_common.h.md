@@ -11,8 +11,3 @@
 `modules/woz_uwb/src/aliro/include/cherry/cherry_common.h:15`
 
 @brief Per-session diagnostics selection flags and CIR window parameters, passed by value.
-
-### `struct cherry_common_diag_report`
-`modules/woz_uwb/src/aliro/include/cherry/cherry_common.h:34`
-
-@brief Opaque diagnostics report structure, referenced only by pointer in event unions.

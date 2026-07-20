@@ -14,12 +14,6 @@
 
 **called by** `uwb_min_read_chipid`, `uwb_radio_ensure_init`
 
-### `int err = dwt_probe((struct dwt_probe_s *)&dw3000_probe_interf)`
-`modules/woz_uwb/src/driver/uwb_min.c:61`
-
-Struct type passed to dwt_probe to initialize the DW3000 device; contains
-platform-specific probe parameters.
-
 ### `static int uwb_radio_ensure_init(void)`
 `modules/woz_uwb/src/driver/uwb_min.c:101`
 
@@ -49,11 +43,6 @@ platform-specific probe parameters.
 ### `int uwb_min_selftest(struct uwb_selftest_result *out)`
 `modules/woz_uwb/src/driver/uwb_min.c:181`
 
-@brief Self-test result emitted by @ref uwb_min_selftest.
-
-### `int uwb_min_selftest(struct uwb_selftest_result *out)`
-`modules/woz_uwb/src/driver/uwb_min.c:181`
-
 @brief Radio self-test: configure, TX one frame, then arm RX.
 
 **calls** `uwb_radio_ensure_init`
@@ -75,16 +64,6 @@ platform-specific probe parameters.
 ### `int uwb_min_twr_poll(uint32_t n, uint32_t period_ms, struct uwb_twr_result *out)`
 `modules/woz_uwb/src/driver/uwb_min.c:349`
 
-@brief Result of a raw static-STS SS-TWR initiator burst (@ref uwb_min_twr_poll).
-
-### `int uwb_min_twr_poll(uint32_t n, uint32_t period_ms, struct uwb_twr_result *out)`
-`modules/woz_uwb/src/driver/uwb_min.c:349`
-
 @brief Raw static-STS SS-TWR initiator burst (bench probe).
 
 **calls** `uwb_min_twr_exchange`, `uwb_min_twr_prep`
-
-### `struct uwb_twr_frame f`
-`modules/woz_uwb/src/driver/uwb_min.c:368`
-
-@brief Outcome of one raw SS-TWR POLL/RESP exchange (@ref uwb_min_twr_exchange).

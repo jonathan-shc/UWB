@@ -11,7 +11,9 @@
 /** SP0 MHR Vendor OUI for Aliro ranging (CSA Company Id). */
 #define CCC_ALIRO_VENDOR_OUI 0x4A191Bu
 
-/** An Aliro ranging session: the URSK + the M1-M4 setup parameters; the interface to the CCC MAC.
+/**
+ * @brief An Aliro ranging session: the URSK + the M1-M4 setup parameters; the interface to the CCC
+ * MAC.
  */
 struct ccc_ran_session {
 	uint8_t ursk[CCC_URSK_LEN]; /**< Ranging secret key (aliro_kdf). */
@@ -31,9 +33,6 @@ struct ccc_ran_session {
 uint16_t ccc_session_n_round(const struct ccc_ran_session *s);
 
 /** Map an Aliro session onto the CCC MAC's ranging-schedule parameters. */
-int ccc_session_to_ran_params(const struct ccc_ran_session *s,
-			      // RAN (Random Access Number) parameters: multiplier, index, and
-			      // preamble code, populated by CCC during session setup.
-			      struct ccc_ran_params *out);
+int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out);
 
 #endif /* CCC_SESSION_H */
