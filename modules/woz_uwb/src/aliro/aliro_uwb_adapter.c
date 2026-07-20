@@ -124,6 +124,7 @@ struct aliro_uwb_adapter
 	 * @brief Opaque CCC context handle, threaded through to the CCC session API calls.
 	 */
 	aliro_uwb_adapter_create_reader(
+		// Opaque CCC context handle, threaded through to the CCC session API calls.
 		struct cherry *cherry_ctx,
 		/**
 		 * @brief Device capabilities event from CCC, containing supported protocol

@@ -11,6 +11,7 @@
 #include <deca_device_api.h>
 #include <deca_probe_interface.h>
 #include <dw3000_hw.h>
+#include <dw3000_spi.h>
 
 LOG_MODULE_REGISTER(uwb_min, LOG_LEVEL_INF);
 
@@ -29,6 +30,31 @@ static int uwb_probe_ensure(void)
 	dw3000_hw_reset();
 	/* Datasheet: ~2 ms wakeup latency after reset; 5 ms gives margin. */
 	k_msleep(5);
+
+	/* Wake the DW3000 and settle it BEFORE the SDK probe. The SDK's dwt_probe reads
+	 * the device id immediately after its own CS-toggle wakeup with no delay, so on a
+	 * cold chip that read lands inside the ~2 ms wakeup latency and returns 0 -> the
+	 * probe fails. Prime the wakeup here and poll the raw DEV_ID (register 0) until it
+	 * reads valid, so the chip is definitely awake when dwt_probe runs. The logged
+	 * value also diagnoses a genuine comms failure: 0x00000000 = MISO low / unpowered /
+	 * held in reset (check the EVB power jumper); 0xFFFFFFFF = MISO floating / no chip;
+	 * other non-DECA = wrong SPI pins/mode. */
+	uint32_t raw_devid = 0u;
+
+	for (int i = 0; i < 5; i++) {
+		dw3000_spi_wakeup();
+		k_msleep(2); /* > DW3000 wakeup latency */
+		uint8_t devid_hdr = 0x00;
+		uint8_t devid_buf[4] = {0};
+
+		dw3000_spi_read(1, &devid_hdr, sizeof(devid_buf), devid_buf);
+		raw_devid = ((uint32_t)devid_buf[3] << 24) | ((uint32_t)devid_buf[2] << 16) |
+			    ((uint32_t)devid_buf[1] << 8) | (uint32_t)devid_buf[0];
+		if ((raw_devid & 0xFFFFFF00u) == 0xDECA0300u) {
+			break;
+		}
+	}
+	LOG_INF("DW3000 raw DEV_ID = 0x%08x (expect 0xDECA03xx)", raw_devid);
 
 	// Struct type passed to dwt_probe to initialize the DW3000 device; contains
 	// platform-specific probe parameters.
