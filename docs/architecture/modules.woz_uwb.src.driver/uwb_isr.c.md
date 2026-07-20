@@ -3,7 +3,7 @@
 
 @file uwb_isr.c — DW3000 interrupt-callback registration (implementation).
 
-**depends on** [`modules/woz_uwb/src/driver/uwb_isr.h`](uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](../modules.woz_uwb.src.facade/trace.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
+**depends on** [`modules/woz_uwb/src/driver/uwb_isr.h`](uwb_isr.h.md), [`modules/woz_uwb/src/facade/trace.h`](../modules.woz_uwb.src.facade/trace.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](../modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_port.h`](../modules.woz_uwb.src.facade/woz_port.h.md)
 
 ## API
 
