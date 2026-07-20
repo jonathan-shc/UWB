@@ -16,7 +16,7 @@ exceeds declared message length, clamping to prevent overrun.
 @return The next attribute, or NULL at end-of-payload or on overrun.
 
 ### `static bool read_be(const struct aliro_uwb_msg_attribute *attr, const char *name, uint8_t width, uint64_t *out)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:44`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:48`
 
 @brief Decodes a big-endian fixed-width integer from an attribute; returns false if declared
 length does not match width or on parse error.
@@ -29,7 +29,7 @@ length does not match width or on parse error.
 **called by** `aliro_uwb_msg_read_u16`, `aliro_uwb_msg_read_u32`, `aliro_uwb_msg_read_u64`, `aliro_uwb_msg_read_u8`
 
 ### `bool aliro_uwb_msg_read_u8(const struct aliro_uwb_msg_attribute *attr, const char *name, uint8_t *out)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:70`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:74`
 
 @brief Decodes an 8-bit big-endian integer from an attribute; returns false on width mismatch or
 parse error.
@@ -41,7 +41,7 @@ parse error.
 **calls** `read_be`
 
 ### `bool aliro_uwb_msg_read_u16(const struct aliro_uwb_msg_attribute *attr, const char *name, uint16_t *out)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:90`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:94`
 
 @brief Decodes a 16-bit big-endian integer from an attribute; returns false on width mismatch or
 parse error.
@@ -53,7 +53,7 @@ parse error.
 **calls** `read_be`
 
 ### `bool aliro_uwb_msg_read_u32(const struct aliro_uwb_msg_attribute *attr, const char *name, uint32_t *out)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:110`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:114`
 
 @brief Decodes a 32-bit big-endian integer from an attribute; returns false on width mismatch or
 parse error.
@@ -65,7 +65,7 @@ parse error.
 **calls** `read_be`
 
 ### `bool aliro_uwb_msg_read_u64(const struct aliro_uwb_msg_attribute *attr, const char *name, uint64_t *out)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:129`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.c:133`
 
 @brief Decodes a 64-bit big-endian integer from an attribute.
 @param attr Attribute holding the encoded value.
