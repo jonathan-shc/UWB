@@ -162,7 +162,18 @@ static int cmd_aliro(int argc, char **argv)
 		}
 		return 0;
 	}
-	printf("usage: aliro <prov|trust>\n");
+	if (argc == 2 && strcmp(argv[1], "clear") == 0) {
+		int rc = aliro_reader_trust_clear();
+		if (rc == 0) {
+			printf("aliro clear: trust store emptied + saved to NVS\n");
+		} else if (rc == 1) {
+			printf("aliro clear: already empty\n");
+		} else {
+			printf("aliro clear: FAILED (NVS error)\n");
+		}
+		return 0;
+	}
+	printf("usage: aliro <prov|trust|clear>\n");
 	return 0;
 }
 #endif /* CONFIG_ENABLE_ALIRO_BLE_UWB */
@@ -268,7 +279,8 @@ void app_shell_start(void)
 		 .hint = NULL,
 		 .func = cmd_range},
 		{.command = "aliro",
-		 .help = "aliro <prov|trust>: show reader identity / trust last credential",
+		 .help = "aliro <prov|trust|clear>: show identity / trust last credential / "
+			 "empty trust store",
 		 .hint = NULL,
 		 .func = cmd_aliro},
 #endif

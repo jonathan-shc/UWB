@@ -983,6 +983,36 @@ int aliro_reader_trust_last(void)
 	return 0;
 }
 
+// Empty the trust store and persist the empty store, keeping the reader identity.
+// Returns 1 if the store was already empty (nothing persisted), -1 if the NVS write fails
+// (in-memory trust store left unchanged), 0 if cleared and committed.
+//
+// Every re-pair mints a fresh credential and nothing evicts the old ones, so the store
+// reaches ALIRO_TRUST_MAX and refuses the key currently being presented. A Matter factory
+// reset does not touch this namespace, so without this the only way out is erasing NVS.
+int aliro_reader_trust_clear(void)
+{
+	load_provisioning();
+
+	struct aliro_trust_store cand;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	cand = s_trust;
+	xSemaphoreGive(s_prov_lock);
+
+	if (cand.count == 0) {
+		return 1;
+	}
+	memset(&cand, 0, sizeof(cand));
+	if (aliro_prov_store(&s_id, &cand) != 0) {
+		return -1; /* not committed; s_trust unchanged */
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_trust = cand;
+	xSemaphoreGive(s_prov_lock);
+	return 0;
+}
+
 /* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
  * These run on the Matter task during commissioning, before the reader is
  * started (the reader starts only after the BLE handoff). They mutate the same
