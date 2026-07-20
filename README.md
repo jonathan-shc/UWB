@@ -68,6 +68,13 @@ Also available: `make test` (host test suite, no toolchain or hardware required)
 `make term`, and `make clean`. Run `make` alone for the full grouped list. Options pass
 as variables: `make build PRETTY=1 CHIP=dw3720` (also `PRISTINE=1`, `SELFTEST=1`).
 
+`HA=1` builds an optional Home Assistant variant that surfaces lock operations and
+UWB proximity over Matter. It has to be set on both steps
+(`make bootstrap HA=1 && make build HA=1`) and is not hardware-validated; default
+builds are unaffected. See
+[`integration/homeassistant/`](integration/homeassistant/README.md), which also
+documents a console-to-MQTT bridge that needs no firmware change at all.
+
 ## Hardware
 
 | Part | Role |

@@ -12,6 +12,27 @@ Nothing on the device changes. The bridge only reads the console, so it runs
 alongside the existing Apple Home and Wallet setup without taking a Matter
 fabric slot.
 
+## The optional `HA=1` firmware build
+
+Separate from the bridge, `HA=1` opts into a firmware variant that exposes the
+same information over Matter instead of over the console: a DoorLock
+`LockOperation` event, a UWB-proximity occupancy endpoint, and
+`CONFIG_LOCK_PASS_CREDENTIALS_TO_SET_LOCK_STATE`. It needs both halves, because
+the bootstrap step is what applies the matching data-model patches:
+
+```
+HA=1 ./bootstrap.sh     # or: make bootstrap HA=1
+HA=1 ./build.sh build   # or: make build HA=1
+```
+
+**Not hardware-validated.** This has never been run on a board. It changes the
+Matter data model of the lock, so an already-commissioned controller may need
+the lock re-commissioned to pick the new endpoint up, and
+`CONFIG_LOCK_PASS_CREDENTIALS_TO_SET_LOCK_STATE` is disabled upstream pending
+connectedhomeip issue 38222 (a TC-DRLK-2.3 certification failure). Default
+builds are unaffected: with `HA` unset, neither the patches nor the overlay are
+applied. Treat `HA=1` as untested until someone flashes it.
+
 ## Prerequisites
 
 The range line is compiled behind `CONFIG_WOZ_PRETTY_SHELL` and gated at runtime
@@ -25,8 +46,8 @@ pip install paho-mqtt pyserial   # pyserial only for a real serial port
 ## Usage
 
 ```
-# live, against a broker
-aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 --broker 192.168.1.10
+# live, against a broker (--broker defaults to localhost)
+aliro_mqtt_bridge.py --port /dev/tty.usbmodem1234 --broker mqtt.example.com
 
 # parse only: no broker, no board, reads a captured log on stdin
 aliro_mqtt_bridge.py --port - --dry-run < captured.log
