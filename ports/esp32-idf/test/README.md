@@ -9,7 +9,7 @@ a green build is not evidence of anything on this target — these suites are.
 
 | Suite | What it pins |
 |---|---|
-| `test_compat_shim.c` | The fake `<zephyr/*>` headers behave like the real ones |
+| `test_port_headers.c` | The `woz_port.h` platform contract and the pure `woz_bytes.h` / `woz_util.h` helpers behave as specified |
 | `test_aliro_crypto.c` | SHA-256, HMAC, HKDF, X9.63 and AES-GCM against published vectors, then the key-schedule composition and secure-channel counters on top |
 | `test_aliro_apdu.c` | The wire codec byte-for-byte: command builders, signed-data transcripts, response parsers, the L2CAP envelope |
 | `test_aliro_prov.c` | Reader identity serialization and the trust store, including malformed-blob rejection |
