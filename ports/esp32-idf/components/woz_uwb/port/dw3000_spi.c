@@ -27,11 +27,16 @@ static SemaphoreHandle_t s_lock;
 
 /* Max DW3000 single SPI transfer: ~1023 B frame + a few header bytes. */
 #define DW_XFER_MAX 2048
+/* Non-DMA SPI bursts cap at the CPU data registers (64 B on S3). */
+#define DW_XFER_CHUNK SOC_SPI_MAXIMUM_BUFFER_SIZE
 static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_txbuf[DW_XFER_MAX];
 static WORD_ALIGNED_ATTR DRAM_ATTR uint8_t s_rxbuf[DW_XFER_MAX];
 
 int dw3000_spi_init(void)
 {
+	if (s_dev_fast != NULL) {
+		return 0; /* already up: re-adding devices would leak the old handles */
+	}
 	if (s_lock == NULL) {
 		s_lock = xSemaphoreCreateMutex();
 	}
@@ -52,7 +57,12 @@ int dw3000_spi_init(void)
 		.quadhd_io_num = -1,
 		.max_transfer_sz = DW_XFER_MAX,
 	};
-	esp_err_t e = spi_bus_initialize(WOZ_DW3000_SPI_HOST, &bus, SPI_DMA_CH_AUTO);
+	/* DMA-disabled: the ~50us/transaction DMA-descriptor + cache-msync path dwarfs
+	 * bit-time for the small register/STS writes on the ranging arm critical path.
+	 * Without DMA, <=64 B transfers use the CPU data registers directly (~10us).
+	 * dw_xfer chunks anything larger into 64 B bursts. Only the DW3000 is on this
+	 * bus (status LED is on RMT), so this is safe. */
+	esp_err_t e = spi_bus_initialize(WOZ_DW3000_SPI_HOST, &bus, SPI_DMA_DISABLED);
 	if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) {
 		ESP_LOGE(TAG, "spi_bus_initialize failed: %d", e);
 		return -1;
@@ -118,14 +128,24 @@ static int32_t dw_xfer(const uint8_t *hdr, uint16_t hlen, const uint8_t *body,
 		s_txbuf[hlen + blen] = *crc;
 	}
 
-	spi_transaction_t t = {
-		.length = total * 8u,
-		.tx_buffer = s_txbuf,
-		.rx_buffer = rx_body ? s_rxbuf : NULL,
-	};
-
+	/* Non-DMA transfers cap at DW_XFER_CHUNK (64 B), so split longer DW3000
+	 * transactions into <=64 B bursts inside one CS-low window; the chip streams
+	 * sequentially so a split read/write is seamless. Anything <=64 B (every
+	 * register/STS write on the arm critical path) is a single burst, unchanged. */
 	gpio_set_level(WOZ_DW3000_PIN_CS, 0);
-	esp_err_t e = spi_device_polling_transmit(s_cur, &t);
+	esp_err_t e = ESP_OK;
+	for (size_t off = 0; off < total && e == ESP_OK; off += DW_XFER_CHUNK) {
+		size_t n = total - off;
+		spi_transaction_t t = {0};
+
+		if (n > DW_XFER_CHUNK) {
+			n = DW_XFER_CHUNK;
+		}
+		t.length = n * 8u;
+		t.tx_buffer = s_txbuf + off;
+		t.rx_buffer = rx_body ? (s_rxbuf + off) : NULL;
+		e = spi_device_polling_transmit(s_cur, &t);
+	}
 	gpio_set_level(WOZ_DW3000_PIN_CS, 1);
 
 	if (e == ESP_OK && rx_body && blen) {

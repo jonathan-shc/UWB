@@ -48,6 +48,7 @@ idf_component_register(
     SRCS ${WOZ_SRCS}
     INCLUDE_DIRS
         "${WOZ}/facade"        # woz_uwb_facade.h — public API for the app
+        "${WOZ}/aliro/include" # aliro_uwb_adapter/ + cherry/ — reader ranging-setup API
     PRIV_INCLUDE_DIRS
         "compat"               # fake <zephyr/*> — must resolve first
         "port"                 # board_pins.h
@@ -83,8 +84,14 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 #   dwt_rxenable         -> __wrap in ccc_shim_rx.c   (RX-arm CCC key/IV)
 #   dwt_configurestsmode -> pass-through in port/woz_wrap_stubs.c (needed so
 #                           ccc_shim_rx.c's __real_dwt_configurestsmode resolves)
+#   dwt_setcallbacks     -> __wrap in port/woz_wrap_stubs.c: installs the RX-good
+#                           shim that runs ccc_shim_rx_try_prepoll to bootstrap the
+#                           STS warm (g_warm_valid) — without it the responder
+#                           receives Pre-POLLs but never arms/replies. Mirrors the
+#                           Nordic uwb_rxdiag.c shim (which this port omits: k_work).
 target_link_libraries(${COMPONENT_LIB} INTERFACE
     "-Wl,--wrap=dwt_configurestsiv"
     "-Wl,--wrap=dwt_rxenable"
     "-Wl,--wrap=dwt_configurestsmode"
+    "-Wl,--wrap=dwt_setcallbacks"
 )

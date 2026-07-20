@@ -107,9 +107,15 @@ int dw3000_hw_init_interrupt(void)
 	gpio_isr_handler_add(WOZ_DW3000_PIN_IRQ, dw3000_gpio_isr, NULL);
 
 	if (s_irq_task == NULL) {
-		/* High priority, pinned to core 1 (BLE/Wi-Fi live on core 0). */
+		/* Pinned to core 1 (BLE/Wi-Fi live on core 0). Priority 23 (above esp_timer=22
+		 * and the Matter/Thread service tasks): the DW3000 RX/TX-done callbacks drive the
+		 * DS-TWR slot choreography (POLL arm, Response TX, Final-RFRAME arm) with only ~2 ms
+		 * between steps. At 20, esp_timer/Thread preempted this task ~2.4 ms per TX-done,
+		 * so the Final arm (POLL+2 slots) always ran after the Final had passed (t6 lost ->
+		 * garbage ToF). 23 lets the callback fire promptly; the task is bursty and mostly
+		 * blocks on the IRQ semaphore, so it does not starve the system. */
 		xTaskCreatePinnedToCore(dw3000_isr_task, "dw3000_isr", 4096, NULL,
-					20, &s_irq_task, 1);
+					23, &s_irq_task, 1);
 	}
 	s_irq_enabled = true;
 	ESP_LOGI(TAG, "IRQ on GPIO%d", WOZ_DW3000_PIN_IRQ);

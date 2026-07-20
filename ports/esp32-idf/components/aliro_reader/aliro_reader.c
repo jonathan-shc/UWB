@@ -4,70 +4,114 @@
  *
  * aliro_reader — the Aliro reader credential-auth transaction (Phase 3.2/3.3) on
  * top of the aliro_ble L2CAP transport. Drives AUTH0 -> AUTH1 -> EXCHANGE, runs
- * the ECDH + key schedule (aliro_crypto) to derive the URSK, then hands it to the
- * UWB engine (woz_uwb_start_aliro). Wire codec = aliro_apdu; crypto = aliro_crypto.
+ * the ECDH + key schedule (aliro_crypto) to derive the URSK, then hands the URSK
+ * to aliro_ranging, which negotiates the ranging parameters with the peer
+ * (M1-M4) and starts the UWB responder. Wire codec = aliro_apdu; crypto =
+ * aliro_crypto; ranging setup = aliro_ranging.
  *
  * Heavy diagnostic logging by design: this path can only complete end-to-end
- * once the reader is provisioned (Phase 4: real reader identity + issuer trust)
- * and a real credential is present. Until then it exercises + logs each step.
- * The reader identity here is a dev placeholder generated at start.
+ * once the reader is provisioned and a real credential is present. The reader
+ * identity + credential trust store come from the provisioning seam (aliro_prov,
+ * Phase 3.4): NVS if present, else a clearly-marked dev identity so the
+ * transaction is drivable at bench before Phase-4 Matter provisioning lands.
  */
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 
 #include "aliro_ble.h"
 #include "aliro_apdu.h"
 #include "aliro_crypto.h"
 #include "aliro_prim.h"
-#include "woz_uwb_facade.h"
+#include "aliro_prov.h"
+#include "aliro_ranging.h"
 #include "aliro_reader.h"
 
 static const char *TAG = "aliro_reader";
 
 /* PROVISIONAL advertised BLE-UWB protocol version. Real value is the provisioned
  * Matter attribute (Phase 4); 0x0100 is the baseline the arbiter treats specially. */
-static const uint16_t k_proto_versions[] = { 0x0100u };
+static const uint16_t k_proto_versions[] = {0x0100u};
 #define ALIRO_VERSION 0x0100u
 
-/* Dev reader identity (Phase 4 replaces with a provisioned identity + issuer
- * trust anchors). Generated once at reader start. */
-static uint8_t s_reader_id[32];
-static uint8_t s_reader_sign_priv[32];
-static bool s_provisioned;
+/* Reader identity + credential trust store, loaded once at start from the
+ * provisioning seam (NVS, else the clearly-marked dev identity). */
+static struct aliro_reader_identity s_id;
+static struct aliro_trust_store s_trust;
+static bool s_loaded;
 
-/* Canned ranging parameters for the 3.3 handoff. The real parameters are
- * negotiated in the M1-M4 exchange (post-auth, over BleSK) which is a later
- * increment; until then the derived URSK is bound to these demo params. */
-static const struct {
-	uint32_t session_id;
-	uint8_t channel;
-	uint8_t sync_code_index;
-	uint16_t slot_duration_rstu;
-	uint32_t block_duration_ms;
-	uint8_t slot_per_round;
-	uint32_t sts_index0;
-} k_ranging = { 0x02b02fd4u, 9u, 9u, 2400u, 192u, 12u, 0x1196e79du };
+/* Most-recently-presented credential public key (the one the device signature
+ * verified against). Captured for the `aliro-trust` bench command. */
+static uint8_t s_last_cred_pub[ALIRO_CRED_PUB_LEN];
+static bool s_have_last_cred;
+
+/* Reader group key X = the X coordinate of pub(sign_priv). This is salt field 1
+ * (reader_group_identifier_key.x) in the §8.3.1.13 key schedule; both sides must
+ * agree on it, so it is derived from the provisioned signingKey (its public
+ * counterpart = the verificationKey the credential was provisioned with).
+ * Recomputed whenever s_id changes. */
+static uint8_t s_reader_group_x[ALIRO_EC_PUBX_LEN];
+static bool s_have_group_x;
+
+/* Fallback SELECT-response 0xA5 proprietary-info TLV for a CSA-app, protocol
+ * v1.0-only device (Table 10-2): a5 08 [80 02 0000] [5c 02 0100]. Used only when
+ * the phone's op-0x05 message carried no 0xA5 TLV (a live device sends its own). */
+static const uint8_t k_a5_csa_v1[] = {
+	0xa5, 0x08, 0x80, 0x02, 0x00, 0x00, 0x5c, 0x02, 0x01, 0x00,
+};
+
+/* Recover the reader group key X from the provisioned signingKey. Call after any
+ * mutation of s_id. Leaves s_have_group_x=false (and logs) on failure. */
+static void compute_reader_group_x(void)
+{
+	uint8_t pub[ALIRO_P256_POINT];
+
+	if (aliro_ec_p256_pub_from_priv(s_id.sign_priv, pub) == 0) {
+		memcpy(s_reader_group_x, pub + 1, ALIRO_EC_PUBX_LEN);
+		s_have_group_x = true;
+	} else {
+		s_have_group_x = false;
+		ESP_LOGE(TAG, "reader group key derivation failed; salt field 1 unavailable");
+	}
+}
+
+/* Guards s_trust + s_last_cred_pub/s_have_last_cred, which the BLE-host task
+ * (on_auth1_response) and the REPL task (the aliro-prov/aliro-trust commands)
+ * both touch. s_id/s_loaded are set once at boot before the REPL starts, so they
+ * need no lock. Created in load_provisioning() (runs single-threaded at boot). */
+static SemaphoreHandle_t s_prov_lock;
 
 enum txn_phase {
-	PH_IDLE = 0,     /* connected; awaiting the peer's first message */
-	PH_SENT_AUTH0,   /* AUTH0 sent; awaiting AUTH0Response */
-	PH_SENT_AUTH1,   /* AUTH1 sent; awaiting AUTH1Response */
-	PH_ESTABLISHED,  /* URSK derived, UWB armed */
+	PH_IDLE = 0,    /* connected; awaiting the peer's first message */
+	PH_SENT_AUTH0,  /* AUTH0 sent; awaiting AUTH0Response */
+	PH_SENT_AUTH1,  /* AUTH1 sent; awaiting AUTH1Response */
+	PH_SENT_EXCHANGE, /* EXCHANGE sent; awaiting its response, then AP-Completed */
+	PH_ESTABLISHED, /* AP-Completed sent; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
 };
 
 static const char *phase_str(enum txn_phase p)
 {
 	switch (p) {
-	case PH_IDLE:        return "IDLE";
-	case PH_SENT_AUTH0:  return "SENT_AUTH0";
-	case PH_SENT_AUTH1:  return "SENT_AUTH1";
-	case PH_ESTABLISHED: return "ESTABLISHED";
-	case PH_FAILED:      return "FAILED";
-	default:             return "?";
+	case PH_IDLE:
+		return "IDLE";
+	case PH_SENT_AUTH0:
+		return "SENT_AUTH0";
+	case PH_SENT_AUTH1:
+		return "SENT_AUTH1";
+	case PH_SENT_EXCHANGE:
+		return "SENT_EXCHANGE";
+	case PH_ESTABLISHED:
+		return "ESTABLISHED";
+	case PH_FAILED:
+		return "FAILED";
+	default:
+		return "?";
 	}
 }
 
@@ -84,8 +128,15 @@ static struct aliro_session {
 	uint8_t txid[ALIRO_TXID_LEN];
 	uint8_t device_eph_pub[ALIRO_P256_POINT];
 	uint8_t z[32];
-	struct aliro_secchan sc;
+	struct aliro_secchan sc;      /* AP secure channel (ExpeditedSK) */
+	struct aliro_secchan sc_ble;  /* ranging channel (BleSKReader/Device), §11.8 */
 	uint8_t ursk[ALIRO_URSK_LEN];
+
+	/* The phone's 0xA5 proprietary-info TLV (tag+len+value), captured from its
+	 * op-0x05 Initiate-Access-Protocol message; the trailing field of the
+	 * session-key salt. a5_len==0 means none seen (use the CSA v1.0 default). */
+	uint8_t a5_tlv[64];
+	size_t a5_len;
 } s_sessions[ALIRO_MAX_SESSIONS];
 
 static struct aliro_session *session_find(uint16_t conn_handle)
@@ -112,67 +163,59 @@ static struct aliro_session *session_alloc(uint16_t conn_handle)
 	return NULL;
 }
 
-static int provision_dev_identity(void)
+static void load_provisioning(void)
 {
-	uint8_t pub[ALIRO_P256_POINT];
+	if (s_prov_lock == NULL) {
+		s_prov_lock = xSemaphoreCreateMutex();
+	}
+	if (s_loaded) {
+		return;
+	}
+	int rc = aliro_prov_load(&s_id, &s_trust);
 
-	if (s_provisioned) {
-		return 0;
+	if (s_id.is_dev) {
+		ESP_LOGW(TAG,
+			 "using DEV reader identity (Phase 4 supplies the real "
+			 "one); %u trust anchor(s)",
+			 s_trust.count);
+	} else {
+		ESP_LOGI(TAG, "provisioned reader identity loaded; %u trust anchor(s)",
+			 s_trust.count);
 	}
-	if (aliro_ec_p256_keygen(s_reader_sign_priv, pub) != 0) {
-		return -1;
-	}
-	/* Dev placeholder: reader identifier = signing public-key X coordinate.
-	 * Phase 4 supplies the real provisioned reader identifier. */
-	memcpy(s_reader_id, pub + 1, 32);
-	s_provisioned = true;
-	return 0;
+	ESP_LOGI(TAG, "prov source: %s", rc == 0 ? "NVS" : "dev default");
+	compute_reader_group_x();
+	s_loaded = true;
 }
 
-static int send_framed(uint16_t conn, uint8_t opcode, const uint8_t *payload, size_t len)
+/* Frame + send an Access-Protocol command: wrap the command TLV in an ISO7816
+ * APDU (ins selects AUTH0/AUTH1/EXCHANGE), then a BLE Access frame
+ * (type=ACCESS, opcode=AP_OP_COMMAND). The command byte lives in the APDU INS,
+ * NOT the BLE opcode — the phone rejects a raw TLV under opcode=INS. */
+static int send_ap_command(uint16_t conn, uint8_t ins, const uint8_t *tlv, size_t len)
 {
-	uint8_t frame[600];
-	size_t flen;
+	/* One buffer [type][op][len_be16][APDU]. This runs on the small nimble_host
+	 * callback stack, so build the APDU past a 4-byte header and fill the header in
+	 * place rather than staging a second frame buffer. AUTH0/AUTH1/EXCHANGE APDUs
+	 * are all well under 256 B. */
+	uint8_t frame[ALIRO_ENVELOPE_HDR + 256];
+	size_t alen;
 
-	if (aliro_ble_frame(0x00, opcode, payload, len, frame, sizeof(frame), &flen) != 0) {
-		ESP_LOGE(TAG, "[conn %u] frame build failed (op 0x%02x len %u)", conn,
-			 opcode, (unsigned)len);
+	if (aliro_apdu_wrap(ins, tlv, len, frame + ALIRO_ENVELOPE_HDR,
+			    sizeof(frame) - ALIRO_ENVELOPE_HDR, &alen) != 0) {
+		ESP_LOGE(TAG, "[conn %u] APDU wrap failed (ins 0x%02x len %u)", conn, ins,
+			 (unsigned)len);
 		return -1;
 	}
-	int rc = aliro_ble_send(conn, frame, flen);
+	frame[0] = ALIRO_PROTO_ACCESS;
+	frame[1] = ALIRO_AP_OP_COMMAND;
+	frame[2] = (uint8_t)(alen >> 8);
+	frame[3] = (uint8_t)(alen & 0xffu);
 
-	ESP_LOGI(TAG, "[conn %u] TX op 0x%02x, %u payload bytes (send rc=%d)", conn,
-		 opcode, (unsigned)len, rc);
+	int rc = aliro_ble_send(conn, frame, ALIRO_ENVELOPE_HDR + alen);
+
+	ESP_LOGI(TAG, "[conn %u] TX ins 0x%02x, %u APDU bytes (send rc=%d)", conn, ins,
+		 (unsigned)alen, rc);
 	return rc;
-}
-
-/* Phase 3.3: bind the derived URSK and start the UWB responder. */
-static void arm_uwb_from_credential(struct aliro_session *s)
-{
-	ESP_LOGI(TAG, "[conn %u] URSK derived; arming UWB responder", s->conn_handle);
-	ESP_LOG_BUFFER_HEXDUMP(TAG, s->ursk, ALIRO_URSK_LEN, ESP_LOG_INFO);
-
-	struct woz_uwb_aliro_cfg cfg = {
-		.session_id = k_ranging.session_id,
-		.channel = k_ranging.channel,
-		.sync_code_index = k_ranging.sync_code_index,
-		.slot_duration_rstu = k_ranging.slot_duration_rstu,
-		.block_duration_ms = k_ranging.block_duration_ms,
-		.slot_per_round = k_ranging.slot_per_round,
-		.sts_index0 = k_ranging.sts_index0,
-		.uwb_time_us = 0u,
-		.ursk = s->ursk,
-		.ranging_config = NULL,
-		.rc_len = 0,
-	};
-
-	/* Re-point the engine at the credential-derived URSK. Ranging params are
-	 * canned until the M1-M4 negotiation is parsed. */
-	woz_uwb_stop();
-	int rc = woz_uwb_start_aliro(&cfg);
-
-	ESP_LOGI(TAG, "[conn %u] woz_uwb_start_aliro(derived URSK) = %d %s",
-		 s->conn_handle, rc, rc == 0 ? "(ranging armed)" : "(FAILED)");
 }
 
 /* Kick the reader-driven access protocol: ephemeral keys + txid -> AUTH0. */
@@ -188,22 +231,35 @@ static void start_auth(struct aliro_session *s)
 	uint8_t apdu[160];
 	size_t n;
 
-	/* ExpeditedPhaseType/UserAuthenticationPolicy: standard path, no extra
-	 * policy (enum values are provisioning/policy driven; 0x02/0x00 here). */
-	if (aliro_apdu_build_auth0(0x02u, 0x00u, ALIRO_VERSION, s->reader_eph_pub,
-				   s->txid, s_reader_id, apdu, sizeof(apdu), &n) != 0) {
+	/* Standard-path AUTH0: ExpeditedPhaseType 0 (encoded as an empty 41 00) and
+	 * UserAuthenticationPolicy 0x01 — values confirmed from the reference
+	 * AUTH0Command::Serialize. These same two values feed the session-key salt below. */
+	if (aliro_apdu_build_auth0(0x00u, 0x01u, ALIRO_VERSION, s->reader_eph_pub, s->txid,
+				   s_id.reader_id, apdu, sizeof(apdu), &n) != 0) {
 		ESP_LOGE(TAG, "[conn %u] AUTH0 build failed", s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
 	}
-	send_framed(s->conn_handle, ALIRO_OP_AUTH0, apdu, n);
+	send_ap_command(s->conn_handle, ALIRO_INS_AUTH0, apdu, n);
 	s->phase = PH_SENT_AUTH0;
 }
 
 static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t len)
 {
 	struct aliro_auth0_response r;
+	uint16_t sw;
 
+	/* APDU response = <response TLV> SW1 SW2; drop the status word before parsing. */
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AUTH0Response too short (%u B)", s->conn_handle,
+			 (unsigned)len);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (sw != 0x9000u) {
+		ESP_LOGW(TAG, "[conn %u] AUTH0Response SW=0x%04x (expected 0x9000)", s->conn_handle,
+			 sw);
+	}
 	if (aliro_apdu_parse_auth0_response(pl, len, &r) != 0) {
 		ESP_LOGE(TAG, "[conn %u] AUTH0Response parse failed", s->conn_handle);
 		s->phase = PH_FAILED;
@@ -224,10 +280,9 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 	uint8_t td[160], sig[ALIRO_P256_SIG], apdu[128];
 	size_t tn, n;
 
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_READER, s_reader_id,
-				      s->device_eph_pub + 1, s->reader_eph_pub + 1,
-				      s->txid, td, sizeof(td), &tn) != 0 ||
-	    aliro_ecdsa_p256_sign(s_reader_sign_priv, td, tn, sig) != 0) {
+	if (aliro_apdu_build_authdata(ALIRO_AUTH_READER, s_id.reader_id, s->device_eph_pub + 1,
+				      s->reader_eph_pub + 1, s->txid, td, sizeof(td), &tn) != 0 ||
+	    aliro_ecdsa_p256_sign(s_id.sign_priv, td, tn, sig) != 0) {
 		ESP_LOGE(TAG, "[conn %u] reader signature failed", s->conn_handle);
 		s->phase = PH_FAILED;
 		return;
@@ -236,48 +291,47 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 		s->phase = PH_FAILED;
 		return;
 	}
-	send_framed(s->conn_handle, ALIRO_OP_AUTH1, apdu, n);
+	send_ap_command(s->conn_handle, ALIRO_INS_AUTH1, apdu, n);
 	s->phase = PH_SENT_AUTH1;
 }
 
 static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t len)
 {
 	struct aliro_auth1_response r;
+	uint16_t sw;
 
-	if (aliro_apdu_parse_auth1_response(pl, len, &r) != 0) {
-		ESP_LOGE(TAG, "[conn %u] AUTH1Response parse failed", s->conn_handle);
+	/* APDU response = <response TLV> SW1 SW2; drop the status word before parsing. */
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response too short (%u B)", s->conn_handle,
+			 (unsigned)len);
 		s->phase = PH_FAILED;
 		return;
 	}
-
-	/* Verify the device signature over the device-usage transcript. Trust of
-	 * the presenting credential key itself is a Phase-4 issuer check. */
-	const uint8_t *cred_pub = r.have_device_pub ? r.device_pub : s->device_eph_pub;
-	uint8_t td[160];
-	size_t tn;
-
-	if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, s_reader_id,
-				      s->device_eph_pub + 1, s->reader_eph_pub + 1,
-				      s->txid, td, sizeof(td), &tn) != 0) {
-		s->phase = PH_FAILED;
-		return;
+	if (sw != 0x9000u) {
+		ESP_LOGW(TAG, "[conn %u] AUTH1Response SW=0x%04x (expected 0x9000)", s->conn_handle,
+			 sw);
 	}
-	if (aliro_ecdsa_p256_verify(cred_pub, td, tn, r.device_sig) != 0) {
-		ESP_LOGW(TAG, "[conn %u] device signature INVALID (expected until a "
-			      "provisioned credential is present)", s->conn_handle);
-		s->phase = PH_FAILED;
-		return;
-	}
-	ESP_LOGI(TAG, "[conn %u] device signature OK", s->conn_handle);
-
-	/* Establish the secure channel: HKDF key block -> session keys + URSK. */
+	/* Establish the secure channel BEFORE reading the body: the AUTH1Response is
+	 * AES-256-GCM-encrypted under it (Aliro §8.3.1.6/.7). salt_volatile (§8.3.1.13)
+	 * = reader_group_key.x || "Volatile****" || reader_id || interface_byte(BLE) ||
+	 * 0x5C 0x02 || version || reader_eph.x || txid || flag || phone 0xA5 TLV; info =
+	 * the device (Access Credential) ephemeral pub X; ikm = Kdh (s->z). The URSK and
+	 * the ExpeditedSKReader/Device channel keys fall out of the same 160-byte block. */
 	uint8_t salt[ALIRO_SALT_MAX], block[ALIRO_KEY_BLOCK_LEN];
 	uint8_t enc[ALIRO_SESSION_KEY_LEN], dec[ALIRO_SESSION_KEY_LEN];
 	size_t slen;
+	const uint8_t *a5 = s->a5_len ? s->a5_tlv : k_a5_csa_v1;
+	size_t a5n = s->a5_len ? s->a5_len : sizeof(k_a5_csa_v1);
 
-	if (aliro_salt_build(ALIRO_SALT_SESSION, s->txid, s->device_eph_pub + 1,
-			     s->reader_eph_pub + 1, s_reader_id, ALIRO_VERSION, 0x02u,
-			     0x00u, NULL, salt, &slen) != 0 ||
+	if (!s_have_group_x) {
+		ESP_LOGE(TAG, "[conn %u] no reader group key; cannot build session salt",
+			 s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (aliro_salt_build(ALIRO_SALT_SESSION, s->txid, s_reader_group_x,
+			     s->reader_eph_pub + 1, s_id.reader_id, ALIRO_IFACE_BLE,
+			     ALIRO_VERSION, 0x00u, 0x01u, NULL, a5, a5n, salt, &slen) != 0 ||
 	    aliro_crypto_derive_block(s->z, salt, slen, s->device_eph_pub + 1, block) != 0) {
 		ESP_LOGE(TAG, "[conn %u] key-block derivation failed", s->conn_handle);
 		s->phase = PH_FAILED;
@@ -285,6 +339,112 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	}
 	aliro_crypto_split(block, 1, enc, dec, s->ursk);
 	aliro_secchan_init(&s->sc, enc, dec);
+
+	/* Ranging channel keys (§11.8.1): BleSKReader/BleSKDevice off BleSK (block
+	 * offset 96); salt = reader_supported_versions || user_device_selected_version.
+	 * We advertise and select v1.0 only, so salt = 01 00 01 00. Its own counters
+	 * (fresh from 1) live in s->sc_ble and carry across AP-Completed + M1..M4. */
+	{
+		uint8_t ble_r[ALIRO_SESSION_KEY_LEN], ble_d[ALIRO_SESSION_KEY_LEN];
+		uint8_t ble_salt[sizeof(k_proto_versions) + 2];
+		size_t bsl = 0;
+
+		for (size_t i = 0; i < sizeof(k_proto_versions) / sizeof(k_proto_versions[0]);
+		     i++) {
+			ble_salt[bsl++] = (uint8_t)(k_proto_versions[i] >> 8);
+			ble_salt[bsl++] = (uint8_t)(k_proto_versions[i] & 0xffu);
+		}
+		ble_salt[bsl++] = (uint8_t)(ALIRO_VERSION >> 8); /* selected = only version */
+		ble_salt[bsl++] = (uint8_t)(ALIRO_VERSION & 0xffu);
+		if (aliro_crypto_derive_ble_keys(block, ble_salt, bsl, ble_r, ble_d) != 0) {
+			ESP_LOGE(TAG, "[conn %u] BleSK derivation failed", s->conn_handle);
+			s->phase = PH_FAILED;
+			return;
+		}
+		aliro_secchan_init(&s->sc_ble, ble_r, ble_d);
+	}
+
+	/* Decrypt the body: <ciphertext || 16-byte GCM tag>, the first inbound message
+	 * (dec counter 1 per §8.3.1.13 init). A tag mismatch means the session key,
+	 * counter, or ct/tag framing is off — the on-hardware test of the key schedule. */
+	if (len < ALIRO_GCM_TAG_LEN) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response too short for a GCM tag (%u B)",
+			 s->conn_handle, (unsigned)len);
+		s->phase = PH_FAILED;
+		return;
+	}
+	size_t ctlen = len - ALIRO_GCM_TAG_LEN;
+	uint8_t ptbuf[256];
+
+	if (ctlen > sizeof(ptbuf)) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response too large (%u B)", s->conn_handle,
+			 (unsigned)ctlen);
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (aliro_secchan_open(&s->sc, NULL, 0, pl, ctlen, pl + ctlen, ptbuf) != 0) {
+		ESP_LOGE(TAG,
+			 "[conn %u] AUTH1Response GCM auth FAILED (%u ct B): session key / "
+			 "counter / ct-tag framing mismatch",
+			 s->conn_handle, (unsigned)ctlen);
+		s->phase = PH_FAILED;
+		return;
+	}
+	ESP_LOGI(TAG, "[conn %u] AUTH1Response DECRYPTED (%u B plaintext):", s->conn_handle,
+		 (unsigned)ctlen);
+	ESP_LOG_BUFFER_HEXDUMP(TAG, ptbuf, ctlen, ESP_LOG_INFO);
+
+	if (aliro_apdu_parse_auth1_response(ptbuf, ctlen, &r) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AUTH1Response (decrypted) parse failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+
+	/* Verify the device signature over the device-usage transcript. This proves
+	 * possession of the presented key; whether that key is *trusted* is the
+	 * separate trust-store check below. */
+	const uint8_t *cred_pub = r.have_device_pub ? r.device_pub : s->device_eph_pub;
+	uint8_t td[160];
+	size_t tn;
+
+	if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, s_id.reader_id, s->device_eph_pub + 1,
+				      s->reader_eph_pub + 1, s->txid, td, sizeof(td), &tn) != 0) {
+		s->phase = PH_FAILED;
+		return;
+	}
+	if (aliro_ecdsa_p256_verify(cred_pub, td, tn, r.device_sig) != 0) {
+		ESP_LOGW(TAG,
+			 "[conn %u] device signature INVALID (may need key lookup by "
+			 "identifier; the decrypt itself succeeded)",
+			 s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	ESP_LOGI(TAG, "[conn %u] device signature OK", s->conn_handle);
+
+	/* Remember the presented credential key for the `aliro-trust` bench command,
+	 * and take the trust decision, under the lock the REPL commands share. The
+	 * raw-key allowlist is the interim seam; real issuer-chain validation plugs
+	 * in here (Phase 4). */
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	memcpy(s_last_cred_pub, cred_pub, ALIRO_CRED_PUB_LEN);
+	s_have_last_cred = true;
+	int tv = aliro_prov_trust_check(&s_trust, cred_pub);
+	xSemaphoreGive(s_prov_lock);
+
+	if (tv == 0) {
+		ESP_LOGI(TAG, "[conn %u] credential key TRUSTED", s->conn_handle);
+	} else if (tv == 1 && s_id.is_dev) {
+		ESP_LOGW(TAG,
+			 "[conn %u] no trust anchors (DEV identity): accepting the "
+			 "presented credential; run `aliro-trust` to enforce",
+			 s->conn_handle);
+	} else {
+		ESP_LOGW(TAG, "[conn %u] credential key NOT trusted (%s); rejecting",
+			 s->conn_handle, tv == 1 ? "no anchors provisioned" : "not in trust store");
+		s->phase = PH_FAILED;
+		return;
+	}
 
 	/* EXCHANGE: seal the URSK-ready trigger and frame it. */
 	uint8_t ex[16], ct[16], tag[ALIRO_GCM_TAG_LEN], payload[32];
@@ -298,10 +458,155 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	}
 	memcpy(payload, ct, exn);
 	memcpy(payload + exn, tag, ALIRO_GCM_TAG_LEN);
-	send_framed(s->conn_handle, ALIRO_OP_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
+	send_ap_command(s->conn_handle, ALIRO_INS_EXCHANGE, payload, exn + ALIRO_GCM_TAG_LEN);
+
+	/* Auth + both channels + URSK are ready. Wait for the EXCHANGE response before
+	 * completing the AP: §11.1.1 requires the reader to send Reader-Status-AP-Completed
+	 * (BleSK-sealed) after EXCHANGE succeeds, otherwise the device stalls and drops
+	 * (URSK_Unavailable). on_exchange_response drives that + ranging. */
+	s->phase = PH_SENT_EXCHANGE;
+	ESP_LOGI(TAG, "[conn %u] URSK derived; EXCHANGE sent, awaiting response",
+		 s->conn_handle);
+	ESP_LOG_BUFFER_HEXDUMP(TAG, s->ursk, ALIRO_URSK_LEN, ESP_LOG_INFO);
+}
+
+/* Reader-Status-Access-Protocol-Completed (§11.1.1 / §11.7.3.4.1): a proto-2
+ * Notification, message-id 0x03, carrying one Reader Information Attribute
+ * (id 0x00, len 2, value = unsolicited-status-reporting mode in bits 15:13). The
+ * device will not initiate ranging until it receives this. Plaintext message the
+ * BleSK channel then seals: [02][03][00 04][00 02 20 00]. */
+static const uint8_t k_ap_completed_plain[] = {
+	0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00,
+};
+
+/* Handle the EXCHANGE response, then complete the AP and arm ranging. The body is
+ * an AP (proto-0) response on the ExpeditedSK channel: <ct || 16B tag> SW1SW2. */
+static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, size_t len)
+{
+	uint16_t sw;
+
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		ESP_LOGE(TAG, "[conn %u] EXCHANGE response too short", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	uint8_t body[16];
+	size_t bodylen = (len >= ALIRO_GCM_TAG_LEN) ? len - ALIRO_GCM_TAG_LEN : 0;
+
+	if (bodylen == 0 || bodylen > sizeof(body) ||
+	    aliro_secchan_open(&s->sc, NULL, 0, pl, bodylen, pl + bodylen, body) != 0) {
+		ESP_LOGE(TAG, "[conn %u] EXCHANGE response decrypt failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	/* Success body = 00 02 00 00 (len 0x0002, error 0x0000). Non-zero error bytes
+	 * (body[2..4]) mean the device rejected a request. */
+	bool ok = bodylen >= 4u && body[2] == 0x00u && body[3] == 0x00u;
+
+	ESP_LOGI(TAG, "[conn %u] EXCHANGE response: %s", s->conn_handle,
+		 ok ? "success (URSK armed)" : "ERROR");
+	ESP_LOG_BUFFER_HEXDUMP(TAG, body, bodylen, ESP_LOG_INFO);
+	if (!ok) {
+		s->phase = PH_FAILED;
+		return;
+	}
+
+	/* Reader-Status-AP-Completed, BleSK-sealed on the ranging channel (counter 1). */
+	uint8_t wire[64];
+	size_t wl;
+
+	if (aliro_msg_seal(&s->sc_ble, k_ap_completed_plain, sizeof(k_ap_completed_plain),
+			   wire, sizeof(wire), &wl) != 0) {
+		ESP_LOGE(TAG, "[conn %u] AP-Completed seal failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	int rc = aliro_ble_send(s->conn_handle, wire, wl);
+
+	ESP_LOGI(TAG, "[conn %u] Reader-Status-AP-Completed sent (%u B, rc=%d)", s->conn_handle,
+		 (unsigned)wl, rc);
+
+	/* Arm the ranging engine with the URSK + the BleSK channel; M1 is emitted by the
+	 * engine when the device sends its Initiate-Ranging-Session (proto-2 id-1). The
+	 * ranging session id is NOT reader's free choice: the device derives it as the
+	 * big-endian last 4 bytes of the 16-byte AUTH0 transaction id (libaliro
+	 * AccessProtocolCrypto::GetSessionId = rev(txid[12..15])) and indexes its URSK by
+	 * it. A mismatch makes M1 land on a device with no URSK for that session
+	 * (GeneralError URSK_Unavailable). */
+	uint32_t ranging_sid = ((uint32_t)s->txid[12] << 24) | ((uint32_t)s->txid[13] << 16) |
+			       ((uint32_t)s->txid[14] << 8) | (uint32_t)s->txid[15];
 
 	s->phase = PH_ESTABLISHED;
-	arm_uwb_from_credential(s);
+	if (aliro_ranging_start(s->conn_handle, ranging_sid, s->ursk, &s->sc_ble) != 0) {
+		ESP_LOGW(TAG, "[conn %u] ranging setup did not arm", s->conn_handle);
+	}
+}
+
+/* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
+ * confirmation that fires the iPhone Wallet unlock animation. proto-2 (Notification)
+ * message-id 0x02, one State Attribute (id 0x00, len 2) = [OperationSource,
+ * ReaderStateByte]. OperationSource 0x04 = this user device in the BLE+UWB Aliro flow;
+ * ReaderStateByte Unsecured 0x01 = granted (animate), Secured 0x00 = relocked. The
+ * 65-byte access-credential public key is NOT serialized (the reference uses it only
+ * to select which connection to notify). Plaintext the BleSK channel then seals:
+ * [02][02][00 04][00 02 04 <state>]. Runs on the BLE-host task (posted via
+ * aliro_ble_post_reader_status) so it serializes with the other sc_ble seals. */
+static void reader_status_send_on_host(bool unsecured)
+{
+	struct aliro_session *s = NULL;
+
+	for (int i = 0; i < ALIRO_MAX_SESSIONS; i++) {
+		if (s_sessions[i].active && s_sessions[i].phase == PH_ESTABLISHED) {
+			s = &s_sessions[i];
+			break;
+		}
+	}
+	if (s == NULL) {
+		ESP_LOGW(TAG, "reader-status-changed: no established session to notify");
+		return;
+	}
+
+	const uint8_t plain[8] = {
+		0x02u, 0x02u, 0x00u, 0x04u, 0x00u, 0x02u, 0x04u,
+		(uint8_t)(unsecured ? 0x01u : 0x00u),
+	};
+	uint8_t wire[64];
+	size_t wl;
+
+	if (aliro_msg_seal(&s->sc_ble, plain, sizeof(plain), wire, sizeof(wire), &wl) != 0) {
+		ESP_LOGE(TAG, "[conn %u] reader-status-changed seal failed", s->conn_handle);
+		return;
+	}
+	int rc = aliro_ble_send(s->conn_handle, wire, wl);
+
+	ESP_LOGI(TAG, "[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
+		 unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
+}
+
+void aliro_reader_notify_unlock(bool unsecured)
+{
+	aliro_ble_post_reader_status(reader_status_send_on_host, unsecured);
+}
+
+/* Scan an op-0x05 Initiate-Access-Protocol payload for the phone's 0xA5
+ * proprietary-information TLV (short-form BER length; the A5 value is small) and
+ * copy the whole TLV (tag+len+value) into out. Returns the stored length, or 0
+ * if no well-formed 0xA5 TLV fits. */
+static size_t capture_a5_tlv(const uint8_t *pl, size_t pl_len, uint8_t *out, size_t cap)
+{
+	for (size_t i = 0; i + 2u <= pl_len; i++) {
+		if (pl[i] != 0xA5u) {
+			continue;
+		}
+		size_t vlen = pl[i + 1];         /* short-form length only */
+		size_t tlv = 2u + vlen;
+
+		if (vlen < 0x80u && i + tlv <= pl_len && tlv <= cap) {
+			memcpy(out, pl + i, tlv);
+			return tlv;
+		}
+	}
+	return 0;
 }
 
 /* Consume one inbound Aliro transaction SDU. */
@@ -314,8 +619,8 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	size_t pl_len;
 
 	if (aliro_ble_unframe(data, len, &type, &opcode, &pl, &pl_len) != 0) {
-		ESP_LOGW(TAG, "[conn %u] msg #%u (%u B): not a valid envelope",
-			 s->conn_handle, (unsigned)s->msgs_rx, (unsigned)len);
+		ESP_LOGW(TAG, "[conn %u] msg #%u (%u B): not a valid envelope", s->conn_handle,
+			 (unsigned)s->msgs_rx, (unsigned)len);
 		ESP_LOG_BUFFER_HEXDUMP(TAG, data, len, ESP_LOG_INFO);
 		pl = data;
 		pl_len = len;
@@ -326,14 +631,38 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 		 s->conn_handle, (unsigned)s->msgs_rx, type, opcode, (unsigned)pl_len,
 		 phase_str(s->phase));
 
+	/* A Notification Event mid-auth is the device rejecting us: GeneralError is
+	 * encoded [01 01 <code>]. Surface <code> — it is the exact reason the phone
+	 * bailed, far more legible than a downstream parse failure. Only pre-ranging:
+	 * once ESTABLISHED, proto-2 events ride the BleSK channel encrypted, so pl[] is
+	 * ciphertext here — the real event must be opened below, not read raw. */
+	if (s->phase != PH_ESTABLISHED && type == ALIRO_PROTO_NOTIFICATION &&
+	    opcode == ALIRO_NOTIF_EVENT) {
+		uint8_t code = (pl_len >= 3u) ? pl[2] : 0xffu;
+
+		ESP_LOGW(TAG, "[conn %u] device GeneralError 0x%02x in phase %s", s->conn_handle,
+			 code, phase_str(s->phase));
+		s->phase = PH_FAILED;
+		return;
+	}
+
 	switch (s->phase) {
 	case PH_IDLE:
-		/* First peer message = SELECT / proprietary-info. Version negotiation
-		 * rides the GATT characteristic; here we log it and drive AUTH0.
-		 * (Bench-tunable: some peers expect the reader to send AUTH0 on
-		 * channel-up rather than after this first message.) */
-		ESP_LOGI(TAG, "[conn %u] peer opened; starting access protocol",
-			 s->conn_handle);
+		/* First peer message = op-0x05 Initiate Access Protocol, carrying the
+		 * phone's 0xA5 proprietary-info TLV. Capture that TLV for the session-key
+		 * salt (§8.3.1.13 trailing field) before driving AUTH0; fall back to the
+		 * CSA v1.0 default if the phone sent none. Version negotiation rides the
+		 * GATT characteristic. */
+		s->a5_len = capture_a5_tlv(pl, pl_len, s->a5_tlv, sizeof(s->a5_tlv));
+		if (s->a5_len == 0) {
+			ESP_LOGW(TAG,
+				 "[conn %u] no 0xA5 TLV in op-0x05; salt will use CSA v1.0 default",
+				 s->conn_handle);
+		} else {
+			ESP_LOGI(TAG, "[conn %u] captured phone 0xA5 TLV (%u B) for session salt",
+				 s->conn_handle, (unsigned)s->a5_len);
+		}
+		ESP_LOGI(TAG, "[conn %u] peer opened; starting access protocol", s->conn_handle);
 		start_auth(s);
 		break;
 	case PH_SENT_AUTH0:
@@ -342,10 +671,30 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	case PH_SENT_AUTH1:
 		on_auth1_response(s, pl, pl_len);
 		break;
-	case PH_ESTABLISHED:
-		ESP_LOGI(TAG, "[conn %u] post-auth message (ranging control) — not "
-			      "yet handled", s->conn_handle);
+	case PH_SENT_EXCHANGE:
+		on_exchange_response(s, pl, pl_len);
 		break;
+	case PH_ESTABLISHED: {
+		/* Ranging SDUs (proto 1/2/3) ride the BleSK channel: open the whole SDU
+		 * (<hdr><ct||16B tag>), dump the plaintext, and hand it to the engine, which
+		 * emits M1 on the Initiate-Ranging-Session and M3 on M2. The engine's replies
+		 * are BleSK-sealed by aliro_ranging's tx callback. */
+		uint8_t plain[256];
+		size_t plen;
+
+		if (aliro_msg_open(&s->sc_ble, data, len, plain, sizeof(plain), &plen) != 0) {
+			ESP_LOGW(TAG,
+				 "[conn %u] ranging SDU open FAILED (proto=0x%02x id=0x%02x, %u B); raw:",
+				 s->conn_handle, type, opcode, (unsigned)pl_len);
+			ESP_LOG_BUFFER_HEXDUMP(TAG, pl, pl_len, ESP_LOG_INFO);
+			break;
+		}
+		ESP_LOGI(TAG, "[conn %u] ranging SDU (proto=0x%02x id=0x%02x, %u B plaintext):",
+			 s->conn_handle, plain[0], plain[1], (unsigned)plen);
+		ESP_LOG_BUFFER_HEXDUMP(TAG, plain, plen, ESP_LOG_INFO);
+		aliro_ranging_feed(s->conn_handle, plain, plen);
+		break;
+	}
 	default:
 		ESP_LOGW(TAG, "[conn %u] message in phase %s ignored", s->conn_handle,
 			 phase_str(s->phase));
@@ -371,10 +720,11 @@ static void on_disconnected(uint16_t conn_handle)
 	struct aliro_session *s = session_find(conn_handle);
 
 	if (s != NULL) {
-		ESP_LOGI(TAG, "[conn %u] Aliro session destroyed (%u msgs, phase=%s)",
-			 conn_handle, (unsigned)s->msgs_rx, phase_str(s->phase));
+		ESP_LOGI(TAG, "[conn %u] Aliro session destroyed (%u msgs, phase=%s)", conn_handle,
+			 (unsigned)s->msgs_rx, phase_str(s->phase));
 		s->active = false;
 	}
+	aliro_ranging_stop(conn_handle);
 }
 
 static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
@@ -382,43 +732,292 @@ static void on_data(uint16_t conn_handle, const uint8_t *data, uint16_t len)
 	struct aliro_session *s = session_find(conn_handle);
 
 	if (s == NULL) {
-		ESP_LOGW(TAG, "[conn %u] data for unknown session (%u bytes)",
-			 conn_handle, (unsigned)len);
+		ESP_LOGW(TAG, "[conn %u] data for unknown session (%u bytes)", conn_handle,
+			 (unsigned)len);
 		return;
 	}
 	transaction_feed(s, data, len);
 }
 
-int aliro_reader_start(void)
+/* The reader's BLE transport config: advertised versions/features + the
+ * transaction transport callbacks. Shared by the standalone + attached starts. */
+static struct aliro_ble_config make_ble_cfg(void)
+{
+	const struct aliro_ble_config cfg = {
+		.proto_versions = k_proto_versions,
+		.proto_versions_count = sizeof(k_proto_versions) / sizeof(k_proto_versions[0]),
+		.features =
+			{
+				.timesync_procedure_0 = true,
+				.timesync_procedure_1 = false,
+				.le_coded_phy = false,
+			},
+		.cb =
+			{
+				.on_data = on_data,
+				.on_connected = on_connected,
+				.on_disconnected = on_disconnected,
+			},
+	};
+	return cfg;
+}
+
+/* crypto + provisioning load + UWB ranging setup, shared by both start paths. */
+static int reader_engine_init(void)
 {
 	if (aliro_crypto_init() != 0) {
 		ESP_LOGE(TAG, "crypto init failed");
 		return -1;
 	}
-	if (provision_dev_identity() != 0) {
-		ESP_LOGE(TAG, "dev identity provisioning failed");
+	load_provisioning();
+	if (aliro_ranging_init() != 0) {
+		ESP_LOGW(TAG, "UWB ranging adapter unavailable; auth will run but "
+			      "ranging setup won't start");
+	}
+	return 0;
+}
+
+int aliro_reader_start(void)
+{
+	if (reader_engine_init() != 0) {
 		return -1;
 	}
-	ESP_LOGW(TAG, "using DEV reader identity (Phase 4 supplies the real one)");
-
-	const struct aliro_ble_config cfg = {
-		.proto_versions = k_proto_versions,
-		.proto_versions_count = sizeof(k_proto_versions) / sizeof(k_proto_versions[0]),
-		.features = {
-			.timesync_procedure_0 = true,
-			.timesync_procedure_1 = false,
-			.le_coded_phy = false,
-		},
-		.cb = {
-			.on_data = on_data,
-			.on_connected = on_connected,
-			.on_disconnected = on_disconnected,
-		},
-	};
-
+	struct aliro_ble_config cfg = make_ble_cfg();
 	int rc = aliro_ble_start(&cfg);
 
-	ESP_LOGI(TAG, "aliro_reader_start: transport %s (SPSM 0x%04x)",
-		 rc == 0 ? "up" : "FAILED", aliro_ble_spsm());
+	ESP_LOGI(TAG, "aliro_reader_start: transport %s (SPSM 0x%04x)", rc == 0 ? "up" : "FAILED",
+		 aliro_ble_spsm());
 	return rc;
+}
+
+/* ---- attach mode: share a host another stack (e.g. Matter) owns ---------- */
+
+const void *aliro_reader_ble_prepare(void)
+{
+	struct aliro_ble_config cfg = make_ble_cfg();
+
+	if (aliro_ble_prepare(&cfg) != 0) {
+		ESP_LOGE(TAG, "aliro_ble_prepare failed");
+		return NULL;
+	}
+	return aliro_ble_service_def();
+}
+
+int aliro_reader_start_attached(void)
+{
+	if (reader_engine_init() != 0) {
+		return -1;
+	}
+
+	/* Provisioned Aliro advertising params (BLE-UWB approach discovery): the phone
+	 * resolves "its" reader by re-deriving the dynamic tag from the GroupResolvingKey.
+	 * groupId = reader_id[0..7], subId = reader_id[16..17] (the reader identity is
+	 * groupIdentifier(16) || groupSubIdentifier(16)). Only advertise the resolvable
+	 * service data when a real GRK is present (Matter-provisioned). */
+	bool have_grk = false;
+	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
+		if (s_id.grk[i] != 0u) {
+			have_grk = true;
+			break;
+		}
+	}
+	if (have_grk) {
+		const uint8_t sub2[2] = { s_id.reader_id[16], s_id.reader_id[17] };
+
+		aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
+	}
+
+	int rc = aliro_ble_start_attached();
+
+	ESP_LOGI(TAG, "aliro_reader_start_attached: %s (SPSM 0x%04x)", rc == 0 ? "up" : "FAILED",
+		 aliro_ble_spsm());
+	return rc;
+}
+
+void aliro_reader_refresh_adv(void)
+{
+	/* Matter provisioning (SetAliroReaderConfig) can land after the reader has
+	 * already started advertising: Apple sends it as post-commissioning operational
+	 * commands, whereas the reader starts on kCommissioningComplete. At start the
+	 * identity was still the dev default (no GRK), so the reader advertised only the
+	 * bare 0xFFF2 UUID and the phone cannot resolve it. Once the real GRK is in
+	 * s_id (provision_identity ran just before), pull it into the advertisement. */
+	bool have_grk = false;
+	for (size_t i = 0; i < ALIRO_GRK_LEN; i++) {
+		if (s_id.grk[i] != 0u) {
+			have_grk = true;
+			break;
+		}
+	}
+	if (!have_grk) {
+		return;
+	}
+	const uint8_t sub2[2] = { s_id.reader_id[16], s_id.reader_id[17] };
+
+	aliro_ble_set_adv_params(&s_id.reader_id[0], sub2, s_id.grk, 0 /* tx power */);
+	aliro_ble_readvertise();
+	ESP_LOGI(TAG, "advertisement refreshed with provisioned GRK (approach-resolvable)");
+}
+
+/* ---- bench provisioning helpers (aliro-prov / aliro-trust) ------------- */
+
+void aliro_reader_prov_print(void)
+{
+	load_provisioning();
+
+	/* Snapshot the shared state under the lock, then print off the copy so the
+	 * UART I/O never holds up the BLE task's trust check. */
+	struct aliro_trust_store ts;
+	uint8_t last[ALIRO_CRED_PUB_LEN];
+	bool have;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	ts = s_trust;
+	have = s_have_last_cred;
+	memcpy(last, s_last_cred_pub, ALIRO_CRED_PUB_LEN);
+	xSemaphoreGive(s_prov_lock);
+
+	printf("identity  : %s\n", s_id.is_dev ? "DEV (bench)" : "provisioned");
+	printf("reader_id : ");
+	for (unsigned i = 0; i < ALIRO_READER_ID_LEN; i++) {
+		printf("%02x", s_id.reader_id[i]);
+	}
+	printf("\ntrust     : %u/%u anchor(s)\n", ts.count, ALIRO_TRUST_MAX);
+	for (unsigned i = 0; i < ts.count; i++) {
+		printf("  [%u] ", i);
+		for (unsigned j = 0; j < ALIRO_CRED_PUB_LEN; j++) {
+			printf("%02x", ts.cred_pub[i][j]);
+		}
+		printf("\n");
+	}
+	printf("last cred : ");
+	if (have) {
+		for (unsigned i = 0; i < ALIRO_CRED_PUB_LEN; i++) {
+			printf("%02x", last[i]);
+		}
+		printf("\n");
+	} else {
+		printf("(none presented yet)\n");
+	}
+}
+
+int aliro_reader_trust_last(void)
+{
+	load_provisioning();
+
+	/* Build the candidate store off a snapshot, persist it, then commit — so the
+	 * NVS write happens outside the lock and a failed write changes nothing. */
+	struct aliro_trust_store cand;
+	uint8_t last[ALIRO_CRED_PUB_LEN];
+	bool have;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	cand = s_trust;
+	have = s_have_last_cred;
+	memcpy(last, s_last_cred_pub, ALIRO_CRED_PUB_LEN);
+	xSemaphoreGive(s_prov_lock);
+
+	if (!have) {
+		return 1; /* nothing presented yet */
+	}
+	int add = aliro_prov_trust_add(&cand, last);
+
+	if (add == 1) {
+		return 1; /* already trusted; nothing to persist */
+	}
+	if (add < 0) {
+		return -1; /* store full */
+	}
+	if (aliro_prov_store(&s_id, &cand) != 0) {
+		return -1; /* not committed; s_trust unchanged */
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_trust = cand;
+	xSemaphoreGive(s_prov_lock);
+	return 0;
+}
+
+/* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
+ * These run on the Matter task during commissioning, before the reader is
+ * started (the reader starts only after the BLE handoff). They mutate the same
+ * s_id/s_trust the reader loads, and persist through aliro_prov, so a snapshot-
+ * then-store keeps NVS and the in-memory copy consistent under s_prov_lock. */
+
+int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN],
+				    const uint8_t sign_priv[ALIRO_READER_PRIV_LEN],
+				    const uint8_t grk[ALIRO_GRK_LEN])
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	memcpy(id.reader_id, reader_id, ALIRO_READER_ID_LEN);
+	memcpy(id.sign_priv, sign_priv, ALIRO_READER_PRIV_LEN);
+	memcpy(id.grk, grk, ALIRO_GRK_LEN);
+	id.is_dev = false;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	ts = s_trust; /* keep any anchors already added */
+	xSemaphoreGive(s_prov_lock);
+
+	if (aliro_prov_store(&id, &ts) != 0) {
+		return -1; /* not committed; s_id unchanged */
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_id = id;
+	xSemaphoreGive(s_prov_lock);
+	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
+	ESP_LOGI(TAG, "Matter-provisioned reader identity stored");
+	return 0;
+}
+
+int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store cand;
+
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	id = s_id;
+	cand = s_trust;
+	xSemaphoreGive(s_prov_lock);
+
+	int add = aliro_prov_trust_add(&cand, cred_pub);
+
+	if (add == 1) {
+		return 1; /* already trusted; nothing to persist */
+	}
+	if (add < 0) {
+		return -1; /* store full or not a P-256 point */
+	}
+	if (aliro_prov_store(&id, &cand) != 0) {
+		return -1; /* not committed; s_trust unchanged */
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_trust = cand;
+	xSemaphoreGive(s_prov_lock);
+	ESP_LOGI(TAG, "Matter-provisioned trust anchor stored (%u total)", cand.count);
+	return 0;
+}
+
+int aliro_reader_provision_clear(void)
+{
+	load_provisioning();
+
+	struct aliro_reader_identity id;
+	struct aliro_trust_store ts;
+
+	aliro_prov_dev_default(&id, &ts);
+	if (aliro_prov_store(&id, &ts) != 0) {
+		return -1;
+	}
+	xSemaphoreTake(s_prov_lock, portMAX_DELAY);
+	s_id = id;
+	s_trust = ts;
+	xSemaphoreGive(s_prov_lock);
+	compute_reader_group_x(); /* signingKey changed -> refresh salt field 1 */
+	ESP_LOGI(TAG, "reader provisioning cleared (reverted to dev identity)");
+	return 0;
 }
