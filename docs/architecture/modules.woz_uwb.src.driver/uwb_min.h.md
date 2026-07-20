@@ -7,17 +7,17 @@
 
 ## API
 
-### `int uwb_min_selftest(struct uwb_selftest_result *out)`
-`modules/woz_uwb/src/driver/uwb_min.h:28`
+### `struct uwb_selftest_result`
+`modules/woz_uwb/src/driver/uwb_min.h:13`
 
-@brief Radio self-test: configure, TX one frame, then arm RX.
+@brief Self-test result emitted by @ref uwb_min_selftest.
 
-### `void uwb_min_twr_exchange(struct uwb_twr_frame *f)`
-`modules/woz_uwb/src/driver/uwb_min.h:51`
+### `struct uwb_twr_result`
+`modules/woz_uwb/src/driver/uwb_min.h:31`
 
-@brief Run one POLL/RESP exchange; the STS must already be programmed.
+@brief Result of a raw static-STS SS-TWR initiator burst (@ref uwb_min_twr_poll).
 
-### `int uwb_min_twr_poll(uint32_t n, uint32_t period_ms, struct uwb_twr_result *out)`
-`modules/woz_uwb/src/driver/uwb_min.h:54`
+### `struct uwb_twr_frame`
+`modules/woz_uwb/src/driver/uwb_min.h:40`
 
-@brief Raw static-STS SS-TWR initiator burst (bench probe).
+@brief Outcome of one raw SS-TWR POLL/RESP exchange (@ref uwb_min_twr_exchange).

@@ -8,12 +8,7 @@ ccc_ran_params.
 
 ## API
 
-### `int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out)`
-`modules/woz_uwb/src/ccc/ccc_session.h:34`
+### `struct ccc_ran_session`
+`modules/woz_uwb/src/ccc/ccc_session.h:16`
 
-Map an Aliro session onto the CCC MAC's ranging-schedule parameters.
-
-### `int ccc_session_to_ran_params(const struct ccc_ran_session *s, struct ccc_ran_params *out)`
-`modules/woz_uwb/src/ccc/ccc_session.h:34`
-
-Map an Aliro session onto the CCC MAC's ranging-schedule parameters.
+An Aliro ranging session: the URSK + the M1-M4 setup parameters; the interface to the CCC MAC.

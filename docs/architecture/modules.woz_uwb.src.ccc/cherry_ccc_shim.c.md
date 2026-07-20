@@ -8,15 +8,20 @@ FiRa MAC; maps each call onto woz_uwb_facade.
 
 ## API
 
-#### `struct cherry_session`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:36`
+### `struct cherry`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:23`
+
+Opaque Cherry context: a holder for the (unused) core callback the adapter passes at create.
+
+### `struct cherry_session`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:29`
 
 Base session object; first member of cherry_ccc_session so the base functions can up-cast.
 
-#### `struct cherry_ccc_aliro_session_config *config`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:38`
+### `struct cherry_ccc_session`
+`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:35`
 
-Borrowed pointer to the adapter's negotiated params, valid until destroy.
+CCC ranging session bound to our FiRa MAC.
 
 ### `static inline struct cherry_ccc_session *to_ccc(struct cherry_session *base)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:45`
@@ -32,24 +37,12 @@ Allocate + dispatch a SESSION_STATUS event to the CCC callback (event and data h
 
 **called by** `cherry_session_destroy`, `cherry_session_start`, `cherry_session_stop`
 
-### `struct cherry_ccc_session_event_session_status *status = qmalloc(sizeof(*status))`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:57`
-
-Heap-allocated session status event data; contains a state enum to be reported via the
-CCC callback.
-
 ### `static void emit_error(struct cherry_ccc_session *s, enum cherry_err err)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:77`
 
 @brief Allocate + dispatch a SESSION_ERROR event to the CCC callback.
 
 **called by** `cherry_session_start`
-
-### `struct cherry_ccc_session_event_error *e = qmalloc(sizeof(*e))`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:82`
-
-Heap-allocated error event data; contains an error code to be reported via the CCC
-callback.
 
 ### `struct cherry *cherry_create(const char *device, cherry_core_cb_t core_cb, void *user_data)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:103`
@@ -67,11 +60,6 @@ Deallocate a Cherry context; null input is safely ignored.
 
 Allocate and initialize an Aliro responder CCC session with the given callback, user context, and
 configuration; returns NULL if callback, config, or allocation fails.
-
-### `struct cherry`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:127`
-
-Opaque Cherry context: a holder for the (unused) core callback the adapter passes at create.
 
 ### `struct cherry_session *cherry_ccc_session_to_base(struct cherry_ccc_session *session)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:151`
@@ -101,18 +89,6 @@ CHERRY_ERR_INVALID_PARAMETER if session or config is null, CHERRY_ERR_SESSION_CO
 not set, or CHERRY_ERR_SESSION_INIT if the UWB start fails.
 
 **calls** `emit_error`, `emit_status`, `to_ccc`
-
-### `struct cherry_ccc_aliro_session_config *config`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:187`
-
-Borrowed pointer to the adapter's negotiated params, valid until destroy.
-
-### `struct woz_uwb_aliro_cfg fcfg`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:191`
-
-Configuration struct for woz_uwb_start_aliro; holds session ID, channel, sync code,
-timing, slot geometry, STS index, UWB time, URSK key, and the RangingConfiguration byte
-array required to derive the CCC SaltedHash.
 
 ### `enum cherry_err cherry_session_stop(struct cherry_session *session)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:262`
@@ -152,12 +128,6 @@ CHERRY_ERR_INVALID_PARAMETER if session or its config is null, otherwise CHERRY_
 Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
 returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
 
-### `enum cherry_err cherry_ccc_session_set_round2_antennas(struct cherry_ccc_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:323`
-
-Validate that the session exists; TX and RX antenna set parameters are accepted but ignored;
-returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-
 ### `enum cherry_err cherry_session_set_antennas(struct cherry_session *session, uint8_t tx_antenna_set, uint8_t rx_antenna_set)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:334`
 
@@ -170,24 +140,7 @@ returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NO
 Validate that the session exists; diagnostics config and controlee_only parameters are accepted
 but ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
 
-### `enum cherry_err cherry_session_set_diagnostics(struct cherry_session *session, struct cherry_common_diag_cfg config, bool controlee_only)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:344`
-
-Validate that the session exists; diagnostics config and controlee_only parameters are accepted
-but ignored; returns CHERRY_ERR_INVALID_PARAMETER if session is null, otherwise CHERRY_ERR_NONE.
-
 ### `void cherry_ccc_event_free(struct cherry_ccc_event *event)`
 `modules/woz_uwb/src/ccc/cherry_ccc_shim.c:356`
 
 Free a CCC event handle.
-
-### `void cherry_ccc_event_free(struct cherry_ccc_event *event)`
-`modules/woz_uwb/src/ccc/cherry_ccc_shim.c:356`
-
-Free a CCC event handle.
-
-<details><summary>Undocumented (1)</summary>
-
-- `cherry_common_diag_cfg`
-
-</details>

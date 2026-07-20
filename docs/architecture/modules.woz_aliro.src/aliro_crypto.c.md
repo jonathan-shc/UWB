@@ -121,12 +121,6 @@ or if the underlying seal fails, 0 on success with *wire_len set.
 Represents a secure Aliro communication channel: a pair of AES-GCM session keys and per-direction
 message counters, used to seal/open messages exchanged with the device.
 
-### `int aliro_msg_open(struct aliro_secchan *sc, const uint8_t *wire, size_t wire_len, uint8_t *plain, size_t plain_cap, size_t *plain_len)`
-`modules/woz_aliro/src/aliro_crypto.c:236`
-
-Represents a secure Aliro communication channel: a pair of AES-GCM session keys and per-direction
-message counters, used to seal/open messages exchanged with the device.
-
 **calls** `aliro_secchan_open`
 
 ### `static int append(uint8_t *out, size_t *pos, size_t cap, const void *src, size_t n)`

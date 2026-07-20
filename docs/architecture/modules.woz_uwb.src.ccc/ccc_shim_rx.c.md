@@ -51,11 +51,6 @@ UAD-derived keys, extract Poll_STS_Index and stride, and pre-warm the next block
 
 **called by** `ccc_shim_rx_try_prepoll`, `prepoll_rx_rearm`, `resp_tx_done`
 
-### `struct ccc_pre_poll pp`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:302`
-
-CCC pre-poll message carrying STS mode and hopping schedule start time.
-
 ### `static uint64_t ts5_to_u64(const uint8_t t[5])`
 `modules/woz_uwb/src/ccc/ccc_shim_rx.c:411`
 
@@ -70,17 +65,6 @@ Decode a received Final_Data (SP0, msg_id=02): dUDSK-decrypt and parse the initi
 timestamps; not time-critical.
 
 **called by** `ccc_shim_rx_try_prepoll`  ·  **calls** `ts5_to_u64`
-
-### `struct ccc_final_data fd`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:441`
-
-CCC final message carrying Aliro authentication data (MAC, derived ranging state).
-
-### `struct ccc_ds_twr tw`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:522`
-
-CCC DS-TWR (double-sided two-way ranging) message carrying poll/response/final
-timing and STS data.
 
 ### `void ccc_shim_rx_try_prepoll(uint16_t datalength)`
 `modules/woz_uwb/src/ccc/ccc_shim_rx.c:611`
@@ -207,11 +191,6 @@ POLL if a warmed index is ready, or fire the delayed-TX Response_0 and Final RX 
 CPER; log free-running timing and optionally defer Pre-POLL decode to warm the next block.
 
 **calls** `arm_final_sp3`, `arm_poll_sp3`, `gated_rxenable`, `prepoll_decode`, `revert_to_sp0_listen`, `ts5_to_u64`, `tx_response_sp3`
-
-### `struct ccc_mhr_fields m`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1109`
-
-CCC MAC header fields (source/dest addresses, frame control, sequence number).
 
 ### `int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)`
 `modules/woz_uwb/src/ccc/ccc_shim_rx.c:1304`

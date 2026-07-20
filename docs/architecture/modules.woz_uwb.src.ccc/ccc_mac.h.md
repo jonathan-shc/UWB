@@ -7,43 +7,37 @@
 
 ## API
 
-### `int ccc_parse_mhr(const uint8_t in[CCC_MHR_LEN], struct ccc_mhr_fields *f)`
-`modules/woz_uwb/src/ccc/ccc_mac.h:45`
+### `struct ccc_mhr_fields`
+`modules/woz_uwb/src/ccc/ccc_mac.h:33`
 
-Parse and validate a 23-byte SP0 MHR, extracting the variable fields (-EINVAL on mismatch).
+The per-frame-variable fields of an SP0 MHR (fixed fields are built in by ccc_build_mhr).
 
-### `int ccc_pre_poll_parse(const uint8_t in[CCC_PRE_POLL_LEN], struct ccc_pre_poll *p)`
-`modules/woz_uwb/src/ccc/ccc_mac.h:60`
+### `struct ccc_pre_poll`
+`modules/woz_uwb/src/ccc/ccc_mac.h:48`
 
-Parse a 13-byte Pre-POLL payload.
+Pre-POLL request message parameters.
 
 ### `struct ccc_responder_ts`
 `modules/woz_uwb/src/ccc/ccc_mac.h:63`
 
 One responder's timestamp record in a Final_Data message.
 
-#### `struct ccc_responder_ts responders[CCC_MAX_RESPONDERS]`
-`modules/woz_uwb/src/ccc/ccc_mac.h:79`
+### `struct ccc_final_data`
+`modules/woz_uwb/src/ccc/ccc_mac.h:71`
 
-< Responder records that follow (≤ CCC_MAX_RESPONDERS).
+Final_Data message parameters.
 
-### `struct ccc_hop_decision ccc_initiator_next_hop(const struct ccc_ran_params *p, uint32_t block)`
-`modules/woz_uwb/src/ccc/ccc_mac.h:129`
+### `struct ccc_ran_params`
+`modules/woz_uwb/src/ccc/ccc_mac.h:106`
 
-The initiator's hop decision for the block after block, written into its Final_Data.
+Per-session ranging schedule parameters (negotiated in setup).
 
-### `int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1, uint32_t t_round2, struct ccc_ds_twr *out)`
-`modules/woz_uwb/src/ccc/ccc_mac.h:145`
+### `struct ccc_hop_decision`
+`modules/woz_uwb/src/ccc/ccc_mac.h:116`
 
-Assemble the DS-TWR intervals at the responder from a received Final_Data.
+The initiator's next-block hop decision, carried in Final_Data.
 
 ### `struct ccc_ds_twr`
-`modules/woz_uwb/src/ccc/ccc_mac.h:146`
+`modules/woz_uwb/src/ccc/ccc_mac.h:134`
 
 The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32).
-
-### `bool ccc_ursk_exhausted(const struct ccc_ran_params *p, uint32_t block)`
-`modules/woz_uwb/src/ccc/ccc_mac.h:155`
-
-Whether the current URSK is exhausted for a ranging block (true once its highest STS index would
-exceed 2^31-1).

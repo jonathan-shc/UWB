@@ -11,12 +11,17 @@ credential is authenticated.
 
 ## API
 
-### `int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)`
-`modules/woz_aliro/include/aliro_prov.h:103`
+### `struct aliro_reader_identity`
+`modules/woz_aliro/include/aliro_prov.h:42`
 
-Persist identity+trust to NVS. 0 on success, negative on an NVS error.
+The reader's provisioned identity. reader_id rides AUTH0 and both ECDSA
+transcripts (tag 0x4D); sign_priv signs the reader-usage transcript. is_dev
+marks the built-in bench identity, never a real deployment.
 
-### `int aliro_prov_store(const struct aliro_reader_identity *id, const struct aliro_trust_store *ts)`
-`modules/woz_aliro/include/aliro_prov.h:103`
+### `struct aliro_trust_store`
+`modules/woz_aliro/include/aliro_prov.h:55`
 
-Persist identity+trust to NVS. 0 on success, negative on an NVS error.
+Trusted credential public keys. A presented credential authenticates only if
+its key is in here (or the store is empty and dev policy allows it). A raw-key
+allowlist is the interim seam; real issuer-chain validation is the Phase-4
+refinement that plugs in at aliro_prov_trust_check.

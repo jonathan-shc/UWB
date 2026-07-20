@@ -29,11 +29,6 @@ Bind the CCC STS from the add-on-supplied plaintext URSK; returns 0 on success.
 ### `int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)`
 `modules/woz_uwb/src/facade/woz_uwb_facade.c:46`
 
-Ranging parameters the Aliro M1-M4 handshake negotiated.
-
-### `int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *c)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:46`
-
 Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
 
 **calls** `woz_hfclk_ensure_128mhz`

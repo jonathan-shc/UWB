@@ -64,11 +64,6 @@ Build the 23-byte SP0 MHR (little-endian on the wire).
 ### `int ccc_parse_mhr(const uint8_t in[CCC_MHR_LEN], struct ccc_mhr_fields *f)`
 `modules/woz_uwb/src/ccc/ccc_mac.c:90`
 
-The per-frame-variable fields of an SP0 MHR (fixed fields are built in by ccc_build_mhr).
-
-### `int ccc_parse_mhr(const uint8_t in[CCC_MHR_LEN], struct ccc_mhr_fields *f)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:90`
-
 Parse and validate a 23-byte SP0 MHR, extracting the variable fields (-EINVAL on mismatch).
 
 **calls** `get_le16`, `get_le32`, `mhr_vendor_oui_ok`
@@ -79,11 +74,6 @@ Parse and validate a 23-byte SP0 MHR, extracting the variable fields (-EINVAL on
 Pack a Pre-POLL payload little-endian.
 
 **calls** `put_le16`, `put_le32`
-
-### `int ccc_pre_poll_parse(const uint8_t in[CCC_PRE_POLL_LEN], struct ccc_pre_poll *p)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:121`
-
-Pre-POLL request message parameters.
 
 ### `int ccc_pre_poll_parse(const uint8_t in[CCC_PRE_POLL_LEN], struct ccc_pre_poll *p)`
 `modules/woz_uwb/src/ccc/ccc_mac.c:121`
@@ -134,11 +124,6 @@ The initiator's hop decision for the block after block, written into its Final_D
 
 **calls** `ccc_hop_round_index`
 
-### `struct ccc_hop_decision d =`
-`modules/woz_uwb/src/ccc/ccc_mac.c:236`
-
-The initiator's next-block hop decision, carried in Final_Data.
-
 ### `uint32_t ccc_ds_twr_tof(const struct ccc_ds_twr *t)`
 `modules/woz_uwb/src/ccc/ccc_mac.c:247`
 
@@ -147,22 +132,7 @@ DS-TWR one-way time-of-flight in timestamp ticks (0 if the denominator is 0).
 ### `int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1, uint32_t t_round2, struct ccc_ds_twr *out)`
 `modules/woz_uwb/src/ccc/ccc_mac.c:259`
 
-Final_Data message parameters.
-
-### `int ccc_responder_ds_twr(const struct ccc_final_data *fd, uint8_t responder, uint32_t t_reply1, uint32_t t_round2, struct ccc_ds_twr *out)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:259`
-
 Assemble the DS-TWR intervals at the responder from a received Final_Data.
-
-### `uint32_t t_round2, struct ccc_ds_twr *out)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:260`
-
-The four DS-TWR intervals, in ranging-timestamp ticks (uint32, wrap mod 2^32).
-
-### `static uint32_t slot_offset(const struct ccc_ran_params *p, enum ccc_slot slot, uint8_t responder)`
-`modules/woz_uwb/src/ccc/ccc_mac.c:275`
-
-@brief STS-index offset of a slot within its ranging round.
 
 ### `bool ccc_ursk_exhausted(const struct ccc_ran_params *p, uint32_t block)`
 `modules/woz_uwb/src/ccc/ccc_mac.c:275`

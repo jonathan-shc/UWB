@@ -82,9 +82,3 @@ kCommissioningComplete event. Finally launches the interactive console (app_shel
 must not run alongside esp_matter::console::init since both read the same console UART.
 
 **calls** `start_aliro_reader_once`
-
-### `std::vector<struct ble_gatt_svc_def> svcs =`
-`ports/esp32-matter/main/app_main.cpp:381`
-
-Local vector wrapping the Aliro GATT service definition for registration with the BLE host's
-combined service table.

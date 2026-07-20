@@ -8,7 +8,7 @@ engine is bound and unbound via internal ursk and stop calls.
 
 ## API
 
-### `int woz_uwb_start_aliro(const struct woz_uwb_aliro_cfg *cfg)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.h:37`
+### `struct woz_uwb_aliro_cfg`
+`modules/woz_uwb/src/facade/woz_uwb_facade.h:21`
 
-Start the CCC DS-TWR responder bound to a live Aliro credential; returns 0 on success.
+Ranging parameters the Aliro M1-M4 handshake negotiated.

@@ -5,6 +5,11 @@
 
 **depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.h`](aliro_uwb_msg.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.h`](aliro_uwb_msg_builder.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h`](aliro_uwb_msg_parser.h.md), [`modules/woz_uwb/src/aliro/aliro_uwb_msg_spec.h`](aliro_uwb_msg_spec.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](../modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/ccc/aliro_round_config.h`](../modules.woz_uwb.src.ccc/aliro_round_config.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](../modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](../modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_util.h`](../modules.woz_uwb.src.facade/woz_util.h.md)  ·  **discussed in** [`docs/esp32-gotchas.md`](../../esp32-gotchas.md)
 
+```mermaid
+flowchart TD
+  aliro_uwb_msg_build_general_error --> aliro_uwb_msg_free
+```
+
 ## API
 
 ### `void aliro_uwb_msg_free(struct aliro_uwb_message *message)`
@@ -415,25 +420,6 @@ state handler.
 
 **called by** `aliro_uwb_msg_process_notification`  ·  **calls** `handle_init_ranging_later`, `handle_ranging_suspended`, `handle_resume_later`
 
-### `static enum aliro_uwb_err parse_status(struct aliro_uwb_msg_attribute *attr, uint8_t *status)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1126`
-
-@brief Parses a status attribute from a ranging message into the given output parameter.
-@param attr Attribute to parse.
-@param status Output parameter receiving the parsed 8-bit status value.
-@return ALIRO_UWB_ERR_NONE on success, or ALIRO_UWB_ERR_MSG_MALFORMED if the value cannot be
-read.
-
-### `enum aliro_uwb_err aliro_uwb_msg_process_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1166`
-
-@brief Dispatch a received notification message to its parser by message ID. Reader-status
-notifications are informational and ignored; unknown IDs are logged and ignored.
-@param session Aliro UWB session to update with the parsed notification's effects.
-@param message Received notification message to dispatch.
-@return ALIRO_UWB_ERR_NONE for handled, informational and unknown notifications, otherwise
-the error from the event or ranging parser.
-
 ### `enum aliro_uwb_err aliro_uwb_msg_process_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1166`
 
@@ -445,19 +431,3 @@ notifications are informational and ignored; unknown IDs are logged and ignored.
 the error from the event or ranging parser.
 
 **calls** `aliro_uwb_msg_message_id`, `parse_event_notification`, `parse_ranging_notification`
-
-### `void aliro_uwb_msg_free(struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1167`
-
-@brief Releases a message allocated by this layer's message builders.
-
-<details><summary>Undocumented (6)</summary>
-
-- `aliro_uwb_adapter_reader_config`
-- `cherry_ccc_capabilities`
-- `aliro_uwb_msg_builder`
-- `aliro_uwb_preferred_hopping_configs`
-- `cherry_ccc_aliro_session_config`
-- `aliro_uwb_msg_parser`
-
-</details>

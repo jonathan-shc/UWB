@@ -16,21 +16,6 @@ flowchart TD
 
 ## API
 
-### `static struct aliro_ble_callbacks s_cb`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:62`
-
-Module-static table of Aliro BLE callbacks registered by the application, invoked by the GATT/GAP/L2CAP handlers as events occur.
-
-### `static struct os_mempool s_coc_mempool`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:97`
-
-Module-static memory pool backing the CoC mbuf pool, initialized by l2cap_init.
-
-### `static struct os_mbuf_pool s_coc_mbuf_pool`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:99`
-
-Module-static mbuf pool backing L2CAP CoC send/receive buffers, initialized by l2cap_init.
-
 ### `static void coc_track(uint16_t conn_handle, struct ble_l2cap_chan *chan)`
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:110`
 
@@ -67,11 +52,6 @@ Give the stack a fresh receive buffer so the next SDU can be assembled.
 
 NimBLE L2CAP event callback that tracks connection-oriented channel (CoC) lifecycle events (connect, disconnect, data) for the Aliro L2CAP server.
 
-### `static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:158`
-
-NimBLE L2CAP event callback that tracks connection-oriented channel (CoC) lifecycle events (connect, disconnect, data) for the Aliro L2CAP server.
-
 **calls** `coc_arm_rx`, `coc_track`, `coc_untrack`
 
 ### `static void l2cap_init(void)`
@@ -81,12 +61,6 @@ Initialize the L2CAP connection-oriented channel (CoC) server used for Aliro's B
 Sets up the CoC mbuf memory pool and registers an L2CAP server on the Aliro SPSM with the given MTU. Logs an error and returns early if the mempool init, mbuf pool init, or ble_l2cap_create_server call fails, leaving the CoC server unavailable.
 
 **called by** `aliro_ble_start`, `aliro_ble_start_attached`
-
-### `static uint8_t encode_features(const struct aliro_ble_features *f)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:235`
-
-Pack an aliro_ble_features struct into a single bitmask byte for advertising/READ payloads.
-Bit 0 = timesync_procedure_0, bit 1 = timesync_procedure_1, bit 2 = le_coded_phy.
 
 ### `static uint8_t encode_features(const struct aliro_ble_features *f)`
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:235`
@@ -114,16 +88,6 @@ READ: hand back the prebuilt SPSM/versions/features buffer.
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:284`
 
 WRITE: [version be16][featLen u8][features]. Validate + log the negotiated version.
-
-### `(struct ble_gatt_chr_def[])`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:324`
-
-Array of GATT characteristic definitions for the Aliro BLE service, listing each characteristic's UUID, access callback, and flags.
-
-### `static int gap_event(struct ble_gap_event *event, void *arg)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:342`
-
-NimBLE GAP event callback that handles connection, disconnection, and advertising-related events for the Aliro BLE service.
 
 ### `static int gap_event(struct ble_gap_event *event, void *arg)`
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:342`
@@ -156,17 +120,6 @@ Configure and start BLE advertising for Aliro discovery.
 Advertises full Aliro service data (0xFFF2, 26 bytes) built by build_aliro_svc_data when adv is enabled and a GRK is configured; otherwise falls back to a bare service UUID plus device name for the unprovisioned/no-GRK case. Logs and returns without starting advertising if either ble_gap_adv_set_fields or ble_gap_adv_start fails.
 
 **called by** `aliro_ble_readvertise`, `aliro_ble_start_attached`, `gap_event`, `on_sync`  ·  **calls** `build_aliro_svc_data`
-
-### `struct ble_hs_adv_fields fields =`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:431`
-
-Local advertising fields structure populated by aliro_advertise and passed to ble_gap_adv_set_fields; zero-initialized before being filled with either full Aliro service data or the fallback UUID/name fields.
-
-### `struct ble_gap_adv_params adv_params =`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:460`
-
-Local GAP advertising parameters used to configure and start Aliro BLE advertising.
-Zero-initialized then set to undirected connectable, general discoverable mode before being passed to ble_gap_adv_start.
 
 ### `static void on_sync(void)`
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:473`
@@ -213,18 +166,7 @@ handled no-free-pages/new-version cases). Returns 0 on success.
 Capture the Aliro BLE configuration for later use by the service.
 Returns whatever capture_cfg returns; does not itself start advertising or the GATT service.
 
-### `int aliro_ble_prepare(const struct aliro_ble_config *cfg)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:579`
-
-Capture the Aliro BLE configuration for later use by the service.
-Returns whatever capture_cfg returns; does not itself start advertising or the GATT service.
-
 **calls** `capture_cfg`
-
-### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:585`
-
-Return the Aliro GATT service definition table for registration with the NimBLE host.
 
 ### `const struct ble_gatt_svc_def *aliro_ble_service_def(void)`
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:585`
@@ -276,22 +218,6 @@ On success the stack takes ownership of the sdu buffer; on failure it is freed h
 
 **calls** `coc_chan_for`
 
-### `static void coc_track(uint16_t conn_handle, struct ble_l2cap_chan *chan)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:662`
-
-Record a newly established L2CAP CoC channel against its connection handle in the first free tracking slot.
-Silently does nothing if all CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM slots are already active.
-
-### `struct os_mbuf *sdu = os_mbuf_get_pkthdr(&s_coc_mbuf_pool, 0)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:669`
-
-Local mbuf handle allocated from the CoC mbuf pool to hold an outgoing L2CAP SDU.
-
-### `static void reader_status_ev_cb(struct ble_npl_event *ev)`
-`ports/esp32-idf/components/aliro_ble/aliro_ble.c:696`
-
-NimBLE portable event-queue event type used to defer reader-status callback execution onto the host task.
-
 ### `static void reader_status_ev_cb(struct ble_npl_event *ev)`
 `ports/esp32-idf/components/aliro_ble/aliro_ble.c:696`
 
@@ -302,9 +228,3 @@ NimBLE portable event-queue event type used to defer reader-status callback exec
 
 Queue a reader-status callback to run on the NimBLE host task.
 Stores cb and unsecured in module statics and posts an event to the default NimBLE event queue; the callback fires later from reader_status_ev_cb, not synchronously. Runs on the host task so it serializes with every other sc_ble seal operation and keeps the BleSK counter monotonic; callers must not rely on immediate execution and must not post a second call before the first has been drained if ordering matters.
-
-<details><summary>Undocumented (1)</summary>
-
-- `ble_gatt_access_ctxt`
-
-</details>

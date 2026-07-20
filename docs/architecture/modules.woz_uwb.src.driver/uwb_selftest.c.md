@@ -7,27 +7,10 @@
 
 ## API
 
-### `static struct k_work_delayable uwb_selftest_dwork`
-`modules/woz_uwb/src/driver/uwb_selftest.c:14`
-
-Delayable work item for the UWB self-test boot diagnostic; scheduled once at startup if
-UWB_SELFTEST=1.
-
 ### `static void uwb_selftest_work(struct k_work *work)`
 `modules/woz_uwb/src/driver/uwb_selftest.c:24`
 
 One-shot worker: run the Aliro UWB start path and log the outcome.
-
-### `static void uwb_selftest_work(struct k_work *work)`
-`modules/woz_uwb/src/driver/uwb_selftest.c:24`
-
-One-shot worker: run the Aliro UWB start path and log the outcome.
-
-### `const struct woz_uwb_aliro_cfg cfg =`
-`modules/woz_uwb/src/driver/uwb_selftest.c:28`
-
-Configuration struct for the Aliro DS-TWR responder, containing ranging parameters
-(channel, preamble code, session ID, and STS index).
 
 ### `static int uwb_selftest_init(void)`
 `modules/woz_uwb/src/driver/uwb_selftest.c:53`

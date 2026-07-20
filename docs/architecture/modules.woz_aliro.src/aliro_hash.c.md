@@ -58,6 +58,13 @@ digest.
 
 **called by** `aliro_hkdf_expand`, `aliro_hmac_sha256`, `aliro_sha256`, `aliro_x963_kdf`  ·  **calls** `aliro_sha256_update`
 
+### `void aliro_sha256(const void *data, size_t len, uint8_t out[ALIRO_SHA256_LEN])`
+`modules/woz_aliro/src/aliro_hash.c:160`
+
+One-shot SHA-256.
+
+**called by** `aliro_hmac_sha256`  ·  **calls** `aliro_sha256_final`, `aliro_sha256_init`, `aliro_sha256_update`
+
 ### `void aliro_hmac_sha256(const uint8_t *key, size_t key_len, const void *msg, size_t msg_len, uint8_t out[ALIRO_SHA256_LEN])`
 `modules/woz_aliro/src/aliro_hash.c:169`
 
@@ -109,11 +116,3 @@ OKM = Hash(Z | counter_be32=1 | info) | Hash(Z | counter=2 | info) | ...
 truncated to out_len. Returns 0 on success, -1 on a bad length.
 
 **calls** `aliro_sha256_final`, `aliro_sha256_init`, `aliro_sha256_update`
-
-### `void aliro_sha256_init(struct aliro_sha256 *s)`
-`modules/woz_aliro/src/aliro_hash.c:290`
-
-Initialize a streaming SHA-256 context with the FIPS 180-4 initial hash values.
-Resets total byte count and internal buffer length to zero; must be called before feeding data.
-
-**called by** `aliro_hmac_sha256`  ·  **calls** `aliro_sha256_final`, `aliro_sha256_init`, `aliro_sha256_update`

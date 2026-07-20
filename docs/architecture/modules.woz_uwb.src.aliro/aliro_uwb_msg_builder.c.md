@@ -15,12 +15,6 @@
 @param payload_len Number of payload bytes to reserve, in addition to the header.
 @return true on successful allocation, false if allocation failed.
 
-### `builder->message = qmalloc(sizeof(struct aliro_uwb_message) + total)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:18`
-
-@brief Aliro UWB message under construction, holding encoded M1-M4 attributes and
-payload.
-
 ### `void aliro_uwb_msg_builder_header(struct aliro_uwb_msg_builder *builder, uint8_t protocol, uint8_t id, uint16_t payload_length)`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:34`
 
@@ -98,16 +92,6 @@ payload.
 would overrun the builder's capacity.
 
 **calls** `add_attribute`
-
-### `bool aliro_uwb_msg_builder_add_bytes(struct aliro_uwb_msg_builder *builder, uint8_t id, size_t count, const uint8_t *values)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:172`
-
-@brief Append an attribute whose value is count raw bytes.
-@param builder Message builder to append the attribute to.
-@param id Attribute identifier byte.
-@param count Number of bytes in the values array.
-@param values Pointer to the raw bytes to append.
-@return true if the attribute was appended, false if it would overrun the builder's capacity.
 
 ### `bool aliro_uwb_msg_builder_add_bytes(struct aliro_uwb_msg_builder *builder, uint8_t id, size_t count, const uint8_t *values)`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg_builder.c:172`

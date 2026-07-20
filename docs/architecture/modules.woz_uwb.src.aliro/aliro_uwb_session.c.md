@@ -29,13 +29,6 @@ flowchart TD
 @param event CCC event to wrap and forward.
 @param user_data Aliro UWB session that owns the callback and client data.
 
-### `static void aliro_ccc_cb(struct cherry_ccc_event *event, void *user_data)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:46`
-
-@brief CCC seam callback: wrap the CCC event and forward it to the client.
-@param event CCC event to wrap and forward.
-@param user_data Aliro UWB session that owns the callback and client data.
-
 **calls** `notify_error`
 
 ### `static void session_close(struct aliro_uwb_session *session)`
@@ -84,12 +77,6 @@ the mapped CCC error on failure.
 @brief Allocate an Aliro UWB session in the CREATED state, bound to an adapter and to the
 caller's transmit and event callbacks. No CCC session is started here.
 
-### `struct aliro_uwb_session *aliro_uwb_session_create(struct aliro_uwb_adapter *aliro_ctx, uint32_t session_id, aliro_uwb_session_cb_t callback, aliro_uwb_adapter_transmit_message_t transmit, void *user_data)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:233`
-
-@brief Allocate an Aliro UWB session in the CREATED state, bound to an adapter and to the
-caller's transmit and event callbacks. No CCC session is started here.
-
 ### `void aliro_uwb_session_destroy(struct aliro_uwb_session *session)`
 `modules/woz_uwb/src/aliro/aliro_uwb_session.c:266`
 
@@ -104,11 +91,6 @@ session.
 
 @brief Free a session message, delegating to the message-specific free function.
 @param message Message to free.
-
-### `void aliro_uwb_session_event_free(struct aliro_uwb_session_event *event)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:287`
-
-@brief Free a session event, releasing its wrapped CCC event if present.
 
 ### `void aliro_uwb_session_event_free(struct aliro_uwb_session_event *event)`
 `modules/woz_uwb/src/aliro/aliro_uwb_session.c:287`
@@ -188,22 +170,3 @@ cherry_ccc_session_stop.
 @brief Resume a suspended ranging session by building and transmitting a resume request.
 ALIRO_UWB_ERR_INVALID_STATE if there is no active CCC session or the session is not in the
 SUSPENDED state, ALIRO_UWB_ERR_INTERNAL if the resume request could not be built.
-
-### `enum aliro_uwb_err aliro_uwb_session_resume(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:489`
-
-@brief Resume a suspended ranging session by building and transmitting a resume request.
-ALIRO_UWB_ERR_INVALID_STATE if there is no active CCC session or the session is not in the
-SUSPENDED state, ALIRO_UWB_ERR_INTERNAL if the resume request could not be built.
-
-### `void aliro_uwb_session_message_free(struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:491`
-
-@brief Free a session message, delegating to the message-specific free function.
-@param message Message to free.
-
-<details><summary>Undocumented (1)</summary>
-
-- `aliro_uwb_adapter_reader_config`
-
-</details>

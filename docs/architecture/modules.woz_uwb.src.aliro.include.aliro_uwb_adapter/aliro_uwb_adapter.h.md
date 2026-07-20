@@ -12,26 +12,7 @@
 
 @brief Ordered hopping preferences (at least one default sequence required).
 
-#### `struct aliro_uwb_preferred_hopping_configs preferred_hopping_configs`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:58`
-
-@brief Ordered preferred hopping configurations.
-
 ### `struct aliro_uwb_adapter_reader_config`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:77`
+`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:52`
 
 Reader-side selection preferences (borrowed for the adapter's lifetime).
-
-### `void aliro_uwb_adapter_destroy(struct aliro_uwb_adapter *aliro_ctx)`
-`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h:91`
-
-@brief Release an adapter context.
-@param aliro_ctx Adapter context to release.
-
-<details><summary>Undocumented (3)</summary>
-
-- `cherry`
-- `cherry_core_event_device_capabilities`
-- `cherry_common_diag_cfg`
-
-</details>

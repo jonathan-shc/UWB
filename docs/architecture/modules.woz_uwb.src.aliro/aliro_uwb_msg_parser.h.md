@@ -7,12 +7,12 @@
 
 ## API
 
-### `struct aliro_uwb_msg_attribute *aliro_uwb_msg_next_attribute(struct aliro_uwb_msg_parser *parser)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:36`
-
-Advance to the next attribute; NULL at end-of-payload or on overrun.
-
 ### `struct aliro_uwb_msg_attribute`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:45`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:14`
 
 A single type/length/value attribute overlaid on the message bytes.
+
+### `struct aliro_uwb_msg_parser`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg_parser.h:21`
+
+Cursor walking the attributes of one message payload.

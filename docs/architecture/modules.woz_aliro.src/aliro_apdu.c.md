@@ -127,12 +127,6 @@ EXCHANGE command plaintext (sealed by the caller before framing).
 
 **calls** `aliro_tlv_put_empty`, `aliro_tlv_put_u16`, `aliro_tlv_w_finish`, `aliro_tlv_w_init`
 
-### `void aliro_tlv_w_init(struct aliro_tlv_w *w, uint8_t *buf, size_t cap)`
-`modules/woz_aliro/src/aliro_apdu.c:213`
-
-Initializes a TLV writer to append into buf, with capacity cap and no error latched.
-Must be called before any aliro_tlv_put / aliro_tlv_put_empty / w_byte calls on w.
-
 ### `int aliro_apdu_wrap(uint8_t ins, const uint8_t *tlv, size_t tlv_len, uint8_t *out, size_t cap, size_t *out_len)`
 `modules/woz_aliro/src/aliro_apdu.c:225`
 
@@ -156,28 +150,7 @@ public key (tag ALIRO_TAG_DEVICE_PUBX) is mandatory and must be exactly 65 bytes
 populated (zero-initialized first); returns -1 if the mandatory pubkey TLV is missing or has the
 wrong length.
 
-### `int aliro_apdu_parse_auth0_response(const uint8_t *buf, size_t len, struct aliro_auth0_response *r)`
-`modules/woz_aliro/src/aliro_apdu.c:266`
-
-Parses an AUTH0 response APDU body, extracting the device's ephemeral public key and optional
-cryptogram. buf/len is the APDU body with any status word already stripped. The device ephemeral
-public key (tag ALIRO_TAG_DEVICE_PUBX) is mandatory and must be exactly 65 bytes; the cryptogram
-(tag 0x9D) is optional and, if present, must be exactly 64 bytes. Returns 0 on success with *r
-populated (zero-initialized first); returns -1 if the mandatory pubkey TLV is missing or has the
-wrong length.
-
 **calls** `aliro_tlv_find`
-
-### `int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len, struct aliro_auth1_response *r)`
-`modules/woz_aliro/src/aliro_apdu.c:290`
-
-Parses an AUTH1 response APDU body, extracting the device's signature and optional device public
-key. buf/len is the APDU body with any status word already stripped. The device signature (tag
-ALIRO_TAG_SIG) is mandatory and must be exactly 64 bytes; the device public key (tag
-ALIRO_TAG_DEVICE_PUB) is optional and, if present, must be exactly 65 bytes. A signaling-bitmap
-item at tag 0x91 is recognized but ignored. Returns 0 on success with *r populated
-(zero-initialized first); returns -1 if the mandatory signature TLV is missing or has the wrong
-length.
 
 ### `int aliro_apdu_parse_auth1_response(const uint8_t *buf, size_t len, struct aliro_auth1_response *r)`
 `modules/woz_aliro/src/aliro_apdu.c:290`

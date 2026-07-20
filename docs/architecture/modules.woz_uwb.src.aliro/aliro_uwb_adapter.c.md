@@ -5,6 +5,12 @@
 
 **depends on** [`modules/woz_uwb/src/aliro/aliro_uwb_internal.h`](aliro_uwb_internal.h.md), [`modules/woz_uwb/src/aliro/include/aliro_uwb_adapter/aliro_uwb_adapter.h`](../modules.woz_uwb.src.aliro.include.aliro_uwb_adapter/aliro_uwb_adapter.h.md), [`modules/woz_uwb/src/aliro/include/cherry/cherry_ccc.h`](../modules.woz_uwb.src.aliro.include.cherry/cherry_ccc.h.md), [`modules/woz_uwb/src/facade/woz_alloc.h`](../modules.woz_uwb.src.facade/woz_alloc.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](../modules.woz_uwb.src.facade/woz_log.h.md)
 
+```mermaid
+flowchart TD
+  aliro_uwb_adapter_create_reader --> copy_capabilities
+  aliro_uwb_adapter_create_reader --> reader_config_valid
+```
+
 ## API
 
 ### `enum aliro_uwb_err cherry_err_to_aliro(enum cherry_err err)`
@@ -45,15 +51,6 @@ resolving the minimum RAN multiplier against the reader's own configuration.
 
 **calls** `copy_capabilities`, `reader_config_valid`
 
-### `static bool reader_config_valid(const struct aliro_uwb_adapter_reader_config *config)`
-`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c:120`
-
-@brief Validate that a reader configuration offers at least one valid hopping sequence and
-respects configured bounds, returning false if invalid.
-@param config Reader configuration to validate.
-@return true if the configuration's hopping count is within bounds and includes a default
-sequence, false otherwise.
-
 ### `void aliro_uwb_adapter_set_diagnostics(struct aliro_uwb_adapter *aliro_ctx, struct cherry_common_diag_cfg config)`
 `modules/woz_uwb/src/aliro/aliro_uwb_adapter.c:160`
 
@@ -65,19 +62,3 @@ allocating storage if needed.
 
 @brief Destroy an Aliro UWB adapter, freeing all associated CCC capabilities arrays and
 diagnostic configuration.
-
-### `void aliro_uwb_adapter_destroy(struct aliro_uwb_adapter *aliro_ctx)`
-`modules/woz_uwb/src/aliro/aliro_uwb_adapter.c:179`
-
-@brief Destroy an Aliro UWB adapter, freeing all associated CCC capabilities arrays and
-diagnostic configuration.
-
-<details><summary>Undocumented (5)</summary>
-
-- `cherry_ccc_capabilities`
-- `aliro_uwb_preferred_hopping_configs`
-- `cherry`
-- `cherry_core_event_device_capabilities`
-- `cherry_common_diag_cfg`
-
-</details>

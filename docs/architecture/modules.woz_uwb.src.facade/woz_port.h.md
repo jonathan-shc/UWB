@@ -12,14 +12,12 @@
 
 host tests are single-threaded
 
-<details><summary>Undocumented (13)</summary>
+<details><summary>Undocumented (11)</summary>
 
-- `woz_mutex_t.k_mutex`
 - `woz_malloc`
 - `woz_calloc`
 - `woz_free`
 - `woz_uptime_us`
-- `timespec`
 - `woz_uptime_ms`
 - `woz_sleep_ms`
 - `woz_sleep_us`

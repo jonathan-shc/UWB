@@ -8,8 +8,11 @@ seal/open framing shared by the reader and device sides of an Aliro session.
 
 ## API
 
-### `int aliro_msg_open(struct aliro_secchan *sc, const uint8_t *wire, size_t wire_len, uint8_t *plain, size_t plain_cap, size_t *plain_len)`
-`modules/woz_aliro/include/aliro_crypto.h:144`
+### `struct aliro_secchan`
+`modules/woz_aliro/include/aliro_crypto.h:95`
 
-Inverse of aliro_msg_seal: open a wire SDU into the engine plaintext form,
-verifying the tag. Returns <0 on a tag mismatch (drop the connection then).
+---- Secure channel (AES-256-GCM, directional per-message counters) ------
+Nonce = 8-byte big-endian direction (0 outbound/seal, 1 inbound/open) followed
+by a 4-byte big-endian per-direction counter. Separate seal/open counters,
+start at 0, no wrap. SessionCrypto sends no AAD; the BLE channel authenticates
+a 4-byte AAD (caller-supplied here).

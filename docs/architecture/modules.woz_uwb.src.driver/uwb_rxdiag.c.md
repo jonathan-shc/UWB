@@ -68,11 +68,6 @@ then decode the Pre-POLL frame off the critical path to warm the next block's ST
 
 @brief Periodic ranging heartbeat (every 2 s); re-arms itself while streaming.
 
-### `static void rxdiag_log(struct k_work *work)`
-`modules/woz_uwb/src/driver/uwb_rxdiag.c:208`
-
-@brief Periodic ranging heartbeat (every 2 s); re-arms itself while streaming.
-
 ### `void uwb_rxdiag_get_counts(uint32_t *rxok, uint32_t *rxerr, uint32_t *rxto, uint32_t *txdone, uint32_t *last_err, uint32_t *last_ok)`
 `modules/woz_uwb/src/driver/uwb_rxdiag.c:273`
 

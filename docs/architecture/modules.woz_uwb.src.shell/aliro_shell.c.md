@@ -46,11 +46,6 @@ status words.
 
 **calls** `hdr`
 
-### `struct uwb_selftest_result r =`
-`modules/woz_uwb/src/shell/aliro_shell.c:119`
-
-Uninitialized self-test result structure, filled by uwb_min_selftest.
-
 ### `static int cmd_log(const struct shell *sh, size_t argc, char **argv)`
 `modules/woz_uwb/src/shell/aliro_shell.c:136`
 
@@ -75,12 +70,6 @@ Print all system status at a glance: chip ID, CCC bind state, URSK provisioning,
 (distance and age), RX tally, and stream state (log and frames).
 
 **calls** `hdr`
-
-### `static int cmd_aliro(const struct shell *sh, size_t argc, char **argv)`
-`modules/woz_uwb/src/shell/aliro_shell.c:242`
-
-Print aliro shell command help: lists all subcommands (status, rx, range, chip, selftest, log,
-frames, version) with descriptions.
 
 ### `static int cmd_aliro(const struct shell *sh, size_t argc, char **argv)`
 `modules/woz_uwb/src/shell/aliro_shell.c:242`

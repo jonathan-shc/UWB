@@ -19,12 +19,12 @@
 
 @brief Periodic sampler so a CYCCNT wrap is never missed during console idle.
 
-### `static void woz_wrap_sample(struct k_timer *t)`
-`modules/woz_uwb/src/facade/woz_logfmt.c:61`
-
-@brief Periodic sampler so a CYCCNT wrap is never missed during console idle.
-
 **calls** `woz_timestamp_get`
+
+### `struct woz_sink`
+`modules/woz_uwb/src/facade/woz_logfmt.c:70`
+
+@brief Small bounded sink so cbpprintf can render into a stack buffer.
 
 ### `static int woz_sink_out(int c, void *ctx)`
 `modules/woz_uwb/src/facade/woz_logfmt.c:76`
@@ -51,22 +51,7 @@ string or exhausted buffer.
 
 @brief Render one message as `SEC.NS module message`, or delegate hexdumps.
 
-### `static void woz_msg_format(const struct log_output *output, struct log_msg *msg, uint32_t flags)`
-`modules/woz_uwb/src/facade/woz_logfmt.c:112`
-
-@brief Render one message as `SEC.NS module message`, or delegate hexdumps.
-
-### `static void woz_msg_format(const struct log_output *output, struct log_msg *msg, uint32_t flags)`
-`modules/woz_uwb/src/facade/woz_logfmt.c:112`
-
-@brief Render one message as `SEC.NS module message`, or delegate hexdumps.
-
 **calls** `module_color`, `woz_sink_str`
-
-### `struct woz_sink`
-`modules/woz_uwb/src/facade/woz_logfmt.c:175`
-
-@brief Small bounded sink so cbpprintf can render into a stack buffer.
 
 ### `static int woz_logfmt_init(void)`
 `modules/woz_uwb/src/facade/woz_logfmt.c:219`
