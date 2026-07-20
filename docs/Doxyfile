@@ -41,7 +41,13 @@ HIDE_UNDOC_CLASSES     = YES
 ENABLE_PREPROCESSING   = YES
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = YES
-PREDEFINED             = __cplusplus=
+#
+# SEARCH_INCLUDES is off, so doxygen never reads a #define out of a header: any
+# macro gating real code evaluates to 0 here and takes its whole #if block with
+# it, silently. Restate those below. WOZ_CCC_PREPOLL_LISTEN is an unconditional
+# `#define ... 1` in ccc_shim.h that guards 547 lines of ccc_shim_rx.c.
+PREDEFINED             = __cplusplus= \
+                         WOZ_CCC_PREPOLL_LISTEN=1
 SEARCH_INCLUDES        = NO
 
 OPTIMIZE_OUTPUT_FOR_C  = YES

@@ -1099,9 +1099,13 @@ static void resp_tx_done(const dwt_cb_data_t *cb)
 	}
 }
 
-// RX callback for Pre-POLL listen and POLL/Final results: re-arm SP0 by default, or arm SP3/ND for
-// POLL if a warmed index is ready, or fire the delayed-TX Response_0 and Final RX arm on valid POLL
-// CPER; log free-running timing and optionally defer Pre-POLL decode to warm the next block.
+/**
+ * @brief RX callback for Pre-POLL listen and POLL/Final results.
+ *
+ * Re-arms SP0 by default, or arms SP3/ND for POLL if a warmed index is ready, or fires the
+ * delayed-TX Response_0 and Final RX arm on valid POLL CPER; logs free-running timing and
+ * optionally defers Pre-POLL decode to warm the next block.
+ */
 static void prepoll_rx_rearm(const dwt_cb_data_t *cb)
 {
 	/* FREE-RUNNING TIMING+CONTENT DIAGNOSTIC (de-starved: re-arm first, log deferred): free-run

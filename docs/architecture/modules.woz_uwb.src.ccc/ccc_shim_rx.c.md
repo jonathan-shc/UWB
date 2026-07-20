@@ -193,16 +193,17 @@ then run the block's deferred Pre-POLL decode in the idle.
 **calls** `arm_final_sp3`, `prepoll_decode`, `revert_to_sp0_listen`, `ts5_to_u64`
 
 ### `static void prepoll_rx_rearm(const dwt_cb_data_t *cb)`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1105`
+`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1109`
 
-RX callback for Pre-POLL listen and POLL/Final results: re-arm SP0 by default, or arm SP3/ND for
-POLL if a warmed index is ready, or fire the delayed-TX Response_0 and Final RX arm on valid POLL
-CPER; log free-running timing and optionally defer Pre-POLL decode to warm the next block.
+@brief RX callback for Pre-POLL listen and POLL/Final results.
+Re-arms SP0 by default, or arms SP3/ND for POLL if a warmed index is ready, or fires the
+delayed-TX Response_0 and Final RX arm on valid POLL CPER; logs free-running timing and
+optionally defers Pre-POLL decode to warm the next block.
 
 **calls** `arm_final_sp3`, `arm_poll_sp3`, `gated_rxenable`, `prepoll_decode`, `revert_to_sp0_listen`, `ts5_to_u64`, `tx_response_sp3`
 
 ### `int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1325`
+`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1329`
 
 Initialize the DW3000 radio for permanent SP0 Pre-POLL listen: configure PHY (6.8 Mbps, preamble
 length 64, SFD 4a, no STS), install RX callbacks that self-rearm on every frame outcome, and
@@ -211,7 +212,7 @@ enable all RX/TX interrupts; returns 0 on success.
 **calls** `ccc_shim_rx_log_reset`
 
 ### `void ccc_prepoll_stop(void)`
-`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1390`
+`modules/woz_uwb/src/ccc/ccc_shim_rx.c:1394`
 
 Stop the permanent Pre-POLL listener: close the listen-gate (every self-rearm
 site checks it via gated_rxenable), then force the radio out of RX/TX.  The
