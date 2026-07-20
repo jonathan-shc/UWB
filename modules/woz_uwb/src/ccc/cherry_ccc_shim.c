@@ -8,8 +8,8 @@
 #include "woz_alloc.h"
 #include <string.h>
 
-#include <zephyr/logging/log.h>
-#include <zephyr/sys/util.h>
+#include "woz_log.h"
+#include "woz_util.h"
 
 #include "woz_uwb_facade.h"
 #include "aliro_round_config.h" /* ALIRO_NUM_RESPONDERS — EXPERIMENT-2RESP */

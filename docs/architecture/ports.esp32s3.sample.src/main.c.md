@@ -8,8 +8,6 @@ DW3000 + CCC init path comes up on ESP32-S3; a live range needs a peer that
 drives the DS-TWR exchange (an Aliro Wallet, or a second board as initiator).
 Reference scaffold (see ports/esp32s3/README.md) — not yet built on silicon.
 
-**depends on** [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md)
-
 ## API
 
 ### `int main(void)`

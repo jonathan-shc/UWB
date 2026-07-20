@@ -1,4 +1,4 @@
-# Verifies the 6 integration patches still apply to the pinned upstream
+# Verifies every integration patch still applies to the pinned upstream
 # revisions (add-on, sdk-nrf, matter) via cheap sparse fetches — no workspace.
 # Push runs only when a pin or a patch changes; the pins are otherwise immutable.
 name: patch-drift

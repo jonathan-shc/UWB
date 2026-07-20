@@ -15,8 +15,8 @@
 #include "deca_version.h"
 #include "deca_private.h"
 
-#include <zephyr/sys/printk.h> /* DIAG: callback-registration trace (temporary) */
-#include <zephyr/sys/util.h>   /* IS_ENABLED — gate the DIAG printk under PRETTY */
+#include "woz_log.h"           /* DIAG: callback-registration trace (temporary) */
+#include "woz_util.h"          /* IS_ENABLED — gate the DIAG printk under PRETTY */
 
 /*! The device ID regiser address, common to all QM33xxx/DW3xxx devices */
 #define DW3XXX_DEVICE_ID (0x0)

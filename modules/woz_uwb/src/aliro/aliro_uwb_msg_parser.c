@@ -2,7 +2,7 @@
 
 #include "aliro_uwb_msg_parser.h"
 
-#include <zephyr/logging/log.h>
+#include "woz_log.h"
 
 LOG_MODULE_DECLARE(woz_aliro_uwb, LOG_LEVEL_INF);
 

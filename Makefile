@@ -20,6 +20,10 @@ PRETTY   ?=
 PRISTINE ?=
 SELFTEST ?=
 STRICT   ?=
+# HA=1 opts into the Home Assistant variant. It must be set on BOTH bootstrap
+# (applies the data-model patches) and build (layers woz-ha.conf); see
+# integration/homeassistant/README.md. Not hardware-validated.
+HA       ?=
 
 # Serial monitor (make term). PORT auto-detects the nRF5340DK console (VCOM1 —
 # this firmware's console + Zephyr shell live there; VCOM0 is silent). Override
@@ -35,12 +39,15 @@ ENV := $(strip \
   $(if $(PRETTY),PRETTY=$(PRETTY)) \
   $(if $(PRISTINE),PRISTINE=$(PRISTINE)) \
   $(if $(SELFTEST),UWB_SELFTEST=$(SELFTEST)) \
-  $(if $(STRICT),STRICT=$(STRICT)))
+  $(if $(STRICT),STRICT=$(STRICT)) \
+  $(if $(HA),HA=$(HA)))
 
 .PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws docs flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
+##   Options: HA=1 also applies the Home Assistant data-model patches
+##            (pair with `make build HA=1`; not hardware-validated)
 bootstrap:
 	@$(ENV) ./bootstrap.sh
 
@@ -53,6 +60,7 @@ ws-seed:
 ## build: incremental build            -> build/merged.hex
 ##   Options: CHIP=dw3720 (default dw3000)  PRETTY=1  PRISTINE=1  SELFTEST=1
 ##            STRICT=1 (drop suspect ranges)
+##            HA=1 (Home Assistant variant — needs `make bootstrap HA=1` too)
 ##   e.g.     make build PRETTY=1 CHIP=dw3720
 build:
 	@$(ENV) ./build.sh build
@@ -154,4 +162,7 @@ help:
 	   /^## [^ ]/ { s=substr($$0,4); i=index(s,": "); \
 	     printf "    %s%-14s%s %s%s%s\n", c, substr(s,1,i-1), r, d, substr(s,i+2), r }' \
 	  $(MAKEFILE_LIST); \
+	printf '\n  %sOptions%s  %s·  set on the command line, e.g. make build PRETTY=1%s\n' "$$y" "$$r" "$$d" "$$r"; \
+	printf '    %sCHIP=dw3720  PRETTY=1  PRISTINE=1  SELFTEST=1  STRICT=1%s\n' "$$d" "$$r"; \
+	printf '    %sHA=1  ·  Home Assistant variant; set on bootstrap AND build%s\n' "$$d" "$$r"; \
 	printf '\n'

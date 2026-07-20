@@ -4,7 +4,7 @@
 @file ccc_shim_rx.c — responder-RX CCC STS substitution (ld --wrap=dwt_rxenable) programming the
 CCC STS on each RX-arm; target only.
 
-**depends on** [`modules/woz_uwb/src/ccc/aliro_round_config.h`](aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](../modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](../modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](../modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](../modules.woz_uwb.src.fira/fira_session.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/kernel.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr/kernel.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/logging/log.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr.logging/log.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/byteorder.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/byteorder.h.md)  ·  **discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md), [`ports/esp32-idf/README.md`](../../../ports/esp32-idf/README.md)
+**depends on** [`modules/woz_uwb/src/ccc/aliro_round_config.h`](aliro_round_config.h.md), [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md), [`modules/woz_uwb/src/ccc/ccc_mac.h`](ccc_mac.h.md), [`modules/woz_uwb/src/ccc/ccc_shim.h`](ccc_shim.h.md), [`modules/woz_uwb/src/driver/uwb_min.h`](../modules.woz_uwb.src.driver/uwb_min.h.md), [`modules/woz_uwb/src/driver/uwb_rxdiag.h`](../modules.woz_uwb.src.driver/uwb_rxdiag.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](../modules.woz_uwb.src.facade/woz_bytes.h.md), [`modules/woz_uwb/src/facade/woz_diag.h`](../modules.woz_uwb.src.facade/woz_diag.h.md), [`modules/woz_uwb/src/facade/woz_log.h`](../modules.woz_uwb.src.facade/woz_log.h.md), [`modules/woz_uwb/src/facade/woz_port.h`](../modules.woz_uwb.src.facade/woz_port.h.md), [`modules/woz_uwb/src/fira/fira_session.h`](../modules.woz_uwb.src.fira/fira_session.h.md)  ·  **discussed in** [`docs/porting-esp32.md`](../../porting-esp32.md), [`integration/homeassistant/README.md`](../../../integration/homeassistant/README.md), [`ports/esp32-idf/README.md`](../../../ports/esp32-idf/README.md)
 
 ```mermaid
 flowchart TD
@@ -228,7 +228,7 @@ enable all RX/TX interrupts; returns 0 on success.
 Stop the permanent Pre-POLL listener: close the listen-gate (every self-rearm
 site checks it via gated_rxenable), then force the radio out of RX/TX.  The
 DW3000 callbacks run on the dedicated coop (-11) isr workqueue with
-busy-polled SPI and synchronous printk, so a callback never yields
+busy-polled SPI and synchronous woz_printf, so a callback never yields
 mid-flight: one in flight when a preemptive-thread caller gets here has
 already run to completion (its rearm landed BEFORE our forcetrxoff), and any
 later callback sees the gate closed.  A residual rearm window exists only if

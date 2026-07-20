@@ -59,7 +59,7 @@ the internal tables.
 **calls** `BoltLockMgr`
 
 ### `inline BoltLockManager &BoltLockMgr()`
-`ports/esp32-matter/main/lock/door_lock_manager.h:198`
+`ports/esp32-matter/main/lock/door_lock_manager.h:202`
 
 Returns the process-wide BoltLockManager singleton (BoltLockManager::sLock).
 

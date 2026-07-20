@@ -3,7 +3,7 @@
 
 @file ccc_sts.c — DW3000 STS register load for the CCC ranging path.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_sts.h`](ccc_sts.h.md), [`ports/esp32-idf/components/woz_uwb/compat/zephyr/sys/byteorder.h`](../ports.esp32-idf.components.woz_uwb.compat.zephyr.sys/byteorder.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_sts.h`](ccc_sts.h.md), [`modules/woz_uwb/src/facade/woz_bytes.h`](../modules.woz_uwb.src.facade/woz_bytes.h.md)
 
 ## API
 

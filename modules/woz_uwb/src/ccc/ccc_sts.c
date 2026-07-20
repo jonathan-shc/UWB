@@ -4,7 +4,7 @@
 
 #include <errno.h>
 
-#include <zephyr/sys/byteorder.h>
+#include "woz_bytes.h"
 
 #include <deca_device_api.h>
 

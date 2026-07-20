@@ -3,7 +3,7 @@
 
 @file ccc_crypto_psa.c — On-target AES-ECB block (PSA/CC312) backing the CCC key schedule.
 
-**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md)
+**depends on** [`modules/woz_uwb/src/ccc/ccc_kdf.h`](ccc_kdf.h.md)  ·  **discussed in** [`docs/porting.md`](../../porting.md)
 
 ## API
 

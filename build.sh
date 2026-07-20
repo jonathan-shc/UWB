@@ -143,11 +143,18 @@ do_build() {
   local lat_conf=""
   [ "${LAT:-0}" = 1 ] && lat_conf=";$OV/diag-latency.conf"
 
+  # HA=1: layer woz-ha.conf (Home Assistant / multi-admin). Off by default so the
+  # Apple Home demo image is untouched; see that file for why. Needs the matching
+  # HA=1 ./bootstrap.sh, which applies the data-model patches this pairs with.
+  # Rides EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
+  local ha_conf=""
+  [ "${HA:-0}" = 1 ] && ha_conf=";$OV/woz-ha.conf"
+
   # Every -D flag that, if changed, requires a from-scratch configure. Overlay
   # *content* edits are handled incrementally by Zephyr (configure-deps), so only
   # flag changes are captured here.
   local -a dflags=(
-    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}"
+    -DEXTRA_CONF_FILE="$OV/woz-aliro.conf${pretty_conf}${lat_conf}${ha_conf}"
     -Dipc_radio_EXTRA_CONF_FILE="$OV/ipc_radio.conf"
     -DEXTRA_DTC_OVERLAY_FILE="$OV/dw3000-nfc.overlay"
     -DPM_STATIC_YML_FILE="$OV/pm_static.yml"

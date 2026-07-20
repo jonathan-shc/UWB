@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Test entry point for the ESP32 port. Three layers, all hardware-free:
-#   - test_compat_shim:  fast host unit test of the pure compat headers.
+#   - test_port_headers: fast host unit test of the pure port headers.
 #   - test_aliro_crypto: host KAT of the Aliro key-schedule core (SHA-256/KDF),
 #                        compiled from the same source as the target.
 #   - verify_port.sh:    on-target build + --wrap seam + exclusion guard (needs
@@ -12,32 +12,32 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-echo "== host: compat shim unit test =="
-BIN="$(mktemp -t woz_compat_shim.XXXXXX)"
+echo "== host: port headers unit test =="
+BIN="$(mktemp -t woz_port_headers.XXXXXX)"
 trap 'rm -f "$BIN" "${CBIN:-}"' EXIT
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$HERE/../components/woz_uwb/compat" \
-   "$HERE/test_compat_shim.c" -o "$BIN"
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   "$HERE/test_port_headers.c" -o "$BIN"
 "$BIN"
 
 echo
 echo "== host: aliro_crypto key-schedule KAT =="
-CRYPTO="$HERE/../components/aliro_crypto"
+# The Aliro core is shared with the nRF build; it lives in modules/woz_aliro.
+ALIRO="$HERE/../../../modules/woz_aliro"
 CBIN="$(mktemp -t aliro_crypto_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$CRYPTO/include" -I "$CRYPTO/src" \
+   -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_crypto.c" \
-   "$CRYPTO/src/aliro_hash.c" "$CRYPTO/src/aliro_crypto.c" \
+   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
    "$HERE/aliro_prim_host.c" -o "$CBIN"
 "$CBIN"
 
 echo
 echo "== host: aliro_apdu wire-codec KAT =="
-READER="$HERE/../components/aliro_reader"
 ABIN="$(mktemp -t aliro_apdu_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$READER" \
-   "$HERE/test_aliro_apdu.c" "$READER/aliro_apdu.c" -o "$ABIN"
+   -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_aliro_apdu.c" "$ALIRO/src/aliro_apdu.c" -o "$ABIN"
 "$ABIN"
 rm -f "$ABIN"
 
@@ -45,8 +45,8 @@ echo
 echo "== host: aliro_prov identity/trust KAT =="
 PBIN="$(mktemp -t aliro_prov_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
-   -I "$READER" \
-   "$HERE/test_aliro_prov.c" "$READER/aliro_prov.c" -o "$PBIN"
+   -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_aliro_prov.c" "$ALIRO/src/aliro_prov.c" -o "$PBIN"
 "$PBIN"
 rm -f "$PBIN"
 
