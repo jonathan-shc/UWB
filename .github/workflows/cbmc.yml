@@ -1,0 +1,34 @@
+# Bounded model-checking of the wire parsers with CBMC: proves memory safety
+# (no out-of-bounds access, no bad pointer, no overflowing conversion) for ALL
+# inputs up to each harness bound — the exhaustive counterpart to fuzzing, which
+# only samples. Slower than the other gates (a couple of minutes), so it stands
+# as its own workflow.
+name: cbmc
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - modules/woz_uwb/**
+      - modules/woz_aliro/**
+      - tests/host/**
+      - Makefile
+      - .github/workflows/cbmc.yml
+  # No path filter on PRs: keep it reporting like the other required checks.
+  pull_request:
+  workflow_dispatch:
+
+# Superseded runs on the same ref are wasted work — cancel them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cbmc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: install cbmc
+        run: sudo apt-get update -q && sudo apt-get install -y -q cbmc
+      - name: prove wire-parser memory safety
+        run: make cbmc

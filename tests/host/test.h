@@ -52,5 +52,6 @@ void test_fira(void);
 void test_facade(void);
 void test_prepoll_gate(void);
 void test_prepoll_round(void);
+void test_twin(void);
 
 #endif /* WOZ_HOST_TEST_H */
