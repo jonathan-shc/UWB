@@ -53,10 +53,22 @@ ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing,
 
 ## Licensing
 
-Project-original code is ISC (see [LICENSE](LICENSE)); the tree is mixed-license, with
-per-file `SPDX-License-Identifier` headers as the source of truth. Contributions to
-project-original files are accepted under ISC. Do not copy code in from external
-projects unless its license is compatible and its header says where it came from.
+Project-original code is ISC (see [LICENSE](LICENSE)). The tree is mixed-license, and
+because of the Qorvo driver's terms the repository as a whole is source-available rather
+than open source in the OSI sense; [LICENSE](LICENSE) maps each vendored component to its
+license and says where the text lives.
+
+Where a file carries an `SPDX-License-Identifier` header, that header is authoritative.
+Most of the tree predates the convention and has none, so absence of a header means the
+component mapping in [LICENSE](LICENSE) applies, not that the file is unlicensed. CI gates
+the license store rather than full REUSE compliance: every identifier a file claims must
+have its text in [`LICENSES/`](LICENSES), and every text there must be claimed by
+something. Per-file header coverage is reported, not enforced.
+
+Contributions to project-original files are accepted under ISC; new project-original files
+should carry `SPDX-License-Identifier: ISC`. Do not copy code in from external projects
+unless its license is compatible, its header says where it came from, and its text is
+added to [`LICENSES/`](LICENSES).
 
 ## Security issues
 

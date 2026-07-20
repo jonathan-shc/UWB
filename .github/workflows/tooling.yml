@@ -37,3 +37,39 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: shellcheck all tracked scripts
         run: git ls-files '*.sh' | xargs shellcheck -S warning
+
+  licenses:
+    # The licence *store* is gated, not full REUSE compliance. Every identifier a
+    # file claims must have its text in LICENSES/, and every text there must be
+    # claimed by something — that is the failure this repo actually hit (an
+    # identifier with no text, and a text nothing referenced). Per-file header
+    # coverage is reported, not enforced: most of the tree predates the
+    # convention, and bulk-declaring licences for files of mixed provenance
+    # would assert something nobody verified.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: licence store is consistent
+        run: |
+          pipx install 'reuse[charset-normalizer]==6.2.0'
+          reuse lint --json > /tmp/reuse.json || true
+          python3 - <<'PY'
+          import json, sys
+          nc = json.load(open("/tmp/reuse.json"))["non_compliant"]
+          gated = (
+              "missing_licenses",       # a file claims an identifier with no text
+              "unused_licenses",        # a text in LICENSES/ nothing claims
+              "bad_licenses",           # not a valid SPDX identifier
+              "deprecated_licenses",
+              "licenses_without_extension",
+              "read_errors",
+          )
+          bad = {k: nc[k] for k in gated if nc.get(k)}
+          for k in ("missing_licensing_info", "missing_copyright_info"):
+              print(f"note: {len(nc.get(k, []))} file(s) without {k.split('_')[1]} header")
+          if bad:
+              for k, v in bad.items():
+                  print(f"FAIL {k}: {v}", file=sys.stderr)
+              sys.exit(1)
+          print("licence store consistent")
+          PY
