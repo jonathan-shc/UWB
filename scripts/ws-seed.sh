@@ -13,7 +13,7 @@
 # deleting the worktree deletes it (see `make ws-clean`).
 set -euo pipefail
 
-TREE="$(cd "$(dirname "$0")" && pwd)"
+TREE="$(cd "$(dirname "$0")/.." && pwd)"
 WS="$TREE/workspace"
 
 if [ -d "$WS/.west" ]; then
@@ -28,11 +28,11 @@ case "$common" in /*) ;; *) common="$TREE/$common" ;; esac
 primary="$(cd "$(dirname "$common")" && pwd)"
 
 if [ "$primary" = "$TREE" ]; then
-  echo "ERROR: this IS the primary checkout — run ./bootstrap.sh here, don't seed onto self"
+  echo "ERROR: this IS the primary checkout — run make bootstrap here, don't seed onto self"
   exit 1
 fi
 [ -d "$primary/workspace/.west" ] || {
-  echo "ERROR: primary workspace not bootstrapped ($primary/workspace) — run ./bootstrap.sh there first"
+  echo "ERROR: primary workspace not bootstrapped ($primary/workspace) — run make bootstrap there first"
   exit 1
 }
 
@@ -53,7 +53,7 @@ created=1                             # arm cleanup before the clone so a failed
 cp -c -R "$primary/workspace" "$WS"   # cp -c = APFS clonefile; fails loudly off APFS
 
 echo "==> normalizing patches to this worktree's branch"
-( cd "$TREE" && ./bootstrap.sh )      # reuses the clone, re-applies THIS branch's patches
+( cd "$TREE" && ./scripts/bootstrap.sh )   # reuses the clone, re-applies THIS branch's patches
 
 done=1
 echo "    ✓ isolated workspace ready — build.sh will use it automatically"

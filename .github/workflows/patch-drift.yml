@@ -8,7 +8,7 @@ on:
     branches: [main]
     paths:
       - west.yml
-      - bootstrap.sh
+      - scripts/bootstrap.sh
       - integration/patches/**
       - tests/tooling/patch_drift_check.sh
       - .github/workflows/patch-drift.yml

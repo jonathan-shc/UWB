@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # build.sh {build|rebuild|flash|flash-erase|build-flash} — build the Aliro
-# NFC+UWB image from the self-contained ./workspace. Run ./bootstrap.sh first.
+# NFC+UWB image from the self-contained ./workspace. Run scripts/bootstrap.sh first.
 #
 # Layers our modules + ISC dw3000 onto the fetched add-on via out-of-tree
 # overlays. Output → ./build (git-ignored).
@@ -10,15 +10,15 @@
 # has to: first build, changed build flags (UWB chip / self-test / config), or
 # when you ask for one. A preflight first checks the workspace is bootstrapped.
 #
-#   ./build.sh build                  # incremental where safe (fast)
-#   ./build.sh rebuild                # force a clean pristine build
-#   PRISTINE=1 ./build.sh build       # same as rebuild
-#   UWB_SELFTEST=1 ./build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
-#   PRETTY=1 ./build.sh build         # curated/clean console (reversible; default verbose)
-#   UWB_CHIP=dw3720 ./build.sh build  # select the plugged-in UWB chip (default: dw3000)
+#   scripts/build.sh build                  # incremental where safe (fast)
+#   scripts/build.sh rebuild                # force a clean pristine build
+#   PRISTINE=1 scripts/build.sh build       # same as rebuild
+#   UWB_SELFTEST=1 scripts/build.sh build   # one-shot boot self-test, no iPhone (diagnostic)
+#   PRETTY=1 scripts/build.sh build         # curated/clean console (reversible; default verbose)
+#   UWB_CHIP=dw3720 scripts/build.sh build  # select the plugged-in UWB chip (default: dw3000)
 set -euo pipefail
 
-TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS="${ALIRO_WS:-$TREE/workspace}"
 
 # A linked git worktree usually has no NCS workspace of its own (the ~6.5 GB tree
@@ -29,7 +29,7 @@ WS="${ALIRO_WS:-$TREE/workspace}"
 # If seeding can't happen (off APFS, primary not bootstrapped, etc.) fall back to
 # the shared primary workspace so builds still work. An explicit ALIRO_WS wins.
 if [ -z "${ALIRO_WS:-}" ] && [ ! -d "$WS/.west" ]; then
-  if ! { [ -x "$TREE/ws-seed.sh" ] && "$TREE/ws-seed.sh"; }; then
+  if ! { [ -x "$TREE/scripts/ws-seed.sh" ] && "$TREE/scripts/ws-seed.sh"; }; then
     _common="$(git -C "$TREE" rev-parse --git-common-dir 2>/dev/null || true)"
     if [ -n "$_common" ]; then
       case "$_common" in /*) ;; *) _common="$TREE/$_common" ;; esac
@@ -94,7 +94,7 @@ preflight() {
   ok "nrfutil $(nrfutil --version 2>/dev/null | head -1 | awk '{print $2}')"
 
   { [ -d "$WS/.west" ] && [ -d "$APP" ]; } \
-    || die "workspace not bootstrapped ($WS)" "run: ./bootstrap.sh"
+    || die "workspace not bootstrapped ($WS)" "run: make bootstrap"
   ok "workspace initialized"
 
   # bootstrap patches these three fetched repos; a pristine repo means it did not run.
@@ -105,7 +105,7 @@ preflight() {
       || unpatched="$unpatched $(basename "$repo")"
   done
   [ -z "$unpatched" ] \
-    || die "integration patches missing on:$unpatched" "run: ./bootstrap.sh"
+    || die "integration patches missing on:$unpatched" "run: make bootstrap"
   ok "integration patches applied"
 
   local f missing=""
@@ -145,7 +145,7 @@ do_build() {
 
   # HA=1: layer woz-ha.conf (Home Assistant / multi-admin). Off by default so the
   # Apple Home demo image is untouched; see that file for why. Needs the matching
-  # HA=1 ./bootstrap.sh, which applies the data-model patches this pairs with.
+  # `make bootstrap HA=1`, which applies the data-model patches this pairs with.
   # Rides EXTRA_CONF_FILE (in the signature), so toggling it forces a reconfigure.
   local ha_conf=""
   [ "${HA:-0}" = 1 ] && ha_conf=";$OV/woz-ha.conf"

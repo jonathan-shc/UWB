@@ -13,11 +13,11 @@
 # Prereq (once per machine): nRF Connect SDK v3.3.0 toolchain
 #   nrfutil sdk-manager toolchain install --ncs-version v3.3.0
 #
-# Usage:  ./bootstrap.sh                       # workspace in ./workspace
-#         ALIRO_WS=/big/disk/ws ./bootstrap.sh # put the multi-GB workspace elsewhere
+# Usage:  scripts/bootstrap.sh                       # workspace in ./workspace
+#         ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewhere
 set -euo pipefail
 
-TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS="${ALIRO_WS:-$TREE/workspace}"
 NCS_VER="${NCS_VER:-v3.3.0}"
 PIN="a5ad7fde1041d81690710a949c98eda1985fee0b"     # ncs-door-lock-and-access-control (public)
@@ -60,7 +60,7 @@ apply_to() {   # $1 = repo, remaining args = patch files
 # because they change the Matter data model of an already-commissioned lock, and
 # that has not been validated on hardware. They are a pair, not independent: the
 # occupancy patch is cut against a tree with the LockOperation one applied, so
-# applying it alone will not apply cleanly. Pair with HA=1 ./build.sh.
+# applying it alone will not apply cleanly. Pair with `make build HA=1`.
 ha_patches=()
 if [ "${HA:-0}" = 1 ]; then
   ha_patches=("$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch")
@@ -71,4 +71,4 @@ apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
 echo "    ✓ pristine upstream + $((11 + ${#ha_patches[@]})) patches (add-on ×$((9 + ${#ha_patches[@]})), nrf, matter)"
 
-echo "==> ready. Build with:  $TREE/build.sh build"
+echo "==> ready. Build with:  make build"

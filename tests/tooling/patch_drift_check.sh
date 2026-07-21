@@ -16,7 +16,7 @@ P="$ROOT/integration/patches"
 
 # The add-on pin lives in bootstrap.sh (the applier); west.yml documents the same
 # pin. The two drifting apart is itself a failure.
-PIN="$(sed -n 's/^PIN="\([0-9a-f]\{40\}\)".*/\1/p' "$ROOT/bootstrap.sh")"
+PIN="$(sed -n 's/^PIN="\([0-9a-f]\{40\}\)".*/\1/p' "$ROOT/scripts/bootstrap.sh")"
 [ -n "$PIN" ] || { echo "ERROR: could not read PIN from bootstrap.sh" >&2; exit 1; }
 grep -q "revision: $PIN" "$ROOT/west.yml" \
   || { echo "ERROR: west.yml revision != bootstrap.sh PIN ($PIN)" >&2; exit 1; }
