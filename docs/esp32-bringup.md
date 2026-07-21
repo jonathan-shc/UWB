@@ -1,4 +1,4 @@
-# DWM3000EVB → ESP32-S3 bring-up checklist
+# ESP32-S3 bring-up
 
 One page, match-the-table. The pin map's source of truth is
 `components/woz_uwb/port/board_pins.h`; if you change it there, change it here.
