@@ -1,0 +1,94 @@
+# Firmware build gates — prove the shipped firmware trees still compile.
+# Heavyweight cross-toolchain builds, so none of these jobs is a required
+# check: a path-skipped job that never reports is fine here (contrast with the
+# required checks, e.g. patch-drift.yml, which must always report on PRs).
+#
+# Workflow-level `paths:` can only gate the whole file, so per-job filtering
+# uses a change-detection job: `changes` computes which build inputs a push/PR
+# actually touched and each build job keys off its output.
+name: firmware-builds
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ports/esp32/**
+      - modules/woz_aliro/**
+      - modules/woz_port/**
+      - modules/woz_uwb/**
+      - deps/dw3000/**
+      - .github/workflows/firmware-builds.yml
+  pull_request:
+    paths:
+      - ports/esp32/**
+      - modules/woz_aliro/**
+      - modules/woz_port/**
+      - modules/woz_uwb/**
+      - deps/dw3000/**
+      - .github/workflows/firmware-builds.yml
+  workflow_dispatch:
+
+# CI only reads the repo: no token write scopes for any job.
+permissions:
+  contents: read
+
+# Superseded runs on the same ref are wasted work — cancel them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Which build inputs did this push/PR touch? Feeds the per-job gates below.
+  # On workflow_dispatch the filter is skipped and every gate's event condition
+  # takes over (a manual run builds everything).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          persist-credentials: false
+          # Push events diff against the pre-push commit, which a depth-1
+          # clone does not have.
+          fetch-depth: 0
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        if: github.event_name != 'workflow_dispatch'
+        id: filter
+        with:
+          # The esp32 component/module dirs are shared by both ESP32 apps;
+          # per-app dirs are added on top (see the app CMakeLists for the
+          # REPO_ROOT source references the components compile).
+          filters: |
+            esp32-shared: &esp32-shared
+              - ports/esp32/components/**
+              - modules/woz_aliro/**
+              - modules/woz_port/**
+              - modules/woz_uwb/**
+              - deps/dw3000/**
+              - .github/workflows/firmware-builds.yml
+            esp32-idf:
+              - *esp32-shared
+              - ports/esp32/apps/reader/**
+
+  # Plain ESP-IDF reader app. All dependencies are in-tree, so this is the
+  # cheapest firmware build: the official IDF container plus idf.py.
+  esp32-idf:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.esp32-idf == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: build the reader app (esp32s3)
+        working-directory: ports/esp32/apps/reader
+        # Steps bypass the image entrypoint, so source the IDF env explicitly.
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
