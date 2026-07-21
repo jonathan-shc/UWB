@@ -35,6 +35,8 @@ jobs:
       FUZZ_SECONDS: "45" # per-target budget: a PR smoke run, not an endurance run
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: install clang (libFuzzer runtime)
         run: sudo apt-get update -q && sudo apt-get install -y -q clang
       - name: fuzz the wire parsers
