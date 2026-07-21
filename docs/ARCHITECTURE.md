@@ -908,6 +908,10 @@ itself so nothing is hand-curated to drift:
     the "@file <name> — " prefix that would repeat the heading above them.
     The chip and prefix tidy also runs on every module reference page,
     whose "used by" rows and hero blurbs carry the same noise.
+  * then the whole flat run of sections folds into one collapsed drill-down
+    per directory cluster — color-dotted to match the graphs, a compact
+    link row per module — so the page ends at a screenful instead of a
+    hundred sections.
   * every graph gets a full-screen control: the wrap pins over the viewport
     with the same drag/zoom behavior, and Esc or the button collapses it.
   * a sitewide sidebar shim regroups the flat guide list under the same

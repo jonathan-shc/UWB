@@ -32,6 +32,10 @@ itself so nothing is hand-curated to drift:
     the "@file <name> — " prefix that would repeat the heading above them.
     The chip and prefix tidy also runs on every module reference page,
     whose "used by" rows and hero blurbs carry the same noise.
+  * then the whole flat run of sections folds into one collapsed drill-down
+    per directory cluster — color-dotted to match the graphs, a compact
+    link row per module — so the page ends at a screenful instead of a
+    hundred sections.
   * every graph gets a full-screen control: the wrap pins over the viewport
     with the same drag/zoom behavior, and Esc or the button collapses it.
   * a sitewide sidebar shim regroups the flat guide list under the same
@@ -48,6 +52,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -376,6 +381,90 @@ def tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]:
     return page, heads, blocks
 
 
+# A tidied per-module section: dot slot (optional), directory eyebrow,
+# reference link, file name, then the body up to the section close.
+SEC_PARSE = re.compile(
+    r'<section class="arch-sec"><h2><span class="arch-dir">'
+    r'(?:<i class="gv-dot" style="--c:var\(--gv(\d+)\)"></i>)?([\w./-]+)</span>'
+    r'<a href="([^"]+)"><code>([\w.-]+)</code></a></h2>\n(.*?)</section>\n?',
+    re.S,
+)
+BLURB_RE = re.compile(r"<p>(.*?)</p>", re.S)
+
+GRP_CSS = """<style>
+.arch-grp{border:1px solid var(--line);border-radius:13px;background:var(--card);margin:.7rem 0;transition:border-color .15s}
+.arch-grp:hover,.arch-grp[open]{border-color:var(--tint-line)}
+.arch-grp summary{display:flex;align-items:center;gap:.6rem;padding:.75rem 1rem;cursor:pointer;list-style:none}
+.arch-grp summary::-webkit-details-marker{display:none}
+.arch-grp .ag-name{font-family:var(--mono);font-weight:650;font-size:.92rem}
+.arch-grp .ag-dir{font-family:var(--mono);font-size:.72rem;color:var(--faint)}
+.arch-grp .ag-n{margin-left:auto;font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.arch-grp .ag-chev{color:var(--faint);transition:transform .2s;line-height:.6}
+.arch-grp[open] .ag-chev{transform:rotate(180deg)}
+.arch-grp .ag-body{padding:.1rem 1rem .8rem;border-top:1px solid var(--hairline)}
+.arch-grp[open] .ag-body{animation:ag-in .25s cubic-bezier(.2,.7,.2,1) both}
+@keyframes ag-in{from{opacity:0;transform:translateY(-4px)}}
+.arch-grp .rows{margin:.3rem 0 0}
+.arch-grp .row-name code{background:none;border:0;padding:0;font-size:.88rem}
+.arch-grp .row-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+</style>"""
+
+
+def group_sections(page: str, slots: dict[str, int]) -> tuple[str, int]:
+    """Fold the flat run of per-module sections into per-cluster drill-downs.
+
+    One collapsed group per directory cluster, in the graphs' color order,
+    each module a compact link row (name + clamped blurb). Dependency rows
+    are dropped here — the graph above carries them, and every module page
+    keeps its own. The group holding the graphs' entry point opens by
+    default.
+    """
+    secs: list[tuple[str, str, str, str]] = []
+
+    def eat(m: re.Match) -> str:
+        b = BLURB_RE.search(m.group(5))
+        secs.append(
+            (m.group(2), m.group(3), m.group(4), b.group(1).strip() if b else "")
+        )
+        return ""
+
+    page = SEC_PARSE.sub(eat, page)
+    if not secs:
+        return page, 0
+
+    groups: dict[str, list[tuple[str, str, str, str]]] = {}
+    for d, href, name, blurb in secs:
+        groups.setdefault(cluster_of(d), []).append((d, href, name, blurb))
+
+    hm = re.search(r' data-gv-home="([\w.-]+)"', page)
+    home = hm.group(1) if hm else ""
+    order = sorted(groups, key=lambda c: (slots.get(c, len(slots)), c))
+    out = [GRP_CSS, '<div class="section-h"><h2>Modules</h2><span class="rule"></span></div>']
+    for c in order:
+        mods = groups[c]
+        i = slots.get(c)
+        dot = f'<i class="gv-dot" style="--c:var(--gv{i})"></i>' if i is not None else ""
+        prefix = os.path.commonprefix([d for d, _, _, _ in mods]).rstrip("/")
+        is_home = any(re.sub(r"\.(cpp|c|h)$", "", n) == home for _, _, n, _ in mods)
+        rows = "\n".join(
+            f'<li><a href="{href}" title="{d}/{name}">'
+            f'<span class="row-name"><code>{name}</code></span>'
+            f'<span class="row-desc">{blurb}</span></a></li>'
+            for d, href, name, blurb in mods
+        )
+        out.append(
+            f'<details class="arch-grp"{" open" if is_home else ""}>'
+            f"<summary>{dot}"
+            f'<span class="ag-name">{c}</span>'
+            f'<span class="ag-dir">{prefix}</span>'
+            f'<span class="ag-n">{len(mods)} module{"s" if len(mods) != 1 else ""}</span>'
+            f'<span class="ag-chev">&#8964;</span></summary>'
+            f'<div class="ag-body"><ul class="rows">\n{rows}\n</ul></div></details>'
+        )
+    page = page.replace('<div class="arch">', '<div class="arch">\n' + "\n".join(out), 1)
+    return page, len(secs)
+
+
 SLOTS_RE = re.compile(
     r'<script type="application/json" id="gv-slots">(\{.*?\})</script>'
 )
@@ -486,6 +575,20 @@ def main() -> int:
             f"    {heads} section heading(s) shortened, "
             f"{blocks} depends-on row(s) compacted"
         )
+
+    if 'class="arch-grp"' in page:
+        print("    module sections already grouped")
+    else:
+        page, n = group_sections(page, slots)
+        if not n:
+            print(
+                "docs_graph: architecture page has no module sections to "
+                "group — generator layout changed?",
+                file=sys.stderr,
+            )
+            return 1
+        dirty = True
+        print(f"    {n} module section(s) folded into cluster drill-downs")
     if dirty:
         ARCH.write_bytes(page.encode())
 

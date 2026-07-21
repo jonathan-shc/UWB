@@ -34,6 +34,10 @@ itself so nothing is hand-curated to drift:
     the "@file <name> — " prefix that would repeat the heading above them.
     The chip and prefix tidy also runs on every module reference page,
     whose "used by" rows and hero blurbs carry the same noise.
+  * then the whole flat run of sections folds into one collapsed drill-down
+    per directory cluster — color-dotted to match the graphs, a compact
+    link row per module — so the page ends at a screenful instead of a
+    hundred sections.
   * every graph gets a full-screen control: the wrap pins over the viewport
     with the same drag/zoom behavior, and Esc or the button collapses it.
   * a sitewide sidebar shim regroups the flat guide list under the same
@@ -48,7 +52,7 @@ after docs_github.py and before the link pass.
 ## API
 
 ### `stem_dirs(page: str) -> dict[str, str]`
-`tools/docs_graph.py:188`
+`tools/docs_graph.py:193`
 
 module name -> its source directory, from the page's file headings.
 
@@ -58,7 +62,7 @@ is the one the import graph describes, so modules/ wins.
 **called by** `figures`
 
 ### `color_css(names: list[str], clusters: dict[str, set[str]]) -> str`
-`tools/docs_graph.py:211`
+`tools/docs_graph.py:216`
 
 Theme-aware cluster colors: tinted node fills, hue strokes, dot vars.
 
@@ -69,7 +73,7 @@ win over the OS preference in both directions.
 **called by** `figures`
 
 ### `tidy_page(page: str) -> str`
-`tools/docs_graph.py:339`
+`tools/docs_graph.py:344`
 
 The same de-noising the architecture sections get, on a module page:
 base-name chips with the full path on hover, and no "@file <name> — "
@@ -78,7 +82,7 @@ prefix repeating the file name the hero already shows.
 **called by** `main`
 
 ### `tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]`
-`tools/docs_graph.py:350`
+`tools/docs_graph.py:355`
 
 Short file-name headings with a directory eyebrow; base-name chips.
 
@@ -87,7 +91,20 @@ eyebrow, correlating each section with the graphs above.
 
 **called by** `main`
 
-<details><summary>Undocumented (9)</summary>
+### `group_sections(page: str, slots: dict[str, int]) -> tuple[str, int]`
+`tools/docs_graph.py:413`
+
+Fold the flat run of per-module sections into per-cluster drill-downs.
+
+One collapsed group per directory cluster, in the graphs' color order,
+each module a compact link row (name + clamped blurb). Dependency rows
+are dropped here — the graph above carries them, and every module page
+keeps its own. The group holding the graphs' entry point opens by
+default.
+
+**called by** `main`  ·  **calls** `cluster_of`
+
+<details><summary>Undocumented (10)</summary>
 
 - `parse_edges`
 - `cluster_of`
@@ -96,6 +113,7 @@ eyebrow, correlating each section with the graphs above.
 - `chip`
 - `chips_block`
 - `head`
+- `eat`
 - `side_shim`
 - `main`
 
