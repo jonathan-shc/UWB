@@ -8,12 +8,14 @@
  * report after the bolt is driven, so plain stores are sufficient for a
  * diagnostic trace.
  */
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "woz_port.h"
 #include "woz_log.h"
 
+#include "aliro_lab.h"
 #include "aliro_lat.h"
 
 /* 0 = unmarked this walk-up (woz_uptime_us() is nonzero by the time BLE is up). */
@@ -23,10 +25,18 @@ static const char *const k_phase_name[ALIRO_LAT_PHASE_COUNT] = {
 	"connect", "op05", "auth0", "auth1", "exch", "apc", "m4", "range", "trusted", "bolt",
 };
 
+#if defined(CONFIG_WOZ_ALIRO_LAB)
+/* aliro_lab (see aliro_lab.h): the walk-up's ph.* lines print at most once. */
+static bool s_lab_dumped;
+#endif
+
 void aliro_lat_begin(void)
 {
 	memset(s_stamp_us, 0, sizeof(s_stamp_us));
 	s_stamp_us[ALIRO_LAT_BLE_CONNECT] = woz_uptime_us();
+#if defined(CONFIG_WOZ_ALIRO_LAB)
+	s_lab_dumped = false;
+#endif
 }
 
 int aliro_lat_mark(enum aliro_lat_phase phase)
@@ -57,4 +67,33 @@ void aliro_lat_report(void)
 		}
 	}
 	woz_printf(" ms\n");
+	aliro_lab_dump();
 }
+
+#if defined(CONFIG_WOZ_ALIRO_LAB)
+
+void aliro_lab_ev(const char *ev)
+{
+	woz_printf("[ALAB] t=%lld ev=%s\n", (long long)woz_uptime_us(), ev);
+}
+
+void aliro_lab_evi(const char *ev, const char *key, long val)
+{
+	woz_printf("[ALAB] t=%lld ev=%s %s=%ld\n", (long long)woz_uptime_us(), ev, key, val);
+}
+
+void aliro_lab_dump(void)
+{
+	if (s_lab_dumped) {
+		return;
+	}
+	s_lab_dumped = true;
+	for (int i = 0; i < ALIRO_LAT_PHASE_COUNT; i++) {
+		if (s_stamp_us[i] != 0) {
+			woz_printf("[ALAB] t=%lld ev=ph.%s\n", (long long)s_stamp_us[i],
+				   k_phase_name[i]);
+		}
+	}
+}
+
+#endif /* CONFIG_WOZ_ALIRO_LAB */

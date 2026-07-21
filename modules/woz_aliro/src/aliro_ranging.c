@@ -22,6 +22,7 @@
 
 #include "aliro_ble.h"
 #include "aliro_crypto.h"
+#include "aliro_lab.h"
 #include "aliro_lat.h"
 #include "woz_uwb_facade.h"
 
@@ -93,6 +94,7 @@ static void uwb_tx_cb(struct aliro_uwb_message *message, struct aliro_uwb_sessio
 
 			LOG_DBG("[conn %u] ranging TX proto=0x%02x id=0x%02x (%u B, rc=%d)", conn,
 				message->data[0], message->data[1], (unsigned)wl, rc);
+			aliro_lab_evi("rtx", "id", message->data[1]);
 			(void)rc;
 		} else {
 			LOG_ERR("[conn %u] ranging TX seal failed (%u B)", conn,
@@ -274,6 +276,7 @@ int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 
 	msg->len = len;
 	memcpy(msg->data, data, len);
+	aliro_lab_evi("rrx", "id", data[1]);
 
 	/* M4 makes the engine start the responder (cherry_ccc_shim ->
 	 * woz_uwb_start_aliro) with the negotiated params. A hard error may DEINIT

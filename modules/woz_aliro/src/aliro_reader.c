@@ -32,6 +32,7 @@
 #include "aliro_ble.h"
 #include "aliro_apdu.h"
 #include "aliro_crypto.h"
+#include "aliro_lab.h"
 #include "aliro_lat.h"
 #include "aliro_prim.h"
 #include "aliro_prov.h"
@@ -434,6 +435,7 @@ static int try_fast_auth(struct aliro_session *s, const struct aliro_auth0_respo
 	}
 	LOG_INF("[conn %u] expedited-FAST cryptogram match (cred %d): AUTH1 skipped",
 		s->conn_handle, match);
+	aliro_lab_evi("flow.fast", "cred", match);
 	send_exchange(s);
 	return 0;
 }
@@ -504,6 +506,7 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 		return;
 	}
 	send_ap_command(s->conn_handle, ALIRO_INS_AUTH1, apdu, n);
+	aliro_lab_ev("flow.standard");
 	s->phase = PH_SENT_AUTH1;
 }
 
@@ -685,6 +688,7 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 		if (ki >= 0) {
 			LOG_INF("[conn %u] Kpersistent agreed (cred %d): next unlock can go fast",
 				s->conn_handle, ki);
+			aliro_lab_evi("kp.minted", "cred", ki);
 		}
 	}
 
@@ -806,6 +810,7 @@ static void reader_status_send_on_host(bool unsecured)
 
 	LOG_INF("[conn %u] Reader-Status-Changed %s sent (%u B, rc=%d)", s->conn_handle,
 		unsecured ? "Unsecured/grant" : "Secured/relock", (unsigned)wl, rc);
+	aliro_lab_ev(unsecured ? "grant.sent" : "relock.sent");
 }
 
 // Sends a Reader-Status BLE notification reporting the lock's unsecured/secured state to the
@@ -961,6 +966,7 @@ static void on_connected(uint16_t conn_handle)
 		return;
 	}
 	LOG_INF("[conn %u] Aliro session created", conn_handle);
+	aliro_lab_ev("session.start");
 }
 
 // BLE disconnection callback: marks the connection's session inactive (if one exists) and
@@ -974,6 +980,10 @@ static void on_disconnected(uint16_t conn_handle)
 		LOG_INF("[conn %u] Aliro session destroyed (%u msgs, phase=%s)", conn_handle,
 			(unsigned)s->msgs_rx, phase_str(s->phase));
 		s->active = false;
+		/* Aborted walk-ups never reach the bolt-time report: flush the stamped
+		 * phases here (no-op if the bolt path already dumped them). */
+		aliro_lab_dump();
+		aliro_lab_ev("session.end");
 	}
 	aliro_ranging_stop(conn_handle);
 	/* The peer is gone: cheapest moment to regenerate the spare ephemeral pair

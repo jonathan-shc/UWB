@@ -1,0 +1,13 @@
+menu "Aliro reader"
+
+    config WOZ_ALIRO_LAB
+        bool "Aliro Lab transaction trace"
+        default n
+        help
+            Emit structured "[ALAB] t=<us> ev=..." lines at transaction phase
+            boundaries (connect, auth, ranging setup, first range, bolt) so
+            tools/aliro_lab.py can turn a captured serial log into a scored
+            walk-up report. Diagnostics only: default off, and every trace
+            call compiles out of the firmware when disabled.
+
+endmenu

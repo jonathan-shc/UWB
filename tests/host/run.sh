@@ -20,4 +20,7 @@ fi
 "${CC:-cc}" -std=c11 -O1 -w $san_flags "${DEFS[@]}" "${INCS[@]}" \
    "${TEST_SRCS[@]}" "${SHIM_SRCS[@]}" "${UNIT_SRCS[@]}" \
    -o "$ROOT/build/host_test"
-exec "$ROOT/build/host_test"
+"$ROOT/build/host_test"
+
+# Host-side tooling tests (pure-stdlib Python; no toolchain involved).
+python3 "$ROOT/tests/host/test_aliro_lab.py"
