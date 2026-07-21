@@ -3,6 +3,7 @@
 
 | subsystem | about |
 |---|---|
+| [`tools/docs_3d.py`](docs_3d.md) | Render the whole code surface as a flyable 3D graph: site/graph3d.html. |
 | [`tools/docs_api.py`](docs_api.md) | Fill the reference pages the page generator leaves bare. |
 | [`tools/docs_cmds.py`](docs_cmds.md) | Render runnable command blocks as one copy chip per command. |
 | [`tools/docs_github.py`](docs_github.md) | Point the rendered site back at its GitHub repository. |

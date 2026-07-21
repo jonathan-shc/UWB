@@ -871,6 +871,41 @@ deleting the worktree deletes it (see `make ws-clean`).
 
 ## `tools/`
 
+### [`tools/docs_3d.py`](architecture/tools/docs_3d.md)
+
+Render the whole code surface as a flyable 3D graph: site/graph3d.html.
+
+The architecture page's 2D graphs show the curated module clusters. This pass
+builds the immersive counterpart over the entire tree — every source file the
+docs cover, from the reader engine to the flash scripts — as a 3D force graph
+you can orbit, filter and fly through. Clicking a file opens a panel with its
+description, its imports both ways, and its API symbols, each linking into the
+reference tree.
+
+Everything is mined from what the repo already publishes, no extra analysis:
+
+  * docs/architecture/<group>/<file>.md — one node per page: the H1 carries
+    the source path, the first paragraph the description, the "**depends on**"
+    row the outgoing edges. Reversing those edges gives "used by".
+  * site/nav.js — the search index built earlier in the pipeline; its
+    function/class/macro entries, keyed by page slug, become each node's
+    symbol list with working anchors.
+  * architecture.html's gv-slots marker — the cluster -> color slot map the
+    2D graphs persisted, so both views and the sidebar dots stay color-keyed
+    alike; directories beyond the curated clusters get slots from an extended
+    palette.
+
+The renderer is the 3d-force-graph bundle (MIT), vendored under
+internal/vendor/ (gitignored) and copied into site/; when the vendor copy is
+missing it is fetched once from unpkg. Offline with no vendor copy, the pass
+skips cleanly: no page, no entry button, the 2D graphs stand alone.
+
+The stage is always dark — same rule as the site's code panels — while the
+page chrome follows the reader's theme (dm-theme, then the OS preference).
+
+Run from the repo root, after the reference fill (the symbol index must be
+complete) and before the link pass (which validates the links minted here).
+
 ### [`tools/docs_api.py`](architecture/tools/docs_api.md)
 
 Fill the reference pages the page generator leaves bare.
