@@ -26,7 +26,14 @@ ADDON="$WS/ncs-door-lock-and-access-control"
 P="$TREE/ports/nrf5340dk/patches"
 
 # Launch the nRF Util SDK manager toolchain with the configured NCS version, passing through all remaining arguments.
-launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
+# ALIRO_TOOLCHAIN=env skips that wrapper and runs the command directly — for
+# environments with the toolchain already on PATH (the NCS toolchain container
+# in CI, where nrfutil's toolchain index is not reachable).
+if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
+  launch() { "$@"; }
+else
+  launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
+fi
 
 # 1. Fetch pristine upstream into $WS.
 echo "==> workspace: $WS   (add-on pin ${PIN:0:10}…, NCS $NCS_VER)"

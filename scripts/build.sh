@@ -50,7 +50,14 @@ BUILD="${ALIRO_BUILD:-$TREE/build}"
 BOARD="nrf5340dk/nrf5340/cpuapp"
 
 # Launch a west command through nrfutil's Nordic SDK toolchain manager for the configured NCS version. Ensures all builds use the pinned toolchain without calling bare west.
-launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
+# ALIRO_TOOLCHAIN=env skips that wrapper and runs the command directly — for
+# environments with the toolchain already on PATH (the NCS toolchain container
+# in CI, where nrfutil's toolchain index is not reachable).
+if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
+  launch() { "$@"; }
+else
+  launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
+fi
 # Compute SHA-1 hash; tries shasum first (BSD/macOS), falls back to sha1sum (Linux). Filters output to the hash hex string only.
 sha()    { if command -v shasum >/dev/null 2>&1; then shasum; else sha1sum; fi; }
 
@@ -88,10 +95,17 @@ resolve_chip() {
 preflight() {
   hdr "preflight"
 
-  command -v nrfutil >/dev/null 2>&1 \
-    || die "nrfutil not found on PATH" \
-           "install: https://www.nordicsemi.com/Products/Development-tools/nrf-util"
-  ok "nrfutil $(nrfutil --version 2>/dev/null | head -1 | awk '{print $2}')"
+  if [ "${ALIRO_TOOLCHAIN:-}" = env ]; then
+    command -v west >/dev/null 2>&1 \
+      || die "west not found on PATH (ALIRO_TOOLCHAIN=env)" \
+             "unset ALIRO_TOOLCHAIN to use the nrfutil-pinned toolchain"
+    ok "toolchain from environment (west $(west --version 2>/dev/null | awk '{print $NF}'))"
+  else
+    command -v nrfutil >/dev/null 2>&1 \
+      || die "nrfutil not found on PATH" \
+             "install: https://www.nordicsemi.com/Products/Development-tools/nrf-util"
+    ok "nrfutil $(nrfutil --version 2>/dev/null | head -1 | awk '{print $2}')"
+  fi
 
   { [ -d "$WS/.west" ] && [ -d "$APP" ]; } \
     || die "workspace not bootstrapped ($WS)" "run: make bootstrap"

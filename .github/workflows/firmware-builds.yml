@@ -13,18 +13,22 @@ on:
     branches: [main]
     paths:
       - ports/esp32/**
-      - modules/woz_aliro/**
-      - modules/woz_port/**
-      - modules/woz_uwb/**
+      - ports/nrf5340dk/**
+      - modules/**
       - deps/dw3000/**
+      - west.yml
+      - scripts/bootstrap.sh
+      - scripts/build.sh
       - .github/workflows/firmware-builds.yml
   pull_request:
     paths:
       - ports/esp32/**
-      - modules/woz_aliro/**
-      - modules/woz_port/**
-      - modules/woz_uwb/**
+      - ports/nrf5340dk/**
+      - modules/**
       - deps/dw3000/**
+      - west.yml
+      - scripts/bootstrap.sh
+      - scripts/build.sh
       - .github/workflows/firmware-builds.yml
   workflow_dispatch:
 
@@ -45,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
+      nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'workflow_dispatch'
@@ -71,6 +76,16 @@ jobs:
             esp32-idf:
               - *esp32-shared
               - ports/esp32/apps/reader/**
+            nrf5340dk:
+              - west.yml
+              - scripts/bootstrap.sh
+              - scripts/build.sh
+              - ports/nrf5340dk/**
+              - modules/woz_uwb/**
+              - modules/woz_aliro_ecp/**
+              - modules/woz_port/**
+              - deps/dw3000/**
+              - .github/workflows/firmware-builds.yml
 
   # Plain ESP-IDF reader app. All dependencies are in-tree, so this is the
   # cheapest firmware build: the official IDF container plus idf.py.
@@ -92,3 +107,51 @@ jobs:
           . "$IDF_PATH/export.sh"
           idf.py set-target esp32s3
           idf.py build
+
+  # nRF5340 DK Zephyr/NCS build: bootstrap the pinned west workspace (multi-GB
+  # fetch), then the sysbuild image. The bootstrapped workspace is cached,
+  # keyed on everything that shapes its content — the pin record (west.yml),
+  # the applier (scripts/bootstrap.sh: add-on pin, NCS version and patch list
+  # live there) and the patch files — so patch drift forces a cold bootstrap.
+  # Deliberately no restore-keys: bootstrap.sh cannot re-patch a workspace
+  # that already carries another patch state (patches that add files leave
+  # untracked files behind), so a near-miss cache would poison the build.
+  nrf5340dk:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.nrf5340dk == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      # NCS toolchain container matching west.yml's NCS v3.3.0. Its BASH_ENV
+      # hook sources the toolchain env (west, Zephyr SDK on PATH) in every
+      # non-interactive bash, so the scripts run with ALIRO_TOOLCHAIN=env: the
+      # default nrfutil launcher would look for its toolchain index under
+      # $HOME, which the runner overrides away from the image's /opt.
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: restore the bootstrapped west workspace
+        id: ws
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: nrf-workspace-${{ hashFiles('west.yml', 'scripts/bootstrap.sh', 'ports/nrf5340dk/patches/**') }}
+      - name: bootstrap the workspace (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        run: ./scripts/bootstrap.sh
+      # Save before building: the build writes only to ./build, so the
+      # workspace is already complete here, and an expensive bootstrap is not
+      # lost when the build step itself fails (the failure this gate exists
+      # to catch).
+      - name: save the workspace cache (cold cache)
+        if: steps.ws.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: workspace
+          key: ${{ steps.ws.outputs.cache-primary-key }}
+      - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild)
+        run: ./scripts/build.sh build
