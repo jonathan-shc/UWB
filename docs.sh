@@ -78,6 +78,9 @@ python3 tools/docs_title.py
 echo "==> media"
 python3 tools/docs_media.py
 
+echo "==> github"
+python3 tools/docs_github.py
+
 echo "==> link pass"
 python3 tools/docs_links.py
 
