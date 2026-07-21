@@ -88,7 +88,7 @@ struct aliro_uwb_message *aliro_uwb_msg_build_m1(struct aliro_uwb_session *sessi
 				 ALIRO_UWB_RANGING_SERVICE_ATTR_PULSE_SHAPE_COMBO_LENGTH +
 			 ALIRO_UWB_RANGING_SERVICE_ATTR_CHANNEL_BITMASK_LENGTH +
 			 ALIRO_UWB_RANGING_SERVICE_ATTR_SESSION_IDENTIFIER_LENGTH +
-			 4 * ALIRO_ATTRIBUTE_HEADER_LENGTH;
+			 (size_t)4 * ALIRO_ATTRIBUTE_HEADER_LENGTH;
 
 	if (!aliro_uwb_msg_builder_init(&builder, payload_length)) {
 		return NULL;
@@ -495,6 +495,9 @@ static enum aliro_uwb_err parse_slot_bitmask(struct aliro_uwb_session *session,
 		break;
 	case 6:
 		chaps_per_slot = 24;
+		break;
+	default:
+		/* No bit 0-6 set in common: keep the seeded raw bitmask value. */
 		break;
 	}
 	session->ccc_aliro_config.slot_duration = 400 * chaps_per_slot;
@@ -1102,6 +1105,8 @@ static enum aliro_uwb_err parse_event_notification(struct aliro_uwb_session *ses
 				return ALIRO_UWB_ERR_MSG_MALFORMED;
 			}
 			break;
+		/* Differs from default only in LOG_* text, which the host shim
+		 * compiles away. NOLINTNEXTLINE(bugprone-branch-clone) */
 		case ALIRO_UWB_MESSAGE_NOTIFICATION_EVENT_ATTR_READER_DESCRIPTOR:
 			LOG_INF("notification: reader descriptor (%u bytes)", attr->length);
 			LOG_HEXDUMP_INF(attr->value, attr->length, "reader descriptor");
@@ -1216,6 +1221,8 @@ enum aliro_uwb_err aliro_uwb_msg_process_supplementary(struct aliro_uwb_session 
 	LOG_INF("supplementary: msg id %u, %u payload B", aliro_uwb_msg_message_id(message->data),
 		aliro_uwb_msg_payload_length(message->data));
 
+	/* Body is log-only; the host shim compiles LOG_* away, leaving the cursor
+	 * unread there. NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores) */
 	while ((attr = aliro_uwb_msg_next_attribute(&parser))) {
 		LOG_INF("supplementary: attr 0x%02x (%u B)", attr->id, attr->length);
 		LOG_HEXDUMP_INF(attr->value, attr->length, "supplementary attr");

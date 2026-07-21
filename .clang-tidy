@@ -1,0 +1,20 @@
+# Static-analysis policy for the project-owned C core (modules/). Bug-finding
+# families only; style is clang-format's job. Enforced by the clang-tidy CI
+# gate over the host-compilable file set (tests/host/sources.sh).
+#
+# Disabled checks:
+#  - easily-swappable-parameters: wire/crypto APIs take adjacent byte-buffer
+#    pointers and lengths by nature; the check flags nearly every prototype.
+#  - reserved-identifier (+ its cert aliases dcl37-c/dcl51-cpp): the CCC shim's
+#    __wrap_/__real_ symbols are the linker's --wrap contract and IS_ENABLED's
+#    _XXXX1 is the Zephyr token-paste idiom; those names are required, not chosen.
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp
+WarningsAsErrors: "*"
