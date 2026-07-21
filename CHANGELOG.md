@@ -40,6 +40,6 @@ the API and behavior may change in minor releases.
 - Host KAT test suite with a line-coverage floor, ASan/UBSan runs, patch-drift and
   shellcheck gates in CI.
 - A second host test suite for the ESP32 port's crypto, wire codec, provisioning, and
-  compat shim (`ports/esp32/test/run.sh`; not yet a CI gate).
+  compat shim (`make test-port`, CI-gated).
 
 [Unreleased]: https://github.com/asxeem/openaliro/commits/main

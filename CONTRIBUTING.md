@@ -12,17 +12,17 @@ coverage report.
 
 For the ESP32-S3 ports, build from the app directory (`ports/esp32/apps/reader` or
 `ports/esp32/apps/matter-lock`) with ESP-IDF on your `PATH`; see [`ports/README.md`](ports/README.md).
-Their host tests run without ESP-IDF: `ports/esp32/test/run.sh`.
+Their host tests run without ESP-IDF: `make test-port`.
 
 Every PR must pass the CI gates that run automatically: host tests, coverage floor,
 ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing, plus
-`ports/esp32/test/run.sh` if you touched a port (CI does not yet gate on it).
+`make test-port` if you touched a port (CI gates on it too).
 
 ## Ground rules
 
 - **Never edit fetched upstream.** `workspace/` is fetched pristine and is layered onto,
-  not modified: diffs go in `integration/patches/`, configuration in
-  `integration/overlays/`, new code in `modules/` or `ports/`. A PR that edits fetched
+  not modified: diffs go in `ports/nrf5340dk/patches/`, configuration in
+  `ports/nrf5340dk/overlays/`, new code in `modules/` or `ports/`. A PR that edits fetched
   trees will be asked to rework.
 - **Keep changes surgical.** Match the surrounding style; do not reformat or restructure
   code unrelated to your change.

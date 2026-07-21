@@ -43,7 +43,7 @@ fi
 if [ -n "${ALIRO_RESOLVE_ONLY:-}" ]; then echo "$WS"; exit 0; fi
 
 NCS_VER="${NCS_VER:-v3.3.0}"
-OV="$TREE/integration/overlays"
+OV="$TREE/ports/nrf5340dk/overlays"
 ADDON="$WS/ncs-door-lock-and-access-control"
 APP="$ADDON/applications/matter-aliro-door-lock-app"
 BUILD="${ALIRO_BUILD:-$TREE/build}"

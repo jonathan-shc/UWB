@@ -61,7 +61,7 @@ discipline already used in this project.
 
 The engine seam is confirmed. Nordic's Aliro reader talks to UWB only through the `UltraWideBand`
 C++ interface (`subsys/aliro/uwb/.../uwb.h`), and this repo's engine already implements it (the
-in-repo `integration/patches/custom_impl-uwb.patch` fills `_ConfigureRangingSession(sessionId,
+in-repo `ports/nrf5340dk/patches/custom_impl-uwb.patch` fills `_ConfigureRangingSession(sessionId,
 ursk, ...)` to call `aliro_uwb_session_set_ursk`, and `_HandleBleMessage(...)` to route the Aliro
 UWB messages, backed by `woz_uwb_facade`). So on ESP32 the engine keeps implementing the same
 interface; the reader above it is what gets rebuilt.

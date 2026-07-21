@@ -48,7 +48,7 @@ if(CONFIG_WOZ_UWB)
 
       # PRETTY (reversible): DWT-cycle-counter timestamps + compact colored log
       # line. Owns the whole log line via LOG_CUSTOM_FORMAT_SUPPORT (set in
-      # integration/overlays/woz-pretty.conf, active only under PRETTY=1).
+      # ports/nrf5340dk/overlays/woz-pretty.conf, active only under PRETTY=1).
       if(CONFIG_WOZ_PRETTY_SHELL)
         zephyr_library_sources(${SRC}/facade/woz_logfmt.c)
         # Runtime-mute benign upstream Matter/BLE error spam (reversible).

@@ -60,6 +60,6 @@ For archaeology, the last commit carrying it is `b11549d`.
 
 The nRF5340 DK build is assembled at the repository root: the app itself is Nordic's
 door-lock add-on, fetched pristine by `make bootstrap` and patched from
-[`integration/patches/`](../integration/patches), configured by
-[`integration/overlays/`](../integration/overlays), with the engine supplied from
+[`ports/nrf5340dk/patches/`](../ports/nrf5340dk/patches), configured by
+[`ports/nrf5340dk/overlays/`](../ports/nrf5340dk/overlays), with the engine supplied from
 `modules/` via `ZEPHYR_EXTRA_MODULES`. See the top-level [README](../README.md).

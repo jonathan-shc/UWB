@@ -70,7 +70,7 @@ For reference, the ESP-IDF port's entire target-specific surface is now
 - **Bring-up only** — `CONFIG_WOZ_UWB=y` alone compiles just `uwb_min.c`.
 - **No UWB (NFC-only)** — `CONFIG_WOZ_UWB=n`. The whole module is wrapped in
   `if(CONFIG_WOZ_UWB)` and contributes nothing; every external call site in
-  `integration/patches/custom_impl-uwb.patch` is `#ifdef CONFIG_WOZ_ALIRO`, so the build
+  `ports/nrf5340dk/patches/custom_impl-uwb.patch` is `#ifdef CONFIG_WOZ_ALIRO`, so the build
   links clean with no UWB silicon present.
 
   This matters more than it looks. Aliro makes NFC the mandatory transport and BLE and UWB

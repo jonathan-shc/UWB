@@ -122,7 +122,7 @@ See [`ports/README.md`](ports/README.md) for the port index, and
 | X-NUCLEO-NFC12A1 (ST25R300) | NFC reader front end for tap (SPIM2) |
 
 Pin assignments live in
-[`integration/overlays/dw3000-nfc.overlay`](integration/overlays/dw3000-nfc.overlay).
+[`ports/nrf5340dk/overlays/dw3000-nfc.overlay`](ports/nrf5340dk/overlays/dw3000-nfc.overlay).
 
 **ESP32-S3:**
 
@@ -230,7 +230,7 @@ A layered stack; each layer is optional and depends only on the one below it:
 On nRF the Nordic add-on owns BLE and Matter and hands the engine a plaintext ranging
 key; on ESP32 the port's own reader derives that key and hands it over at the same seam.
 Integration onto the fetched add-on is layered and never edited in place: patches in
-`integration/patches/`, configuration in `integration/overlays/`, modules in `modules/` +
+`ports/nrf5340dk/patches/`, configuration in `ports/nrf5340dk/overlays/`, modules in `modules/` +
 `deps/`.
 
 </details>
