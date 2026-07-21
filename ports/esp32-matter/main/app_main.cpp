@@ -32,6 +32,7 @@
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
 #include <setup_payload/OnboardingCodesUtil.h>
+#include <setup_payload/QRCodeSetupPayloadGenerator.h> // kMaxQRCodeBase38RepresentationLength
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
@@ -496,23 +497,33 @@ extern "C" void app_main()
 	err = esp_matter::start(app_event_cb);
 	ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
 
-	/* The default log level is WARN (blocking UART writes in the protocol
-	 * callbacks cost walk-up latency; see sdkconfig.defaults), but the
-	 * onboarding codes print at INFO and are useless suppressed. A per-tag
-	 * pin on "chip[SVR]" does NOT work: IDF's tag-level cache compares tag
-	 * pointers (assumes string literals) and CHIP composes its tag in a
-	 * reused stack buffer, so a stale cache hit ignores the pin. Only the
-	 * "*" wildcard is reliable for chip[..] tags (resets default + cache),
-	 * so raise it around the print and restore afterwards. */
-	const esp_log_level_t dflt_log_level = esp_log_level_get("*");
-	esp_log_level_set("*", ESP_LOG_INFO);
-
-	/* Print the commissioning QR-code URL + manual pairing code at boot so it is
-	 * always in the log (Apple Home / chip-tool). BLE is the initial transport. */
-	PrintOnboardingCodes(
-		chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
-
-	esp_log_level_set("*", dflt_log_level);
+	/* CONFIG_LOG_DEFAULT_LEVEL WARN compiles CHIP Progress logging out of the
+	 * whole CHIP library (CHIP_LOG_DEFAULT_LEVEL is Kconfig-range-capped to
+	 * LOG_DEFAULT_LEVEL and gates chip_progress_logging in the GN build), so
+	 * PrintOnboardingCodes emits nothing and no runtime log level can bring
+	 * it back. Print the commissioning codes directly so they are always in
+	 * the boot log (Apple Home / chip-tool). BLE is the initial transport. */
+	{
+		char code[chip::QRCodeBasicSetupPayloadGenerator::kMaxQRCodeBase38RepresentationLength + 1];
+		const chip::RendezvousInformationFlags rendezvous(
+			chip::RendezvousInformationFlag::kBLE);
+		chip::MutableCharSpan qr(code);
+		if (GetQRCode(qr, rendezvous) == CHIP_NO_ERROR) {
+			char url[512];
+			printf("SetupQRCode: [%s]\n", qr.data());
+			if (GetQRCodeUrl(url, sizeof(url), qr) == CHIP_NO_ERROR) {
+				printf("QR code URL: %s\n", url);
+			}
+		} else {
+			printf("SetupQRCode: unavailable\n");
+		}
+		chip::MutableCharSpan manual(code);
+		if (GetManualPairingCode(manual, rendezvous) == CHIP_NO_ERROR) {
+			printf("Manual pairing code: [%s]\n", manual.data());
+		} else {
+			printf("Manual pairing code: unavailable\n");
+		}
+	}
 
 	/* do nothing now */
 	door_lock_init();

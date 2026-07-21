@@ -254,7 +254,9 @@ static int cmd_log(int argc, char **argv)
 	}
 	printf("usage: log <tag|*> <none|error|warn|info|debug|verbose>\n"
 	       "boot default warn; compile-time ceiling debug\n"
-	       "note: chip[..] tags only respond to *, not per-tag\n");
+	       "note: chip[..] progress/detail logs are compiled out; only chip errors\n"
+	       "remain, and they respond to * only (rebuild with\n"
+	       "CONFIG_LOG_DEFAULT_LEVEL_INFO=y for full chip diagnostics)\n");
 	return 0;
 }
 

@@ -100,6 +100,12 @@ CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n
 # contending with the UWB responder's ~1.8 ms slot deadline). Default to WARN;
 # keep the compile-time ceiling at DEBUG so the shell's `log <tag> <level>`
 # command can bring diagnostics back at runtime without a reflash.
+# NB: WARN also compiles CHIP Progress/Detail logging out of the CHIP library
+# (CHIP_LOG_DEFAULT_LEVEL is Kconfig-range-capped to LOG_DEFAULT_LEVEL and
+# gates chip_progress_logging in the GN build), so no runtime level restores
+# chip[..] progress logs; the onboarding codes are printf'd in app_main
+# instead. For full chip diagnostics set CONFIG_LOG_DEFAULT_LEVEL_INFO=y here
+# and rebuild.
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
 
