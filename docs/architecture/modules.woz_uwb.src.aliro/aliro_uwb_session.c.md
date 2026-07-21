@@ -146,7 +146,7 @@ NULL, ALIRO_UWB_ERR_MSG_MALFORMED if the message is shorter than the header or t
 does not match, ALIRO_UWB_ERR_MESSAGE_UNSUPPORTED for an unrecognized protocol.
 
 ### `enum aliro_uwb_err aliro_uwb_session_suspend(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:435`
+`modules/woz_uwb/src/aliro/aliro_uwb_session.c:437`
 
 @brief Suspend an active ranging session by sending a suspend request.
 @param session Session to suspend.
@@ -155,7 +155,7 @@ ALIRO_UWB_ERR_INVALID_STATE if there is no active CCC session or the session is 
 RANGING state, ALIRO_UWB_ERR_INTERNAL if the suspend request could not be built.
 
 ### `enum aliro_uwb_err aliro_uwb_session_forced_suspend(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:467`
+`modules/woz_uwb/src/aliro/aliro_uwb_session.c:469`
 
 @brief Forcibly stop the active CCC session, transitioning it to SUSPENDED without a
 request/response exchange.
@@ -165,7 +165,7 @@ ALIRO_UWB_ERR_INVALID_STATE if no CCC session is active, otherwise the error tra
 cherry_ccc_session_stop.
 
 ### `enum aliro_uwb_err aliro_uwb_session_resume(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_session.c:489`
+`modules/woz_uwb/src/aliro/aliro_uwb_session.c:491`
 
 @brief Resume a suspended ranging session by building and transmitting a resume request.
 ALIRO_UWB_ERR_INVALID_STATE if there is no active CCC session or the session is not in the

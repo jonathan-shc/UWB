@@ -89,7 +89,7 @@ M1-M4 setup and ranging messages during parsing.
 @param bytes Pointer to the start of the raw message bytes.
 @return The message ID byte.
 
-**called by** `aliro_uwb_msg_process_notification`, `aliro_uwb_msg_process_ranging`
+**called by** `aliro_uwb_msg_process_notification`, `aliro_uwb_msg_process_ranging`, `aliro_uwb_msg_process_supplementary`
 
 ### `uint16_t aliro_uwb_msg_payload_length(const uint8_t *bytes)`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg.c:330`
@@ -98,6 +98,8 @@ M1-M4 setup and ranging messages during parsing.
 big-endian integer.
 @param bytes Pointer to the start of the raw message bytes.
 @return The payload length in bytes.
+
+**called by** `aliro_uwb_msg_process_supplementary`
 
 ### `static enum aliro_uwb_err parse_config_id(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
 `modules/woz_uwb/src/aliro/aliro_uwb_msg.c:344`
@@ -410,7 +412,7 @@ has the wrong length.
 **called by** `aliro_uwb_msg_process_notification`
 
 ### `static enum aliro_uwb_err parse_ranging_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1122`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1131`
 
 @brief Parse a ranging-setup notification message and dispatch each attribute to its session
 state handler.
@@ -421,7 +423,7 @@ state handler.
 **called by** `aliro_uwb_msg_process_notification`  ·  **calls** `handle_init_ranging_later`, `handle_ranging_suspended`, `handle_resume_later`
 
 ### `enum aliro_uwb_err aliro_uwb_msg_process_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1166`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1178`
 
 @brief Dispatch a received notification message to its parser by message ID. Reader-status
 notifications are informational and ignored; unknown IDs are logged and ignored.
@@ -431,3 +433,16 @@ notifications are informational and ignored; unknown IDs are logged and ignored.
 the error from the event or ranging parser.
 
 **calls** `aliro_uwb_msg_message_id`, `parse_event_notification`, `parse_ranging_notification`
+
+### `enum aliro_uwb_err aliro_uwb_msg_process_supplementary(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1208`
+
+@brief Log every attribute of a Supplementary Service message (protocol 0x03).
+The phone sends one of these at session establishment. Nothing is modelled yet
+and no response is emitted, so this only surfaces the payload: the semantics are
+unknown and are being characterised by diffing the attributes across conditions.
+@param session Aliro UWB session (unused; no state is driven from here yet).
+@param message Received supplementary-service message to log.
+@return ALIRO_UWB_ERR_NONE always.
+
+**calls** `aliro_uwb_msg_message_id`, `aliro_uwb_msg_payload_length`

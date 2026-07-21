@@ -67,7 +67,7 @@ s_id/s_trust, lazily creating the provisioning mutex on first call. Idempotent: 
 subsequent calls once s_loaded is set. Logs whether a dev-default or real identity was loaded and
 its source (NVS vs. dev default), then recomputes the reader group X coordinate.
 
-**called by** `aliro_reader_authenticated_credential`, `aliro_reader_prov_print`, `aliro_reader_provision_add_trust`, `aliro_reader_provision_clear`, `aliro_reader_provision_identity`, `aliro_reader_trust_last`, `reader_engine_init`  ·  **calls** `compute_reader_group_x`
+**called by** `aliro_reader_authenticated_credential`, `aliro_reader_prov_print`, `aliro_reader_provision_add_trust`, `aliro_reader_provision_clear`, `aliro_reader_provision_identity`, `aliro_reader_trust_clear`, `aliro_reader_trust_last`, `reader_engine_init`  ·  **calls** `compute_reader_group_x`
 
 ### `static int send_ap_command(uint16_t conn, uint8_t ins, const uint8_t *tlv, size_t len)`
 `modules/woz_aliro/src/aliro_reader.c:225`
@@ -274,8 +274,20 @@ unchanged on failure), 0 if newly added and committed.
 
 **calls** `load_provisioning`
 
+### `int aliro_reader_trust_clear(void)`
+`modules/woz_aliro/src/aliro_reader.c:1054`
+
+Empty the trust store and persist the empty store, keeping the reader identity.
+Returns 1 if the store was already empty (nothing persisted), -1 if the NVS write fails
+(in-memory trust store left unchanged), 0 if cleared and committed.
+Every re-pair mints a fresh credential and nothing evicts the old ones, so the store
+reaches ALIRO_TRUST_MAX and refuses the key currently being presented. A Matter factory
+reset does not touch this namespace, so without this the only way out is erasing NVS.
+
+**calls** `load_provisioning`
+
 ### `int aliro_reader_provision_identity(const uint8_t reader_id[ALIRO_READER_ID_LEN], const uint8_t sign_priv[ALIRO_READER_PRIV_LEN], const uint8_t grk[ALIRO_GRK_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:1058`
+`modules/woz_aliro/src/aliro_reader.c:1088`
 
 Store a Matter-provisioned reader identity (reader ID, signing private key, GRK), keeping
 any trust anchors already present, and persist it to NVS.
@@ -286,7 +298,7 @@ compute_reader_group_x since the signing key changed.
 **calls** `compute_reader_group_x`, `load_provisioning`
 
 ### `int aliro_reader_provision_add_trust(const uint8_t cred_pub[ALIRO_CRED_PUB_LEN])`
-`modules/woz_aliro/src/aliro_reader.c:1091`
+`modules/woz_aliro/src/aliro_reader.c:1121`
 
 Add a Matter-provisioned credential public key to the reader's trust store and persist it.
 Returns 0 if newly added and stored, 1 if the credential was already trusted (nothing
@@ -296,7 +308,7 @@ fails. On failure the in-memory trust store (s_trust) is left unchanged.
 **calls** `load_provisioning`
 
 ### `int aliro_reader_provision_clear(void)`
-`modules/woz_aliro/src/aliro_reader.c:1125`
+`modules/woz_aliro/src/aliro_reader.c:1155`
 
 Revert the reader's provisioning to the default dev identity and empty trust store, and
 persist that state to NVS.

@@ -65,20 +65,6 @@ Append a TLV item whose 2-byte value is v encoded big-endian.
 
 **called by** `aliro_apdu_build_auth0`, `aliro_apdu_build_exchange`  ·  **calls** `aliro_tlv_put`
 
-### `void aliro_tlv_put_empty(struct aliro_tlv_w *w, uint8_t tag)`
-`modules/woz_aliro/src/aliro_apdu.c:83`
-
-big-endian
-
-**called by** `aliro_apdu_build_exchange`  ·  **calls** `w_byte`, `w_len`
-
-### `int aliro_tlv_w_finish(struct aliro_tlv_w *w, size_t *out_len)`
-`modules/woz_aliro/src/aliro_apdu.c:89`
-
-zero length
-
-**called by** `aliro_apdu_build_auth0`, `aliro_apdu_build_auth1`, `aliro_apdu_build_authdata`, `aliro_apdu_build_exchange`
-
 ### `static int tlv_read(const uint8_t *buf, size_t buf_len, size_t *pos, uint8_t *tag, const uint8_t **val, size_t *val_len)`
 `modules/woz_aliro/src/aliro_apdu.c:101`
 
@@ -180,3 +166,10 @@ Parses an Aliro BLE envelope, extracting the type, opcode, and a pointer/length 
 region of buf. The returned *payload points into buf; the caller must not use it beyond buf's
 lifetime. Returns 0 on success; returns -1 if len is shorter than the envelope header, or the
 encoded payload length would exceed the buffer.
+
+<details><summary>Undocumented (2)</summary>
+
+- `aliro_tlv_put_empty`
+- `aliro_tlv_w_finish`
+
+</details>
