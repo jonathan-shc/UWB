@@ -186,7 +186,7 @@ def quickstart(url: str) -> bytes:
         )
     steps = "\n".join(items)
     return (
-        f"""<section class="qs">
+        f"""<section class="qs" id="get-running">
 <div class="section-h"><h2>Get running</h2><span class="rule"></span></div>
 <ol class="qs-steps">
 {steps}

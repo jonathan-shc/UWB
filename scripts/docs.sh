@@ -81,8 +81,14 @@ python3 tools/docs_media.py
 echo "==> github"
 python3 tools/docs_github.py
 
+echo "==> get-started landing"
+python3 tools/docs_start.py
+
 echo "==> graphs"
 python3 tools/docs_graph.py
+
+echo "==> reference fill"
+python3 tools/docs_api.py
 
 echo "==> link pass"
 python3 tools/docs_links.py
