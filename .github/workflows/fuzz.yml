@@ -18,6 +18,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# CI only reads the repo: no token write scopes for any job.
+permissions:
+  contents: read
+
 # Superseded runs on the same ref are wasted work — cancel them.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,7 +34,9 @@ jobs:
       CC: clang # the libFuzzer runtime (-fsanitize=fuzzer) is clang-only
       FUZZ_SECONDS: "45" # per-target budget: a PR smoke run, not an endurance run
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: install clang (libFuzzer runtime)
         run: sudo apt-get update -q && sudo apt-get install -y -q clang
       - name: fuzz the wire parsers
