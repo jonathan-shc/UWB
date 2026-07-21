@@ -2,10 +2,9 @@
 """Render a release FLASH.md into a self-contained FLASH.html.
 
 The markdown file stays the single source of truth; this wraps its rendered
-body in an embedded stylesheet (light + dark, no external assets) using the
-same design language as the documentation site, so the bundle ships a guide
-that reads like a page of the docs. The output is committed next to its
-source, so regenerate after editing a FLASH.md:
+body in an embedded stylesheet (light + dark, no external assets) so the
+bundle ships a guide that reads well in a browser. The output is committed
+next to its source, so regenerate after editing a FLASH.md:
 
     pip install markdown==3.8
     python3 scripts/flash_html.py release/*/FLASH.md
@@ -14,82 +13,65 @@ Output is deterministic (no timestamps): it only changes when the source does.
 """
 
 import pathlib
+import re
 import sys
 
 import markdown
 
 STYLE = """
-:root{
-  --ground:#f7f8fa; --surface:#ffffff; --raise:#eff1f5;
-  --ink:#1d2129; --strong:#0e1116; --muted:#5c6470; --faint:#8b93a0;
-  --line:rgba(18,26,38,.12); --hairline:rgba(18,26,38,.075);
-  --accent:#0a69da; --accent-ink:#085ec2; --tint:rgba(10,105,218,.085);
-  --warn:#9a6700; --warn-line:rgba(154,103,0,.4); --warn-tint:rgba(212,167,44,.12);
-  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f5; --panel: #ffffff; --ink: #20282d; --head: #131a1e;
+  --muted: #5f6d75; --line: #dfe4e6; --accent: #0b7d9c;
+  --code-bg: #f0f3f4; --warn: #b3421f;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
-@media (prefers-color-scheme:dark){:root{
-  --ground:#0b0c0f; --surface:#121419; --raise:#1a1d24;
-  --ink:#d8dde5; --strong:#f4f6fa; --muted:#8f98a5; --faint:#5f6875;
-  --line:rgba(226,235,248,.13); --hairline:rgba(226,235,248,.07);
-  --accent:#3f97f5; --accent-ink:#7cb5f9; --tint:rgba(77,159,255,.12);
-  --warn:#d9a84e; --warn-line:rgba(217,168,78,.45); --warn-tint:rgba(217,168,78,.1);
-}}
-*{box-sizing:border-box}
-html{color-scheme:light dark}
-html,body{margin:0;background:var(--ground)}
-body{color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.72;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
-  padding:0 1.25rem}
-::selection{background:var(--tint)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
-main{max-width:42.5rem;margin:0 auto;padding:2.6rem 0 7rem;
-  animation:rise .45s cubic-bezier(.2,.7,.2,1) both}
-@keyframes rise{from{opacity:0;transform:translateY(8px)}}
-@media (prefers-reduced-motion:reduce){main{animation:none}}
-.brand{display:flex;align-items:baseline;gap:.55rem;margin-bottom:2.2rem}
-.brand b{font-family:var(--mono);font-weight:650;font-size:1rem;letter-spacing:-.02em;color:var(--strong)}
-.brand .tag{font-size:.58rem;font-weight:650;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--faint);border:1px solid var(--line);border-radius:99px;padding:.14rem .45rem}
-h1{font-size:1.85rem;font-weight:650;letter-spacing:-.021em;color:var(--strong);
-  margin:.15rem 0 1.05rem;text-wrap:balance;line-height:1.18}
-h1+p{color:var(--muted)}
-h2{font-size:1.25rem;font-weight:650;letter-spacing:-.014em;margin:2.6rem 0 .9rem;color:var(--strong)}
-h3{font-size:1.02rem;font-weight:650;margin:1.7rem 0 .45rem;color:var(--strong)}
-p{margin:.9rem 0}
-ul,ol{padding-left:1.35rem;margin:.9rem 0}
-li{margin:.35rem 0}
-li>p{margin:.35rem 0}
-strong{color:var(--strong);font-weight:650}
-a{color:var(--accent-ink);text-decoration:underline;
-  text-decoration-color:color-mix(in srgb,var(--accent) 30%,transparent);text-underline-offset:3px}
-a:hover{text-decoration-color:var(--accent)}
-p code,li code,td code,h2 code{font-family:var(--mono);background:var(--raise);
-  padding:.1em .36em;border-radius:5px;font-size:.84em;color:var(--ink)}
-.prewrap{position:relative;margin:1.15rem 0}
-pre{background:var(--raise);border:1px solid var(--hairline);border-radius:12px;
-  padding:1rem 1.2rem;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
-  line-height:1.6;color:var(--ink);margin:0}
-pre code{font-family:var(--mono)}
-.copy{position:absolute;top:.55rem;right:.55rem;border:1px solid var(--line);background:var(--surface);
-  color:var(--muted);border-radius:7px;font-family:var(--sans);font-size:.68rem;font-weight:550;
-  padding:.26rem .6rem;opacity:0;cursor:pointer;transition:opacity .15s,color .15s,border-color .15s}
-.prewrap:hover .copy,.copy:focus-visible{opacity:1}
-.copy.done{color:var(--accent-ink);border-color:var(--accent);opacity:1}
-.tablewrap{overflow-x:auto;margin:1.2rem 0}
-table{border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums;min-width:100%}
-th,td{border:1px solid var(--hairline);padding:.45rem .75rem;text-align:left;vertical-align:top}
-th{background:var(--raise);font-weight:600;color:var(--strong)}
-blockquote{margin:1.25rem 0;padding:.15rem 1.1rem;background:var(--warn-tint);
-  border:1px solid var(--warn-line);border-left:3px solid var(--warn);border-radius:0 12px 12px 0}
-blockquote p{margin:.75rem 0}
-blockquote strong{color:var(--warn)}
-footer{margin-top:4rem;padding-top:1.1rem;border-top:1px solid var(--hairline);
-  color:var(--faint);font-size:.8rem}
-footer code{font-family:var(--mono);background:var(--raise);padding:.1em .36em;border-radius:5px}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171c20; --panel: #1e2429; --ink: #ccd6db; --head: #eef4f7;
+    --muted: #8b9ba4; --line: #2c363d; --accent: #4cb8d4;
+    --code-bg: #12171b; --warn: #e0764f;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); }
+body { font-family: var(--sans); color: var(--ink); line-height: 1.55; font-size: 16px; padding: 0 1.5rem; }
+main { max-width: 46rem; margin: 0 auto; padding: 3rem 0 5rem; }
+.eyebrow { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 .8rem; }
+.eyebrow b { color: var(--accent); font-weight: 600; }
+h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .5rem; color: var(--head); text-wrap: balance; letter-spacing: -.01em; }
+h1 + p { color: var(--muted); font-size: .95rem; }
+h2 { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 2.8rem 0 .6rem; font-weight: 600; }
+h3 { font-size: 1rem; color: var(--head); margin: 1.6rem 0 .4rem; }
+p, li { font-size: .92rem; }
+p { margin: .75rem 0; }
+ul, ol { padding-left: 1.25rem; margin: .75rem 0; }
+li { margin-bottom: .3rem; }
+li > p { margin: .3rem 0; }
+strong { color: var(--head); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: .84em; }
+p code, li code, td code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: .06em .3em; }
+.prewrap { position: relative; margin: 1rem 0; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 0; }
+pre code { background: none; border: 0; padding: 0; }
+.copy { position: absolute; top: .5rem; right: .5rem; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 5px; font-family: var(--sans); font-size: .68rem; padding: .2rem .55rem; opacity: 0; cursor: pointer; transition: opacity .15s, color .15s, border-color .15s; }
+.prewrap:hover .copy, .copy:focus-visible { opacity: 1; }
+.copy.done { color: var(--accent); border-color: var(--accent); opacity: 1; }
+.tablewrap { overflow-x: auto; margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+th, td { padding: .45rem 1rem .45rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+blockquote { border-left: 3px solid var(--warn); padding: .1rem 0 .1rem .9rem; margin: 1rem 0; }
+blockquote p { margin: .5rem 0; }
+blockquote strong { color: var(--warn); }
+footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
 """
 
-# Copy buttons on the command blocks, matching the docs site's behavior.
+# Copy buttons on the command blocks.
 SCRIPT = """
 document.querySelectorAll("pre").forEach(function(pre){
   var wrap=document.createElement("div");wrap.className="prewrap";
@@ -116,10 +98,9 @@ TEMPLATE = """<!doctype html>
 </head>
 <body>
 <main>
-<div class="brand"><b>openaliro</b><span class="tag">flash guide</span></div>
+<p class="eyebrow"><b>openaliro</b> · flash bundle · evaluation firmware</p>
 {body}
-<footer>Rendered from the <code>FLASH.md</code> in this bundle; both carry the
-same content. openaliro is evaluation firmware:
+<footer>Same content as this bundle's <code>FLASH.md</code>.
 <a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
 </main>
 <script>{script}</script>
@@ -135,6 +116,8 @@ def render(src: pathlib.Path) -> pathlib.Path:
         src.parent.name,
     )
     body = markdown.markdown(text, extensions=["tables", "fenced_code"])
+    # "## 1. What you need" -> "1 · WHAT YOU NEED" section labels.
+    body = re.sub(r"(<h2>)(\d+)\. ", r"\1\2 · ", body)
     # Wide pin tables must scroll inside their own box on a phone.
     body = body.replace("<table>", '<div class="tablewrap"><table>')
     body = body.replace("</table>", "</table></div>")
