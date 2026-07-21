@@ -85,6 +85,45 @@ void aliro_crypto_split(const uint8_t block[ALIRO_KEY_BLOCK_LEN], int with_c,
 			uint8_t dec_key[ALIRO_SESSION_KEY_LEN], uint8_t ursk[ALIRO_URSK_LEN]);
 
 /*
+ * ---- Expedited-fast phase (§8.1.1.2, §8.3.1.10/.11/.12) ------------------
+ *
+ * The fast phase skips ECDH and the two signatures: the User Device proves it
+ * holds a Kpersistent (agreed during an earlier expedited-standard phase) by
+ * returning a cryptogram the Reader verifies by trial against each stored
+ * Kpersistent. No new derivation code is needed — the fast key material reuses
+ * the standard primitives with different inputs:
+ *
+ *   Kpersistent (during the standard phase, per §8.3.1.13):
+ *     aliro_crypto_derive_key32(IKM = Kdh, salt = salt_persistent, info =
+ *     credential_ephemeral_pub_x) -> 32 bytes. salt_persistent is aliro_salt_build
+ *     type ALIRO_SALT_KPERSISTENT, which appends the Access Credential public-key X.
+ *
+ *   Fast block (per §8.3.1.12):
+ *     aliro_crypto_derive_block(IKM = Kpersistent, salt = salt_fast, info =
+ *     credential_ephemeral_pub_x) -> 160 bytes. salt_fast is aliro_salt_build type
+ *     ALIRO_SALT_CRYPTOGRAM ("VolatileFast"), also appending the credential pub-key X.
+ *
+ * The fast block's layout differs from the standard block only in the first 96
+ * bytes: CryptogramSK@0, ExpeditedSKReader@32, ExpeditedSKDevice@64, BleSK@96,
+ * URSK@128. So BleSK (aliro_crypto_derive_ble_keys) and URSK (offset 128) come
+ * out exactly as in the standard block, and aliro_crypto_split(block, 0, ...)
+ * yields ExpeditedSKReader (enc) / ExpeditedSKDevice (dec). CryptogramSK is the
+ * leading 32 bytes.
+ */
+#define ALIRO_CRYPTOGRAM_SK_OFFSET 0u  /* CryptogramSK = fast_block[0 .. 31] */
+#define ALIRO_CRYPTOGRAM_LEN       64u /* AUTH0 response tag 0x9D: enc_payload(48) || tag(16) */
+
+/* Verify an AUTH0 fast-phase cryptogram (§8.3.1.11): AES-256-GCM open of
+ * cryptogram = encrypted_payload || 16-byte tag under CryptogramSK, with a
+ * 12-byte all-zero IV and no AAD. On a tag match, writes (cryptogram_len - 16)
+ * plaintext bytes to plain_payload and returns 0; returns <0 on a mismatch,
+ * meaning this Kpersistent is not the one (the caller tries the next). The
+ * caller must size plain_payload to at least cryptogram_len - 16 bytes. */
+int aliro_crypto_verify_cryptogram(const uint8_t cryptogram_sk[ALIRO_SESSION_KEY_LEN],
+				   const uint8_t *cryptogram, size_t cryptogram_len,
+				   uint8_t *plain_payload);
+
+/*
  * ---- Secure channel (AES-256-GCM, directional per-message counters) ------
  *
  * Nonce = 8-byte big-endian direction (0 outbound/seal, 1 inbound/open) followed

@@ -81,12 +81,37 @@ void aliro_crypto_split(const uint8_t block[ALIRO_KEY_BLOCK_LEN], int with_c,
 {
 	/* Five 32-byte segments S0..S4. The config flag "derive shared key C"
 	 * shifts the base of the two directional keys: with C -> S0/S1, without
-	 * C -> S1/S2. URSK is S4 (offset 128) unconditionally. */
+	 * C -> S1/S2. URSK is S4 (offset 128) unconditionally. The fast block uses
+	 * the without-C layout (CryptogramSK is S0, ExpeditedSKReader/Device are
+	 * S1/S2), so aliro_crypto_split(block, 0, ...) extracts the fast channel
+	 * keys too. */
 	size_t base = with_c ? 0u : 32u;
 
 	memcpy(enc_key, block + base, ALIRO_SESSION_KEY_LEN);
 	memcpy(dec_key, block + base + 32u, ALIRO_SESSION_KEY_LEN);
 	memcpy(ursk, block + ALIRO_URSK_OFFSET, ALIRO_URSK_LEN);
+}
+
+// Verify an AUTH0 fast-phase cryptogram (Aliro §8.3.1.11): AES-256-GCM open of the
+// encrypted_payload || 16-byte tag under CryptogramSK with a 12-byte zero IV and no AAD.
+// Returns 0 (and writes cryptogram_len-16 plaintext bytes) on a tag match; <0 on a mismatch
+// (short input, or the tag does not verify under this CryptogramSK).
+int aliro_crypto_verify_cryptogram(const uint8_t cryptogram_sk[ALIRO_SESSION_KEY_LEN],
+				   const uint8_t *cryptogram, size_t cryptogram_len,
+				   uint8_t *plain_payload)
+{
+	/* §8.3.1.10/.11 fix IV = 0x00 * 12 and no AAD for the cryptogram AEAD. */
+	static const uint8_t zero_iv[ALIRO_GCM_NONCE_LEN] = {0};
+
+	if (cryptogram == NULL || cryptogram_len < ALIRO_GCM_TAG_LEN) {
+		return -1;
+	}
+
+	size_t ct_len = cryptogram_len - ALIRO_GCM_TAG_LEN;
+
+	return aliro_aes256_gcm_decrypt(cryptogram_sk, zero_iv, ALIRO_GCM_NONCE_LEN, NULL, 0,
+					cryptogram, ct_len, cryptogram + ct_len, ALIRO_GCM_TAG_LEN,
+					plain_payload);
 }
 
 /* ---- secure channel ---- */
