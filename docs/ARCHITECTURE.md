@@ -883,6 +883,13 @@ itself so nothing is hand-curated to drift:
     path, the "depends on" rows become compact base-name chips (full path
     on hover) instead of comma-separated full paths, and the blurbs drop
     the "@file <name> — " prefix that would repeat the heading above them.
+    The chip and prefix tidy also runs on every module reference page,
+    whose "used by" rows and hero blurbs carry the same noise.
+  * every graph gets a full-screen control: the wrap pins over the viewport
+    with the same drag/zoom behavior, and Esc or the button collapses it.
+  * a sitewide sidebar shim regroups the flat guide list under the same
+    topic captions the landing page derives, and marks each reference
+    directory group with its cluster's color dot from the graphs.
 
 Idempotent for the same reason docs_media.py is: when the page generator is
 not configured, the earlier passes run over a site/ kept from a previous

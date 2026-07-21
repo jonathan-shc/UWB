@@ -17,12 +17,13 @@ ALIRO_WS=/big/disk/ws scripts/bootstrap.sh # put the multi-GB workspace elsewher
 
 ## API
 
-### `launch()`
-`scripts/bootstrap.sh:29`
-
-Launch the nRF Util SDK manager toolchain with the configured NCS version, passing through all remaining arguments.
-
 ### `apply_to()`
-`scripts/bootstrap.sh:51`
+`scripts/bootstrap.sh:79`
 
 Apply patch files to a repository, ensuring it is pristine (no uncommitted changes) before patching.
+
+<details><summary>Undocumented (1)</summary>
+
+- `launch`
+
+</details>
