@@ -213,6 +213,15 @@ static void aliro_reader_task(void *arg)
 						     chip::app::Clusters::DoorLock::
 							     OperationSourceEnum::kAliro,
 						     aliro_operating_user());
+				// Stamped after Unlock() so the trace measures execution on
+				// the Matter task, where a busy work queue (e.g. failing
+				// CASE resumption sends) can lag well behind the dispatch
+				// above. Report only when this walk-up's bolt phase was
+				// newly stamped: re-unlocks after a relock would otherwise
+				// reprint the same latched line.
+				if (aliro_lat_mark(ALIRO_LAT_BOLT_DRIVEN)) {
+					aliro_lat_report();
+				}
 			});
 			// Tell the phone's Wallet the reader granted access: the reader->phone
 			// "Reader Status Changed" (Unsecured, Aliro step 23) is what fires the
@@ -220,8 +229,6 @@ static void aliro_reader_task(void *arg)
 			// ranging session already dropped.
 			aliro_reader_notify_unlock(true);
 			locked = false;
-			aliro_lat_mark(ALIRO_LAT_BOLT_DRIVEN);
-			aliro_lat_report(); // the walk-up budget line, off the protocol path
 		} else if (!locked && (!have || cm > ALIRO_RELOCK_RANGE_CM)) {
 			// Hysteresis (RELOCK > UNLOCK) keeps the door open across range jitter
 			// while the peer stays near; no trusted range means it disconnected.
@@ -300,6 +307,15 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 	case chip::DeviceLayer::DeviceEventType::kFabricRemoved: {
 		ESP_LOGI(TAG, "Fabric removed successfully");
 		if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0) {
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+			/* The last home just removed this lock: drop its Aliro reader
+			 * config (delegate RAM) and revert the reader identity + trust
+			 * store to the dev defaults (RAM + NVS). Otherwise the old
+			 * home's phones could still authenticate, and the stale
+			 * verification key makes the next home's SetAliroReaderConfig
+			 * fail InvalidInState. Runs on the Matter task, as required. */
+			AliroReaderDelegate::Instance().ClearAliroReaderConfig();
+#endif
 			chip::CommissioningWindowManager &commissionMgr =
 				chip::Server::GetInstance().GetCommissioningWindowManager();
 			constexpr auto kTimeoutSeconds =

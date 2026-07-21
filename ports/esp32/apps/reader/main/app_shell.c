@@ -5,6 +5,8 @@
  *
  * app_shell — see app_shell.h. Interactive console + demo responder lifecycle.
  */
+#include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_console.h"
@@ -14,6 +16,7 @@
 #include "esp_idf_version.h"
 
 #include "woz_uwb_facade.h"
+#include "woz_diag.h" /* woz_uwb_diag_on — the raw per-frame UWB trace gate */
 #include "aliro_reader.h"
 #include "app_shell.h"
 
@@ -185,6 +188,24 @@ static int cmd_aliro_prov(int argc, char **argv)
 	return 0;
 }
 
+// Shell command handler: toggles the raw per-frame UWB trace (cia#/PREPOLL/POLL/
+// RESPTX/FINALDATA/DIST/GATE). Boot default off: the trace prints synchronously
+// from the UWB task and costs ranging-slot deadlines. With no argument, prints
+// the current state. Always returns 0.
+static int cmd_uwbdiag(int argc, char **argv)
+{
+	if (argc == 2 && strcmp(argv[1], "on") == 0) {
+		woz_uwb_diag_on = 1;
+	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
+		woz_uwb_diag_on = 0;
+	} else if (argc != 1) {
+		printf("usage: uwbdiag [on|off]\n");
+		return 0;
+	}
+	printf("uwb per-frame trace: %s\n", woz_uwb_diag_on ? "on" : "off");
+	return 0;
+}
+
 // Shell command handler: clears the terminal screen via linenoiseClearScreen. Always returns 0.
 static int cmd_clear(int argc, char **argv)
 {
@@ -252,6 +273,9 @@ void app_shell_start(void)
 		{.command = "aliro-trust",
 		 .help = "trust the last-presented credential (persist to NVS)",
 		 .func = cmd_aliro_trust},
+		{.command = "uwbdiag",
+		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off)",
+		 .func = cmd_uwbdiag},
 		{.command = "clear", .help = "clear the screen (also: ctrl-L)", .func = cmd_clear},
 	};
 	for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {

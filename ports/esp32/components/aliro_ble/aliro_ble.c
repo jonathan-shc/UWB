@@ -371,6 +371,23 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 			}
 		}
 		return 0;
+	case BLE_GAP_EVENT_CONN_UPDATE: {
+		/* W so it lands in the default WARN console: this one line per connect
+		 * is the only evidence of whether iOS honored the 15 ms interval
+		 * request above (the interval bounds the lock-step transaction). */
+		struct ble_gap_conn_desc desc;
+
+		if (event->conn_update.status == 0 &&
+		    ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0) {
+			ESP_LOGW(TAG, "conn update: itvl=%u us latency=%u timeout=%u ms",
+				 (unsigned)desc.conn_itvl * 1250u, desc.conn_latency,
+				 (unsigned)desc.supervision_timeout * 10u);
+		} else {
+			ESP_LOGW(TAG, "conn update failed: status=%d",
+				 event->conn_update.status);
+		}
+		return 0;
+	}
 	case BLE_GAP_EVENT_DISCONNECT:
 		ESP_LOGI(TAG, "GAP disconnect reason=%d", event->disconnect.reason);
 		aliro_advertise();

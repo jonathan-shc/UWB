@@ -19,7 +19,13 @@ LOG_MODULE_REGISTER(uwb_min, LOG_LEVEL_INF);
 static bool g_probed;
 static bool g_radio_ready;
 
-/** @brief Bring the SDK up to "probed" state on first call; no-op afterwards. */
+/** @brief Bring the SDK up to "probed" state on first call; no-op afterwards.
+ *
+ * The whole reset -> wake -> probe sequence is retried: transient SPI/power
+ * glitches (bench-seen as a burst of dwt_probe -1 during post-commissioning
+ * Wi-Fi traffic, self-recovering on the caller's next attempt) clear on a
+ * fresh chip reset, so retrying here turns a failed session start into a
+ * slightly slower one. */
 static int uwb_probe_ensure(void)
 {
 	if (g_probed) {
@@ -27,45 +33,52 @@ static int uwb_probe_ensure(void)
 	}
 
 	dw3000_hw_init();
-	dw3000_hw_reset();
-	/* Datasheet: ~2 ms wakeup latency after reset; 5 ms gives margin. */
-	woz_sleep_ms(5);
 
-	/* Wake the DW3000 and settle it BEFORE the SDK probe. The SDK's dwt_probe reads
-	 * the device id immediately after its own CS-toggle wakeup with no delay, so on a
-	 * cold chip that read lands inside the ~2 ms wakeup latency and returns 0 -> the
-	 * probe fails. Prime the wakeup here and poll the raw DEV_ID (register 0) until it
-	 * reads valid, so the chip is definitely awake when dwt_probe runs. The logged
-	 * value also diagnoses a genuine comms failure: 0x00000000 = MISO low / unpowered /
-	 * held in reset (check the EVB power jumper); 0xFFFFFFFF = MISO floating / no chip;
-	 * other non-DECA = wrong SPI pins/mode. */
-	uint32_t raw_devid = 0u;
+	for (int attempt = 1; attempt <= 3; attempt++) {
+		dw3000_hw_reset();
+		/* Datasheet: ~2 ms wakeup latency after reset; 5 ms gives margin. */
+		woz_sleep_ms(5);
 
-	for (int i = 0; i < 5; i++) {
-		dw3000_spi_wakeup();
-		woz_sleep_ms(2); /* > DW3000 wakeup latency */
-		uint8_t devid_hdr = 0x00;
-		uint8_t devid_buf[4] = {0};
+		/* Wake the DW3000 and settle it BEFORE the SDK probe. The SDK's dwt_probe reads
+		 * the device id immediately after its own CS-toggle wakeup with no delay, so on a
+		 * cold chip that read lands inside the ~2 ms wakeup latency and returns 0 -> the
+		 * probe fails. Prime the wakeup here and poll the raw DEV_ID (register 0) until it
+		 * reads valid, so the chip is definitely awake when dwt_probe runs. The logged
+		 * value also diagnoses a genuine comms failure: 0x00000000 = MISO low / unpowered /
+		 * held in reset (check the EVB power jumper); 0xFFFFFFFF = MISO floating / no chip;
+		 * other non-DECA = wrong SPI pins/mode. */
+		uint32_t raw_devid = 0u;
 
-		dw3000_spi_read(1, &devid_hdr, sizeof(devid_buf), devid_buf);
-		raw_devid = ((uint32_t)devid_buf[3] << 24) | ((uint32_t)devid_buf[2] << 16) |
-			    ((uint32_t)devid_buf[1] << 8) | (uint32_t)devid_buf[0];
-		if ((raw_devid & 0xFFFFFF00u) == 0xDECA0300u) {
-			break;
+		for (int i = 0; i < 5; i++) {
+			dw3000_spi_wakeup();
+			woz_sleep_ms(2); /* > DW3000 wakeup latency */
+			uint8_t devid_hdr = 0x00;
+			uint8_t devid_buf[4] = {0};
+
+			dw3000_spi_read(1, &devid_hdr, sizeof(devid_buf), devid_buf);
+			raw_devid = ((uint32_t)devid_buf[3] << 24) |
+				    ((uint32_t)devid_buf[2] << 16) | ((uint32_t)devid_buf[1] << 8) |
+				    (uint32_t)devid_buf[0];
+			if ((raw_devid & 0xFFFFFF00u) == 0xDECA0300u) {
+				break;
+			}
 		}
-	}
-	LOG_INF("DW3000 raw DEV_ID = 0x%08x (expect 0xDECA03xx)", raw_devid);
+		LOG_INF("DW3000 raw DEV_ID = 0x%08x (expect 0xDECA03xx)", raw_devid);
 
-	// Struct type passed to dwt_probe to initialize the DW3000 device; contains
-	// platform-specific probe parameters.
-	int err = dwt_probe((struct dwt_probe_s *)&dw3000_probe_interf);
-	if (err != DWT_SUCCESS) {
-		LOG_ERR("dwt_probe failed: %d", err);
-		return -EIO;
+		// Struct type passed to dwt_probe to initialize the DW3000 device; contains
+		// platform-specific probe parameters.
+		int err = dwt_probe((struct dwt_probe_s *)&dw3000_probe_interf);
+		if (err == DWT_SUCCESS) {
+			g_probed = true;
+			return 0;
+		}
+		/* ERR so the DEV_ID diagnosis survives a WARN-level console (the INF
+		 * line above does not). */
+		LOG_ERR("dwt_probe failed (attempt %d/3): %d, raw DEV_ID=0x%08x", attempt, err,
+			raw_devid);
+		woz_sleep_ms(10 * attempt);
 	}
-
-	g_probed = true;
-	return 0;
+	return -EIO;
 }
 
 /** @brief Default radio configuration (channel 9, 6.8 Mbps). */

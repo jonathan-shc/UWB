@@ -27,7 +27,7 @@ enum aliro_lat_phase {
 	ALIRO_LAT_M4_DONE,         /* UWB session ACTIVE (M4 handled, responder up) */
 	ALIRO_LAT_FIRST_RANGE,     /* first DS-TWR range latched */
 	ALIRO_LAT_TRUSTED_RANGE,   /* layer-4 consensus reached */
-	ALIRO_LAT_BOLT_DRIVEN,     /* unlock dispatched to the lock manager */
+	ALIRO_LAT_BOLT_DRIVEN,     /* lock manager drove the unlock (Matter task) */
 	ALIRO_LAT_PHASE_COUNT
 };
 
@@ -35,8 +35,9 @@ enum aliro_lat_phase {
 void aliro_lat_begin(void);
 
 /* Stamp a phase at its first occurrence this walk-up; later calls are no-ops.
- * Cheap (one uptime read + store) — safe on the BLE-host and UWB RX paths. */
-void aliro_lat_mark(enum aliro_lat_phase phase);
+ * Returns nonzero when this call stamped the phase, 0 otherwise. Cheap (one
+ * uptime read + store) — safe on the BLE-host and UWB RX paths. */
+int aliro_lat_mark(enum aliro_lat_phase phase);
 
 /* Print the consolidated budget line (one printf; call off the protocol path). */
 void aliro_lat_report(void);

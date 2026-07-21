@@ -29,12 +29,13 @@ void aliro_lat_begin(void)
 	s_stamp_us[ALIRO_LAT_BLE_CONNECT] = woz_uptime_us();
 }
 
-void aliro_lat_mark(enum aliro_lat_phase phase)
+int aliro_lat_mark(enum aliro_lat_phase phase)
 {
 	if ((unsigned)phase >= ALIRO_LAT_PHASE_COUNT || s_stamp_us[phase] != 0) {
-		return;
+		return 0;
 	}
 	s_stamp_us[phase] = woz_uptime_us();
+	return 1;
 }
 
 void aliro_lat_report(void)
