@@ -114,6 +114,63 @@ pre{{background:var(--codebg);border-color:var(--codeline);color:var(--codeink)}
 .btn-primary:hover{{background:#a34f31;border-color:#a34f31}}
 :root[data-theme="dark"] .btn-primary:hover{{background:var(--accent-ink);border-color:var(--accent-ink)}}
 @media (prefers-color-scheme:dark){{:root:not([data-theme="light"]) .btn-primary:hover{{background:var(--accent-ink);border-color:var(--accent-ink)}}}}
+
+/* Readability: a larger, airier measure throughout. Bumping the root size
+   scales every rem-based component with it, sidebar included. */
+html{{font-size:17px}}
+:root{{--article:48rem}}
+.doc{{line-height:1.78}}
+.doc p{{margin:1.05rem 0}}
+.lede{{font-size:1.16rem;line-height:1.65}}
+.doc>h1{{font-size:2.35rem}}
+.hero-in h1{{font-size:2.45rem}}
+.doc>h2{{font-size:1.6rem;margin:3rem 0 1rem}}
+.doc>h3{{font-size:1.22rem;margin:2rem 0 .6rem}}
+pre{{padding:1rem 1.15rem;font-size:.86rem;line-height:1.7}}
+p code,li code,.chips code,.xref code,dd code{{padding:.12em .38em;border-radius:6px;font-size:.85em}}
+
+/* Tables read like Claude's: horizontal hairlines only, a firmer header rule. */
+.doc th,.doc td{{border:0;border-bottom:1px solid var(--hairline);padding:.6rem .8rem}}
+.doc thead th{{border-bottom:1px solid var(--line);font-weight:600}}
+
+/* Solid topbar: the translucent blur smeared over images as they scrolled
+   underneath. The crumb drops the monospace for a quiet sans. */
+.topbar{{background:var(--ground);backdrop-filter:none;-webkit-backdrop-filter:none;
+  border-bottom:1px solid var(--hairline);height:3.4rem}}
+.crumb{{font-family:var(--sans);font-size:.85rem;letter-spacing:0}}
+
+/* Sidebar: calmer and more generous. Group caps become title-case headings;
+   the parent cap above the bucket subcaps is redundant and goes; the
+   coverage meter is build telemetry, not reader wayfinding. */
+.cov{{display:none}}
+.tree .tree-cap,.tree .tree-subcap{{font-size:.8rem;font-weight:650;letter-spacing:0;
+  text-transform:capitalize;color:var(--strong);padding:1.5rem .6rem .45rem}}
+.tree .tree-subcap{{text-transform:none}}
+.tree .tree-cap:has(+ * .tree-subcap){{display:none}}
+.doclink{{font-size:.9rem;padding:.5rem .7rem;gap:.6rem}}
+.item-g{{font-size:.88rem;padding:.42rem .65rem}}
+.side-head{{padding:1.35rem 1.2rem 1.1rem}}
+.side .search-btn{{background:var(--ground);border-color:var(--line);color:var(--faint);
+  font-weight:500;animation:none}}
+.side .search-btn:hover{{border-color:var(--tint-line);color:var(--muted);box-shadow:none}}
+.side .search-btn kbd{{color:var(--faint);border-color:var(--line);background:var(--surface)}}
+
+/* Right rail: a serif "On this page", larger targets. */
+.toc-cap{{font-family:var(--serif);font-size:1.02rem;font-weight:500;letter-spacing:0;
+  text-transform:none;color:var(--strong);margin-bottom:.7rem}}
+.toc-link{{font-size:.85rem;padding:.3rem .8rem}}
+
+/* The landing pill reads as a Claude-style eyebrow, not a bordered chip,
+   and the wordmark keeps its full display size against the wider measure. */
+.hero .pill{{border:none;background:none;padding:0;color:var(--accent);
+  font-size:.74rem;font-weight:650;letter-spacing:.13em;text-transform:uppercase}}
+.hero-in .hero h1{{font-size:clamp(2.6rem,5vw,3.4rem)}}
+
+/* Cards and the hero terminal: softer radii, tame scrollbars on dark panels. */
+.feats a{{border-radius:16px}}
+pre,.t-body{{scrollbar-width:thin;scrollbar-color:rgba(250,249,245,.18) transparent}}
+pre::-webkit-scrollbar,.t-body::-webkit-scrollbar{{height:8px}}
+pre::-webkit-scrollbar-thumb,.t-body::-webkit-scrollbar-thumb{{background:rgba(250,249,245,.16);border-radius:9px}}
 """
 
 # doxygen-awesome scopes dark under html.dark-mode plus the OS preference;
