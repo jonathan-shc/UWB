@@ -42,7 +42,7 @@ ENV := $(strip \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws docs fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-ws docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -129,6 +129,12 @@ test-ws:
 ##   graphviz; no NCS toolchain or hardware.
 docs:
 	@$(REPO_ROOT)/docs.sh
+
+## docs-publish: rebuild the site, then snapshot it onto the local gh-pages branch
+##   Never pushes: publishing stays `git push origin gh-pages`. Refuses a stale
+##   or partial site, uncommitted docs/, or a foreign branch named gh-pages.
+docs-publish: docs
+	@$(REPO_ROOT)/docs-publish.sh
 
 ##@ Flash
 ## flash: app-only flash
