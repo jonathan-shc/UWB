@@ -83,7 +83,11 @@ var wraps=document.querySelectorAll(".graph-wrap");var done=0;
 wraps.forEach(function(w){var svg=w.querySelector("svg"),shell=w.querySelector(".graph-shell"),
 b=w.querySelector(".graph-tools button[title='Fit to width']");
 if(svg&&b){done++;if(!w.dataset.fitted){w.dataset.fitted=1;
-if(svg.getBoundingClientRect().width>shell.clientWidth)b.click()}}});
+var h=w.dataset.gvHome&&svg.querySelector('[id*="-'+w.dataset.gvHome+'-"]');
+if(h){var hr=h.getBoundingClientRect(),sr=shell.getBoundingClientRect();
+shell.scrollLeft+=hr.left-sr.left-48;
+shell.scrollTop+=hr.top-sr.top-(shell.clientHeight-hr.height)/2}
+else if(svg.getBoundingClientRect().width>shell.clientWidth)b.click()}}});
 if(wraps.length&&done===wraps.length)clearInterval(t);else if(n>60)clearInterval(t)},120);
 document.querySelectorAll(".graph-wrap:not(.gv-over)").forEach(function(w){
 var shell=w.querySelector(".graph-shell");if(!shell)return;
@@ -110,11 +114,30 @@ addEventListener("mouseup",function(){drag=null;shell.classList.remove("dragging
 
 OVER_CAPTION = (
     "Subsystem-level view of the module graph below: each box is a source "
-    "directory, each arrow an import dependency between them."
+    "directory, each arrow an import dependency between them. The colors "
+    "follow each directory through the detail graph and the sections below."
 )
 DETAIL_CAPTION = (
-    "Every module and its imports, grouped by directory. Drag to pan, "
-    "&#8984;&#8202;scroll or pinch to zoom, or use the per-module sections below."
+    "Every module and its imports, grouped and color-keyed by directory. "
+    "Opens on the entry point; drag to pan, &#8984;&#8202;scroll or pinch "
+    "to zoom, or use the per-module sections below."
+)
+
+# Categorical hues for the directory clusters, one slot per cluster in fixed
+# (sorted-name) order. Light and dark are the same hues stepped per surface;
+# the set passes the CVD/normal-vision gates on both of this site's surfaces,
+# and every colored mark also carries its name as text, so color is never the
+# only channel. Node text keeps the theme ink — the border and wash carry
+# identity.
+PALETTE = (
+    ("#2a78d6", "#3987e5"),  # blue
+    ("#eb6834", "#d95926"),  # orange
+    ("#1baf7a", "#199e70"),  # aqua
+    ("#eda100", "#c98500"),  # yellow
+    ("#e87ba4", "#d55181"),  # magenta
+    ("#008300", "#008300"),  # green
+    ("#4a3aa7", "#9085e9"),  # violet
+    ("#e34948", "#e66767"),  # red
 )
 
 
@@ -151,7 +174,40 @@ def cluster_of(directory: str) -> str:
     return "woz_uwb/" + m.group(1) if m else d.split("/")[0]
 
 
-def figures(page: str, mermaid: str) -> bytes:
+def color_css(names: list[str], clusters: dict[str, set[str]]) -> str:
+    """Theme-aware cluster colors: tinted node fills, hue strokes, dot vars.
+
+    Selectors go by mermaid's DOM ids (flowchart-<node>-<n>), with !important
+    to beat the svg's own id-prefixed stylesheet; the theme toggle scope must
+    win over the OS preference in both directions.
+    """
+    light = ";".join(f"--gv{i}:{PALETTE[i % 8][0]}" for i in range(len(names)))
+    dark = ";".join(f"--gv{i}:{PALETTE[i % 8][1]}" for i in range(len(names)))
+    rules = [
+        f":root{{{light}}}",
+        f':root[data-theme="dark"]{{{dark}}}',
+        f'@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{{dark}}}}}',
+        ".gv-dot{display:inline-block;width:.55em;height:.55em;"
+        "border-radius:50%;background:var(--c);margin-right:.4em}",
+    ]
+    for i, c in enumerate(names):
+        node_sel = ",".join(
+            f'.graph-shell .node[id*="-{n}-"] rect' for n in sorted(clusters[c])
+        )
+        rules.append(
+            f'{node_sel},.graph-shell .node[id*="-gvn{i}-"] rect'
+            f"{{stroke:var(--gv{i})!important;"
+            f"fill:color-mix(in srgb,var(--gv{i}) 10%,transparent)!important}}"
+        )
+        rules.append(
+            f'.graph-shell .cluster[id*="gvc{i}"] rect'
+            f"{{stroke:color-mix(in srgb,var(--gv{i}) 45%,transparent)!important;"
+            f"fill:color-mix(in srgb,var(--gv{i}) 6%,transparent)!important}}"
+        )
+    return "<style>" + "\n".join(rules) + "</style>"
+
+
+def figures(page: str, mermaid: str) -> tuple[str, dict[str, int]]:
     header, pairs = parse_edges(mermaid)
     dirs = stem_dirs(page)
     clusters: dict[str, set[str]] = {}
@@ -179,7 +235,18 @@ def figures(page: str, mermaid: str) -> bytes:
         }
     )
     names = sorted(clusters)
-    cid = {c: f"g{i}" for i, c in enumerate(names)}
+    slots = {c: i for i, c in enumerate(names)}
+
+    # the default view anchors on the graph's entry point: nothing imports
+    # it, and among those the one that drives the most modules
+    targets = {b for _, b in pairs}
+    outdeg: dict[str, int] = {}
+    for a, _ in pairs:
+        outdeg[a] = outdeg.get(a, 0) + 1
+    entries = sorted({n for p in pairs for n in p} - targets)
+    home = max(entries, key=lambda n: outdeg.get(n, 0)) if entries else ""
+
+    cid = {c: f"gvn{i}" for i, c in enumerate(names)}
     over = (
         [header]
         + [f'  {cid[c]}["{c}"]' for c in names]
@@ -187,20 +254,23 @@ def figures(page: str, mermaid: str) -> bytes:
     )
     detail = [header]
     for i, c in enumerate(names):
-        detail.append(f'  subgraph c{i}["{c}"]')
+        detail.append(f'  subgraph gvc{i}["{c}"]')
         detail += [f"    {n}" for n in sorted(clusters[c])]
         detail.append("  end")
     detail += [f"  {a} --> {b}" for a, b in pairs]
 
     esc = lambda t: html.escape("\n".join(t), quote=False)
-    return (
+    home_attr = f' data-gv-home="{home}"' if home else ""
+    block = (
+        f"{color_css(names, clusters)}\n"
         f'<figure class="graph-wrap gv-over"><div class="graph-shell">'
         f'<pre class="mermaid">{esc(over)}</pre></div>\n'
         f"<figcaption>{OVER_CAPTION}</figcaption></figure>\n"
-        f'<figure class="graph-wrap"><div class="graph-shell">'
+        f'<figure class="graph-wrap"{home_attr}><div class="graph-shell">'
         f'<pre class="mermaid">{esc(detail)}</pre></div>\n'
         f"<figcaption>{DETAIL_CAPTION}</figcaption></figure>"
-    ).encode()
+    )
+    return block, slots
 
 
 HEAD_RE = re.compile(
@@ -212,12 +282,23 @@ ATFILE_RE = re.compile(r"<p>@file [\w.-]+ — ")
 ATFILE_BARE_RE = re.compile(r"<p>@file [\w.-]+</p>\n?")
 
 
-def tidy_sections(page: str) -> tuple[str, int, int]:
-    """Short file-name headings with a directory eyebrow; base-name chips."""
+def tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]:
+    """Short file-name headings with a directory eyebrow; base-name chips.
+
+    Directories that form a cluster in the graph get its color dot in the
+    eyebrow, correlating each section with the graphs above.
+    """
 
     def head(m: re.Match) -> str:
+        d = m.group(2).rstrip("/")
+        i = slots.get(cluster_of(d))
+        dot = (
+            f'<i class="gv-dot" style="--c:var(--gv{i})"></i>'
+            if i is not None
+            else ""
+        )
         return (
-            f'<h2><span class="arch-dir">{m.group(2).rstrip("/")}</span>'
+            f'<h2><span class="arch-dir">{dot}{d}</span>'
             f'<a href="{m.group(1)}"><code>{m.group(3)}</code></a></h2>'
         )
 
@@ -244,6 +325,7 @@ def main() -> int:
 
     page = ARCH.read_bytes().decode()
     dirty = False
+    slots: dict[str, int] = {}
     if 'class="graph-wrap gv-over"' in page:
         print("    architecture graphs already restructured")
     else:
@@ -255,15 +337,15 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        figs = figures(page, html.unescape(m.group(1)))
-        page = page[: m.start()] + figs.decode() + page[m.end() :]
+        figs, slots = figures(page, html.unescape(m.group(1)))
+        page = page[: m.start()] + figs + page[m.end() :]
         dirty = True
         print("    architecture graph split into overview + clustered detail")
 
     if 'class="arch-dir"' in page:
         print("    module sections already tidied")
     else:
-        page, heads, blocks = tidy_sections(page)
+        page, heads, blocks = tidy_sections(page, slots)
         if not heads and not blocks:
             print(
                 "docs_graph: architecture page has no module sections to "

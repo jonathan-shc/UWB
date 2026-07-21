@@ -41,7 +41,7 @@ after docs_github.py and before the link pass.
 ## API
 
 ### `stem_dirs(page: str) -> dict[str, str]`
-`tools/docs_graph.py:131`
+`tools/docs_graph.py:154`
 
 module name -> its source directory, from the page's file headings.
 
@@ -50,10 +50,24 @@ is the one the import graph describes, so modules/ wins.
 
 **called by** `figures`
 
-### `tidy_sections(page: str) -> tuple[str, int, int]`
-`tools/docs_graph.py:215`
+### `color_css(names: list[str], clusters: dict[str, set[str]]) -> str`
+`tools/docs_graph.py:177`
+
+Theme-aware cluster colors: tinted node fills, hue strokes, dot vars.
+
+Selectors go by mermaid's DOM ids (flowchart-<node>-<n>), with !important
+to beat the svg's own id-prefixed stylesheet; the theme toggle scope must
+win over the OS preference in both directions.
+
+**called by** `figures`
+
+### `tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]`
+`tools/docs_graph.py:285`
 
 Short file-name headings with a directory eyebrow; base-name chips.
+
+Directories that form a cluster in the graph get its color dot in the
+eyebrow, correlating each section with the graphs above.
 
 **called by** `main`
 
