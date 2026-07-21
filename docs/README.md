@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**106 subsystems in 21 directories · 614/658 symbols documented (93%)**
+**107 subsystems in 21 directories · 614/661 symbols documented (92%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -62,11 +62,11 @@ flowchart LR
 | [`ports/esp32/components/aliro_reader/`](architecture/ports.esp32.components.aliro_reader/README.md) | 1 | 3/3 (100%) |
 | [`ports/esp32/components/woz_uwb/port/`](architecture/ports.esp32.components.woz_uwb.port/README.md) | 4 | 30/30 (100%) |
 | [`scripts/`](architecture/scripts/README.md) | 5 | 12/14 (85%) |
-| [`tools/`](architecture/tools/README.md) | 8 | 18/52 (34%) |
+| [`tools/`](architecture/tools/README.md) | 9 | 18/55 (32%) |
 
 ## Hotspots
 
-*Mined from git history as of `2436a2a`.*
+*Mined from git history as of `15d3e74`.*
 
 **Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (14 commits), [`tools/docs_graph.py`](architecture/tools/docs_graph.md) (6 commits), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) (4 commits), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md) (4 commits), [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md) (4 commits).
 
@@ -74,3 +74,4 @@ flowchart LR
 
 - [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) ↔ [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (3 shared commits)
 - [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md) ↔ [`scripts/build.sh`](architecture/scripts/build.sh.md) (3 shared commits)
+- [`scripts/docs.sh`](architecture/scripts/docs.sh.md) ↔ [`tools/docs_start.py`](architecture/tools/docs_start.md) (3 shared commits)

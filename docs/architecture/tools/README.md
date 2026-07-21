@@ -4,6 +4,7 @@
 | subsystem | about |
 |---|---|
 | [`tools/docs_api.py`](docs_api.md) | Fill the reference pages the page generator leaves bare. |
+| [`tools/docs_cmds.py`](docs_cmds.md) | Render runnable command blocks as one copy chip per command. |
 | [`tools/docs_github.py`](docs_github.md) | Point the rendered site back at its GitHub repository. |
 | [`tools/docs_graph.py`](docs_graph.md) | Make the architecture page's dependency graph legible. |
 | [`tools/docs_links.py`](docs_links.md) | Repair cross-document links in the rendered site, then assert none are left broken. |

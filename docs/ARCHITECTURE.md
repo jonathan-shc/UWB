@@ -852,6 +852,25 @@ the generator adds only what it left out. New entries are also appended to
 the search index in nav.js. Run from the repo root, after docs_graph.py and
 before the link pass.
 
+### [`tools/docs_cmds.py`](architecture/tools/docs_cmds.md)
+
+Render runnable command blocks as one copy chip per command.
+
+A guide's bash block renders as a plain <pre>: the trailing `# comment` sits
+in the same monospace run as the command, and the block-level copy button
+copies comments and all. For a block of commands the reader wants the
+opposite: each command on its own row, the comment visibly muted, and a Copy
+button that yields exactly the command — the chip treatment the landing
+page's quick start already uses. The chip CSS and the .js-copycmd handler
+ship on every page, so the rewrite is markup only.
+
+Only blocks that are unambiguously command sequences are touched: every
+non-blank line must start with an allowlisted command (optionally prefixed
+with VAR=value assignments). Device logs, pseudocode and C fragments never
+match and render as before.
+
+Run from the repo root, after docs_nav.py and before the link pass.
+
 ### [`tools/docs_github.py`](architecture/tools/docs_github.md)
 
 Point the rendered site back at its GitHub repository.
