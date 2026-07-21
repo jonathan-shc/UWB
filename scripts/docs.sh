@@ -87,6 +87,9 @@ python3 tools/docs_start.py
 echo "==> reading order"
 python3 tools/docs_nav.py
 
+echo "==> command chips"
+python3 tools/docs_cmds.py
+
 echo "==> graphs"
 python3 tools/docs_graph.py
 

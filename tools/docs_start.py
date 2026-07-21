@@ -109,9 +109,8 @@ HERO = (
     '<header class="hero-band"><div class="hero-in">'
     '<div class="eyebrow">Start here</div><h1>Get started</h1>'
     '<p class="lede">From a clean checkout to a phone unlocking the door. '
-    "Every track lives on this page — hardware, toolchain, build and test, "
-    "firmware internals, protocol research, and the project around them — "
-    "and each one drills down in place as far as you need.</p>"
+    "Pick a track below. Each one opens in place, with the commands and "
+    "guides it needs.</p>"
     "</div></header>"
 )
 
