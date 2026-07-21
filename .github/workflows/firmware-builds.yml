@@ -23,6 +23,9 @@ on:
   pull_request:
     paths:
       - ports/esp32/**
+      # The Matter app builds only on push/nightly/dispatch (see esp32-matter
+      # below), so PRs touching nothing but its app dir skip the workflow.
+      - "!ports/esp32/apps/matter-lock/**"
       - ports/nrf5340dk/**
       - modules/**
       - deps/dw3000/**
@@ -31,6 +34,11 @@ on:
       - scripts/build.sh
       - .github/workflows/firmware-builds.yml
   workflow_dispatch:
+  # Nightly canary for the Matter build: its setup reaches live upstreams
+  # (esp-matter submodules, CHIP CIPD packages), so breakage can appear with
+  # no push here. 03:27 UTC.
+  schedule:
+    - cron: "27 3 * * *"
 
 # CI only reads the repo: no token write scopes for any job.
 permissions:
@@ -43,23 +51,25 @@ concurrency:
 
 jobs:
   # Which build inputs did this push/PR touch? Feeds the per-job gates below.
-  # On workflow_dispatch the filter is skipped and every gate's event condition
-  # takes over (a manual run builds everything).
+  # On workflow_dispatch and schedule the filter is skipped and every gate's
+  # event condition takes over (a manual run builds everything; the nightly
+  # builds the Matter app).
   changes:
     runs-on: ubuntu-latest
     outputs:
       esp32-idf: ${{ steps.filter.outputs.esp32-idf }}
       nrf5340dk: ${{ steps.filter.outputs.nrf5340dk }}
+      esp32-matter: ${{ steps.filter.outputs.esp32-matter }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         with:
           persist-credentials: false
           # Push events diff against the pre-push commit, which a depth-1
           # clone does not have.
           fetch-depth: 0
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         id: filter
         with:
           # The esp32 component/module dirs are shared by both ESP32 apps;
@@ -76,6 +86,9 @@ jobs:
             esp32-idf:
               - *esp32-shared
               - ports/esp32/apps/reader/**
+            esp32-matter:
+              - *esp32-shared
+              - ports/esp32/apps/matter-lock/**
             nrf5340dk:
               - west.yml
               - scripts/bootstrap.sh
@@ -155,3 +168,73 @@ jobs:
           key: ${{ steps.ws.outputs.cache-primary-key }}
       - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild)
         run: ./scripts/build.sh build
+
+  # ESP32-S3 Matter door lock against esp-matter at the bench-validated
+  # revision (6+ GB once the CHIP submodule tree is in). Deliberately kept off
+  # PRs — push to main, nightly and manual runs only — until the cache proves
+  # out. The esp-matter tree (including CHIP's CIPD-fetched gn/zap under
+  # .environment) is cached on a static key: its revision is pinned, so only
+  # a revision or IDF bump rolls the key.
+  esp32-matter:
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && needs.changes.outputs.esp32-matter == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
+    env:
+      # The bench-validated esp-matter revision; the cache key derives from it.
+      ESP_MATTER_REV: 93b168027bf95f4e467230345ad1f2d147eb1f6b
+      ESP_MATTER_PATH: /opt/esp/esp-matter
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: restore esp-matter
+        id: esp-matter
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/esp/esp-matter
+          key: esp-matter-${{ env.ESP_MATTER_REV }}-idf-v5.5.4
+      - name: fetch + install esp-matter (cold cache)
+        if: steps.esp-matter.outputs.cache-hit != 'true'
+        # Pinned-SHA clone (git clone --branch takes no SHA, so init + fetch),
+        # then the setup esp-matter documents: shallow esp32 submodules and
+        # install.sh, minus the chip-tool/chip-cert host tools the firmware
+        # build never runs.
+        run: |
+          . "$IDF_PATH/export.sh"
+          git init -q "$ESP_MATTER_PATH"
+          cd "$ESP_MATTER_PATH"
+          git remote add origin https://github.com/espressif/esp-matter.git
+          git fetch -q --depth 1 origin "$ESP_MATTER_REV"
+          git checkout -q FETCH_HEAD
+          git submodule update --init --depth 1
+          ./connectedhomeip/connectedhomeip/scripts/checkout_submodules.py \
+            --platform esp32 linux --shallow
+          ./install.sh --no-host-tool
+      # Save before building, so a broken app build does not throw away the
+      # expensive fetch + install.
+      - name: save the esp-matter cache (cold cache)
+        if: steps.esp-matter.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/esp/esp-matter
+          key: ${{ steps.esp-matter.outputs.cache-primary-key }}
+      - name: install the esp-matter python deps (warm cache)
+        if: steps.esp-matter.outputs.cache-hit == 'true'
+        # install.sh put these into the IDF python env, which lives in the
+        # container image, not in the cache — reinstate them on cache hits.
+        run: |
+          . "$IDF_PATH/export.sh"
+          python3 -m pip install -q -r "$ESP_MATTER_PATH/requirements.txt"
+      - name: build the matter-lock app (esp32s3)
+        working-directory: ports/esp32/apps/matter-lock
+        run: |
+          . "$IDF_PATH/export.sh"
+          . "$ESP_MATTER_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
