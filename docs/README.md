@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**103 subsystems in 21 directories · 607/637 symbols documented (95%)**
+**105 subsystems in 21 directories · 612/651 symbols documented (94%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -62,13 +62,13 @@ flowchart LR
 | [`ports/esp32/components/aliro_reader/`](architecture/ports.esp32.components.aliro_reader/README.md) | 1 | 3/3 (100%) |
 | [`ports/esp32/components/woz_uwb/port/`](architecture/ports.esp32.components.woz_uwb.port/README.md) | 4 | 30/30 (100%) |
 | [`scripts/`](architecture/scripts/README.md) | 5 | 12/14 (85%) |
-| [`tools/`](architecture/tools/README.md) | 5 | 11/31 (35%) |
+| [`tools/`](architecture/tools/README.md) | 7 | 16/45 (35%) |
 
 ## Hotspots
 
-*Mined from git history as of `7bcd574`.*
+*Mined from git history as of `256b777`.*
 
-**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (14 commits), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) (4 commits), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md) (4 commits), [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md) (4 commits), [`tools/docs_graph.py`](architecture/tools/docs_graph.md) (4 commits).
+**Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (14 commits), [`tools/docs_graph.py`](architecture/tools/docs_graph.md) (5 commits), [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md) (4 commits), [`modules/woz_uwb/src/fira/fira_session.h`](architecture/modules.woz_uwb.src.fira/fira_session.h.md) (4 commits), [`scripts/bootstrap.sh`](architecture/scripts/bootstrap.sh.md) (4 commits).
 
 **Change together without importing each other:**
 

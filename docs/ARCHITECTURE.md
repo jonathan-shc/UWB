@@ -829,6 +829,29 @@ deleting the worktree deletes it (see `make ws-clean`).
 
 ## `tools/`
 
+### [`tools/docs_api.py`](architecture/tools/docs_api.md)
+
+Fill the reference pages the page generator leaves bare.
+
+The generator documents code where it is defined: functions with bodies,
+structs, inline helpers. A header that only *declares* things — prototypes,
+macros, enums — renders as a hero line and a "used by" row, which reads as
+an empty page even when every declaration in the file carries a doc comment.
+
+This pass parses those headers straight from the working tree and appends
+the missing declarations in the generator's own api-entry markup, so the
+"On this page" rail and the search palette treat them like any other entry:
+
+  * function prototypes (with their /** brief */ if present),
+  * documented #defines, plus undocumented value-carrying ones — a pin map
+    is worth listing even uncommented; include guards are not,
+  * enum/struct/union declarations the page does not already show.
+
+Anything the page already renders is skipped by anchor id, so running after
+the generator adds only what it left out. New entries are also appended to
+the search index in nav.js. Run from the repo root, after docs_graph.py and
+before the link pass.
+
 ### [`tools/docs_github.py`](architecture/tools/docs_github.md)
 
 Point the rendered site back at its GitHub repository.
@@ -931,6 +954,30 @@ Idempotent on purpose: when the page generator is not configured, the earlier
 passes run over a site/ kept from a previous build, so a page may already carry
 the injections. Run from the repo root, after the generators and before the
 link pass.
+
+### [`tools/docs_start.py`](architecture/tools/docs_start.md)
+
+Give the rendered site a real "Get started" landing.
+
+The hero's Get-started button used to deep-link straight into the ESP32
+bring-up checklist — an fine first page for exactly one kind of reader.
+This pass builds start.html instead: one landing that holds every track
+(hardware, toolchain, build and test, firmware internals, protocol
+research, project and CI), each a card that drills down in place to the
+commands, installs and guides that track needs. The page is assembled from
+an existing rendered guide page, so it always carries the current shell —
+sidebar, palette, theme toggle and the other passes' injections.
+
+Also part of wayfinding, on every page:
+
+  * the sidebar gains a Get-started entry next to Overview,
+  * the search button gets the visual weight a primary control deserves
+    (accent tint, a couple of attention pings on load) and the palette a
+    springier open — search is how readers actually move around, so it
+    should not look like chrome.
+
+Run from the repo root, after docs_github.py and before docs_graph.py, so
+the page exists before the sitewide shims and the link pass run.
 
 ### [`tools/docs_title.py`](architecture/tools/docs_title.md)
 
