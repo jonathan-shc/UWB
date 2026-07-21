@@ -432,7 +432,7 @@ static uint64_t ts5_to_u64(const uint8_t t[5])
  * 208 hi32 ticks, so 2400 * 208 = 499200 hi32 (127795200 DTU). A peer with no reverse
  * timestamp report assumes the responder replied exactly one such slot after the POLL. */
 #define CCC_SLOT_NOMINAL_HI32 499200u
-#define CCC_SLOT_NOMINAL_DTU  (CCC_SLOT_NOMINAL_HI32 * 256u) /* 127795200 */
+#define CCC_SLOT_NOMINAL_DTU  ((int64_t)CCC_SLOT_NOMINAL_HI32 * 256) /* 127795200 */
 /* Reader reply-path excess (TX antenna + processing), hi32 ticks. Measured: reply1 came out
  * ~499263 (63 over nominal) and the controller's computed range sat a constant ~+37 m high at
  * every true distance (8 cm..3 m) = ~62 hi32 too much reply. The reader's own DS-TWR cancels

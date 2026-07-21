@@ -50,7 +50,7 @@ enum aliro_uwb_ranging_service_attribute {
 	ALIRO_UWB_RANGING_SERVICE_ATTR_MAC_MODE = 0x0F,
 	ALIRO_UWB_RANGING_SERVICE_ATTR_VENDOR_SPECIFIC = 0x10,
 	ALIRO_UWB_RANGING_SERVICE_ATTR_STATUS = 0x11,
-	ALIRO_UWB_RANGING_SERVICE_ATTR_MAX,
+	ALIRO_UWB_RANGING_SERVICE_ATTR_MAX = 0x12,
 };
 
 /** Status attribute values (suspend/resume responses). */
