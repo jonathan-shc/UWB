@@ -114,6 +114,7 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 // which crashed because NimBLE can't be re-inited after Matter reclaims BLE.
 #define ALIRO_UNLOCK_RANGE_CM 100 // approach threshold: unlock at/under this (bench-tunable)
 #define ALIRO_RELOCK_RANGE_CM 150 // depart threshold: relock past this (hysteresis > unlock)
+#define ALIRO_PEER_GONE_TICKS 5   // consecutive silent 200 ms wakes (~1 s) before the peer is "gone"
 
 // Resolve the Matter user that owns the credential the reader authenticated, so the LockOperation
 // event names who operated the lock. Without it the event is anonymous and Apple Home, unable to
@@ -194,61 +195,73 @@ static void aliro_reader_task(void *arg)
 	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
 		 rc == 0 ? "reader advertising on shared host" : "reader start FAILED");
 
-	// Approach-unlock: `locked` mirrors the bolt, `granted` mirrors what Wallet
-	// was last told. The fixed Matter auto-relock is disabled (see
-	// create_auto_relock_time(..., 0)), so this loop is the only auto-driver:
-	// grant (Wallet animation) at the first trusted range at any distance,
-	// unlock the bolt when the peer is within range, hold while it is present,
-	// and relock when it leaves (moved past the relock band, or disconnected).
+	// Approach-driver: `locked` mirrors the bolt, `present` mirrors what Wallet
+	// was last told (granted vs secured). The fixed Matter auto-relock is
+	// disabled (see create_auto_relock_time(..., 0)), so this loop is the only
+	// auto-driver. It fires the Wallet grant (unlock animation) once at the first
+	// trusted range at any distance, drives the bolt open inside
+	// ALIRO_UNLOCK_RANGE_CM, holds while the peer is near, and only after the
+	// peer is silent for ALIRO_PEER_GONE_TICKS consecutive wakes relocks and
+	// sends Secured. The debounce is load-bearing: trusted ranges arrive one per
+	// ranging block and a single missed wake is normal jitter, not a departure —
+	// toggling grant/secured on every miss floods the phone with animations.
 	bool locked = true;
-	bool granted = false;
+	bool present = false;
+	int misses = 0;
 	while (true) {
-		// Wake on a fresh range latch, or after 200 ms of silence (departure).
+		// Wake on a fresh range latch, or after 200 ms of silence.
 		ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
 
 		int32_t cm = 0;
 		bool have = woz_uwb_trusted_range_cm(&cm);
 
-		if (have && !granted) {
-			// Tell the phone's Wallet the reader granted access: the reader->phone
-			// "Reader Status Changed" (Unsecured, Aliro step 23) is what fires the
-			// iPhone unlock animation. Sent at trust establishment, not at the
-			// bolt's approach gate, so on a long approach the animation plays
-			// while the user walks up (native-reader feel); trust already means
-			// the credential authenticated and ranging passed the integrity gate.
-			// Marshaled to the BLE-host task; a no-op if the session dropped.
-			ESP_LOGI(TAG, "Aliro trusted range %d cm: granting (Wallet notify)",
-				 (int)cm);
-			aliro_reader_notify_unlock(true);
-			granted = true;
-		}
-		if (have && locked && cm >= 0 && cm <= ALIRO_UNLOCK_RANGE_CM) {
-			ESP_LOGI(TAG, "Aliro trusted range %d cm (<= %d): unlocking", (int)cm,
-				 ALIRO_UNLOCK_RANGE_CM);
-			chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
-				BoltLockMgr().Unlock(door_lock_endpoint_id,
-						     chip::app::Clusters::DoorLock::
-							     OperationSourceEnum::kAliro,
-						     aliro_operating_user());
-				// Stamped after Unlock() so the trace measures execution on
-				// the Matter task, where a busy work queue (e.g. failing
-				// CASE resumption sends) can lag well behind the dispatch
-				// above. Report only when this walk-up's bolt phase was
-				// newly stamped: re-unlocks after a relock would otherwise
-				// reprint the same latched line.
-				if (aliro_lat_mark(ALIRO_LAT_BOLT_DRIVEN)) {
-					aliro_lat_report();
-				}
-			});
-			locked = false;
-		} else if ((granted || !locked) && (!have || cm > ALIRO_RELOCK_RANGE_CM)) {
-			// Hysteresis (RELOCK > UNLOCK) keeps the door open across range jitter
-			// while the peer stays near; no trusted range means it disconnected.
-			// Also reached when a grant never became an unlock (peer turned away
-			// before the approach gate): Wallet still needs the Secured update.
+		if (have) {
+			misses = 0;
+			if (!present) {
+				// First trusted range this approach: grant + fire the Wallet
+				// unlock animation. "Reader Status Changed" (Unsecured, Aliro
+				// step 23), marshaled to the BLE-host task; a no-op if the
+				// session already dropped. Trust already means the credential
+				// authenticated and ranging passed the integrity gate.
+				ESP_LOGI(TAG, "Aliro trusted range %d cm: granting (Wallet notify)",
+					 (int)cm);
+				aliro_reader_notify_unlock(true);
+				present = true;
+			}
+			if (locked && cm >= 0 && cm <= ALIRO_UNLOCK_RANGE_CM) {
+				ESP_LOGI(TAG, "Aliro trusted range %d cm (<= %d): unlocking",
+					 (int)cm, ALIRO_UNLOCK_RANGE_CM);
+				chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+					BoltLockMgr().Unlock(door_lock_endpoint_id,
+							     chip::app::Clusters::DoorLock::
+								     OperationSourceEnum::kAliro,
+							     aliro_operating_user());
+					// Stamped after Unlock() so the trace measures execution
+					// on the Matter task; report only when newly stamped so a
+					// re-unlock does not reprint the latched budget line.
+					if (aliro_lat_mark(ALIRO_LAT_BOLT_DRIVEN)) {
+						aliro_lat_report();
+					}
+				});
+				locked = false;
+			} else if (!locked && cm > ALIRO_RELOCK_RANGE_CM) {
+				// Peer still ranging but stepped past the relock band
+				// (hysteresis RELOCK > UNLOCK avoids chatter near the gate).
+				ESP_LOGI(TAG, "Aliro peer out of range (%d cm): relocking", (int)cm);
+				chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+					BoltLockMgr().Lock(door_lock_endpoint_id,
+							   chip::app::Clusters::DoorLock::
+								   OperationSourceEnum::kAliro,
+							   aliro_operating_user());
+				});
+				locked = true;
+			}
+		} else if (present && ++misses >= ALIRO_PEER_GONE_TICKS) {
+			// No trusted range for ALIRO_PEER_GONE_TICKS wakes (~1 s): the peer
+			// left or the session dropped. Relock if still open, tell Wallet
+			// Secured, and reset so the next approach grants (and animates) again.
+			ESP_LOGI(TAG, "Aliro peer gone: relock + secured");
 			if (!locked) {
-				ESP_LOGI(TAG, "Aliro peer %s: relocking",
-					 have ? "out of range" : "gone");
 				chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
 					BoltLockMgr().Lock(door_lock_endpoint_id,
 							   chip::app::Clusters::DoorLock::
@@ -258,7 +271,8 @@ static void aliro_reader_task(void *arg)
 				locked = true;
 			}
 			aliro_reader_notify_unlock(false); // Reader Status Changed -> Secured
-			granted = false;
+			present = false;
+			misses = 0;
 		}
 	}
 }
