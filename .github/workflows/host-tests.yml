@@ -30,7 +30,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: run host KAT suite
+        run: make test
+
+  # Portability leg: the same suite under the other compiler/libc pairs the
+  # project targets (test above covers gcc/glibc; coverage covers clang/glibc's
+  # build; macOS gcc is a clang alias, so it adds nothing). Not a required
+  # check yet — new contexts should prove stable before branch protection pins
+  # them.
+  portability:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: clang
+          - os: macos-latest
+            cc: clang
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: run host KAT suite (${{ matrix.cc }}, ${{ matrix.os }})
         run: make test
 
   coverage:
@@ -40,6 +66,8 @@ jobs:
       COV_MIN: "85" # line-% floor; total was 89.2% when set
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: install llvm (llvm-profdata / llvm-cov)
         run: sudo apt-get update -q && sudo apt-get install -y -q llvm
       - name: build instrumented + run + report
