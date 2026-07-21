@@ -1,4 +1,4 @@
-# Protocol research: BLE + UWB proximity unlock
+# Protocol research
 
 ## Abstract
 

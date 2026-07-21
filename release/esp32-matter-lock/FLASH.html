@@ -1,0 +1,287 @@
+<!doctype html>
+<!-- Generated from FLASH.md by scripts/flash_html.py; edit the .md, not this. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openaliro on the ESP32-S3: flash guide</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f5; --panel: #ffffff; --ink: #20282d; --head: #131a1e;
+  --muted: #5f6d75; --line: #dfe4e6; --accent: #0b7d9c;
+  --code-bg: #f0f3f4; --warn: #b3421f;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171c20; --panel: #1e2429; --ink: #ccd6db; --head: #eef4f7;
+    --muted: #8b9ba4; --line: #2c363d; --accent: #4cb8d4;
+    --code-bg: #12171b; --warn: #e0764f;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); }
+body { font-family: var(--sans); color: var(--ink); line-height: 1.55; font-size: 16px; padding: 0 1.5rem; }
+main { max-width: 46rem; margin: 0 auto; padding: 3rem 0 5rem; }
+.eyebrow { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 .8rem; }
+.eyebrow b { color: var(--accent); font-weight: 600; }
+h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .5rem; color: var(--head); text-wrap: balance; letter-spacing: -.01em; }
+h1 + p { color: var(--muted); font-size: .95rem; }
+h2 { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 2.8rem 0 .6rem; font-weight: 600; }
+h3 { font-size: 1rem; color: var(--head); margin: 1.6rem 0 .4rem; }
+p, li { font-size: .92rem; }
+p { margin: .75rem 0; }
+ul, ol { padding-left: 1.25rem; margin: .75rem 0; }
+li { margin-bottom: .3rem; }
+li > p { margin: .3rem 0; }
+strong { color: var(--head); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: .84em; }
+p code, li code, td code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: .06em .3em; }
+.prewrap { position: relative; margin: 1rem 0; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.55; margin: 0; }
+pre code { background: none; border: 0; padding: 0; }
+.copy { position: absolute; top: .5rem; right: .5rem; border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 5px; font-family: var(--sans); font-size: .68rem; padding: .2rem .55rem; opacity: 0; cursor: pointer; transition: opacity .15s, color .15s, border-color .15s; }
+.prewrap:hover .copy, .copy:focus-visible { opacity: 1; }
+.copy.done { color: var(--accent); border-color: var(--accent); opacity: 1; }
+.tablewrap { overflow-x: auto; margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+th, td { padding: .45rem 1rem .45rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+blockquote { border-left: 3px solid var(--warn); padding: .1rem 0 .1rem .9rem; margin: 1rem 0; }
+blockquote p { margin: .5rem 0; }
+blockquote strong { color: var(--warn); }
+footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
+</style>
+</head>
+<body>
+<main>
+<p class="eyebrow"><b>openaliro</b> · flash bundle · evaluation firmware</p>
+<h1>openaliro on the ESP32-S3: flash guide</h1>
+<p>The complete Aliro Matter lock on a single ESP32-S3: it commissions into Apple Home over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you walk up (BLE + UWB approach unlock; no NFC tap on this target).</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>openaliro-matter-lock.bin</code></td>
+<td>one merged image (bootloader + partitions + app), flashed at 0x0</td>
+</tr>
+<tr>
+<td><code>flash.sh</code></td>
+<td>flashes the image with esptool</td>
+</tr>
+<tr>
+<td><code>FLASH.md</code> / <code>FLASH.html</code></td>
+<td>this guide, plain text and styled</td>
+</tr>
+<tr>
+<td><code>VERSION.txt</code></td>
+<td>release tag, commit, and build date</td>
+</tr>
+</tbody>
+</table></div>
+<h2>1 · What you need</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ESP32-S3 dev board</td>
+<td>host: Wi-Fi, Matter, BLE, ranging engine. Validated on ESP32-S3-WROOM N16R8 (16 MB flash, 8 MB PSRAM); smaller variants untested</td>
+</tr>
+<tr>
+<td>Qorvo DWM3000EVB (DW3110)</td>
+<td>UWB radio, hand-wired over SPI (11 connections)</td>
+</tr>
+<tr>
+<td>11 jumper wires</td>
+<td>the SPI wiring</td>
+</tr>
+<tr>
+<td>USB cable</td>
+<td>power, flashing, serial console; must be a data cable</td>
+</tr>
+</tbody>
+</table></div>
+<p>Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor), a Home hub (HomePod or Apple TV), and a 2.4 GHz Wi-Fi network (the ESP32 has no 5 GHz).</p>
+<h2>2 · Install the tools</h2>
+<ol>
+<li>Python 3 (<code>python3 --version</code> to check; on Windows from <a href="https://www.python.org/downloads/">python.org</a> with "Add to PATH" ticked).</li>
+<li><code>pip install esptool</code> (<code>pip3</code> on some systems, <code>py -m pip</code> on Windows).</li>
+<li>A serial terminal: <code>screen</code> (built into macOS and most Linux), <code>minicom</code>, or PuTTY.</li>
+</ol>
+<p>Boards using the S3's native USB need no driver; boards with a CP210x or CH340 bridge may need that vendor's driver on Windows and older macOS.</p>
+<h2>3 · Wire it</h2>
+<blockquote>
+<p><strong>Check the DWM3000EVB's power-select jumper first.</strong> Wrong source and the radio fails silently (no device ID, a deaf responder), looking exactly like a software fault. It cost days on the bench once.</p>
+</blockquote>
+<p>Power the EVB from <strong>3V3</strong>, not 5 V (the DW3000 is a 3.3 V part), share ground, and wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/board_pins.h</code>:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>DWM3000EVB (Arduino pin)</th>
+<th>Signal</th>
+<th>ESP32-S3</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D13</td>
+<td>SCLK</td>
+<td>GPIO12</td>
+</tr>
+<tr>
+<td>D11</td>
+<td>MOSI</td>
+<td>GPIO11</td>
+</tr>
+<tr>
+<td>D12</td>
+<td>MISO</td>
+<td>GPIO13</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>CS</td>
+<td>GPIO10</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>IRQ</td>
+<td>GPIO5</td>
+</tr>
+<tr>
+<td>D7</td>
+<td>RSTn</td>
+<td>GPIO4</td>
+</tr>
+<tr>
+<td>D9</td>
+<td>WAKEUP</td>
+<td>GPIO6</td>
+</tr>
+<tr>
+<td>3V3</td>
+<td>power</td>
+<td>3V3</td>
+</tr>
+<tr>
+<td>GND</td>
+<td>ground</td>
+<td>GND</td>
+</tr>
+<tr>
+<td>D1</td>
+<td>SPI-POL</td>
+<td>GND (mode-0 strap)</td>
+</tr>
+<tr>
+<td>D0</td>
+<td>SPI-PHA</td>
+<td>GND (mode-0 strap)</td>
+</tr>
+</tbody>
+</table></div>
+<p>The two straps hold the DW3000 in SPI mode 0; skip them if your EVB revision already fixes the mode (check its manual).</p>
+<h2>4 · Flash</h2>
+<pre><code class="language-bash">bash flash.sh
+</code></pre>
+<p>esptool auto-detects the port; to name one, <code>bash flash.sh /dev/ttyACM0</code> (<code>/dev/cu.usbmodem…</code> on macOS, <code>COM…</code> on Windows). Chip not detected? Hold BOOT while plugging in, retry, then replug.</p>
+<p>Manual equivalent:</p>
+<pre><code class="language-bash">esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock.bin
+</code></pre>
+<p>Reflashing wipes any previous commissioning.</p>
+<h2>5 · Watch it boot</h2>
+<p>Open the serial console at 115200 baud (after a BOOT-button flash, replug first):</p>
+<ul>
+<li><strong>macOS:</strong> <code>screen /dev/cu.usbmodem&lt;something&gt; 115200</code></li>
+<li><strong>Linux:</strong> <code>screen /dev/ttyACM0 115200</code> (<code>/dev/ttyUSB0</code> on bridge boards)</li>
+<li><strong>Windows:</strong> PuTTY, Serial, the board's COM port, 115200</li>
+</ul>
+<p>The boot log prints the Matter onboarding QR code URL and manual pairing code, then a <code>matter&gt;</code> prompt; <code>codes</code> reprints both.</p>
+<h2>6 · Add it to Apple Home</h2>
+<ol>
+<li>Open the QR code URL on another screen, or keep the 11-digit code handy.</li>
+<li>Home app: add accessory, scan the QR code or type the code manually.</li>
+<li>Keep the phone next to the board; commissioning starts over BLE, then joins your 2.4 GHz Wi-Fi. Expect a minute or two.</li>
+<li>Home warns about an uncertified accessory (test certificates); add anyway.</li>
+<li>Home then provisions the key into Wallet on its own. Walk up: the Wallet animation plays, the lock opens, and it relocks as you leave.</li>
+</ol>
+<p>The <code>matter&gt;</code> console also has <code>status</code>, <code>range</code>, <code>lock</code>/<code>unlock</code>, and <code>factoryreset</code>.</p>
+<h2>7 · Troubleshooting</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause and fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>esptool "Failed to connect" or no port</td>
+<td>Charge-only cable, wrong port, or hold BOOT while plugging in, then replug</td>
+</tr>
+<tr>
+<td>No boot log</td>
+<td>Wrong port, or still in download mode: replug</td>
+</tr>
+<tr>
+<td>No valid UWB device ID</td>
+<td>Power-select jumper (see Wire it), 5 V instead of 3V3, or a wrong SPI line</td>
+</tr>
+<tr>
+<td><code>range</code> shows nothing with the phone near</td>
+<td>UWB wiring, or no key yet: finish commissioning, check Wallet</td>
+</tr>
+<tr>
+<td>Home cannot find the accessory</td>
+<td>No hub, Bluetooth off, or already commissioned (reflash or <code>factoryreset</code>)</td>
+</tr>
+<tr>
+<td>Commissioning fails near the end</td>
+<td>Wi-Fi join: 2.4 GHz required; remove the half-added accessory and retry</td>
+</tr>
+<tr>
+<td>No key in Wallet</td>
+<td>Wait a few minutes; needs iOS 26+ and a UWB iPhone</td>
+</tr>
+</tbody>
+</table></div>
+<p>More depth: the <a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-bringup.md">bring-up checklist</a> and <a href="https://github.com/asxeem/openaliro/blob/main/docs/esp32-gotchas.md">forty-odd known traps</a>.</p>
+<h2>Notes</h2>
+<ul>
+<li>Evaluation firmware with Matter test certificates; do not put it in charge of a door you care about.</li>
+<li>Reflashing wipes commissioning; remove the stale accessory from Home before re-adding.</li>
+</ul>
+<footer>Same content as this bundle's <code>FLASH.md</code>.
+<a href="https://github.com/asxeem/openaliro">github.com/asxeem/openaliro</a></footer>
+</main>
+<script>
+document.querySelectorAll("pre").forEach(function(pre){
+  var wrap=document.createElement("div");wrap.className="prewrap";
+  pre.parentNode.insertBefore(wrap,pre);wrap.appendChild(pre);
+  var btn=document.createElement("button");btn.className="copy";btn.type="button";
+  btn.textContent="Copy";wrap.appendChild(btn);
+  btn.addEventListener("click",function(){
+    navigator.clipboard.writeText(pre.textContent.replace(/\n$/,"")).then(function(){
+      btn.textContent="Copied";btn.classList.add("done");
+      setTimeout(function(){btn.textContent="Copy";btn.classList.remove("done");},1600);
+    });
+  });
+});
+</script>
+</body>
+</html>

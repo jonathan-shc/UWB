@@ -1,4 +1,4 @@
-# Porting openaliro
+# Porting to a new chipset
 
 How the UWB engine moves to a new chipset, what it costs, and how to prove a port did not
 change the code the validated target runs.

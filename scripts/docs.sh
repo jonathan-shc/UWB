@@ -78,6 +78,24 @@ python3 tools/docs_title.py
 echo "==> media"
 python3 tools/docs_media.py
 
+echo "==> github"
+python3 tools/docs_github.py
+
+echo "==> get-started landing"
+python3 tools/docs_start.py
+
+echo "==> reading order"
+python3 tools/docs_nav.py
+
+echo "==> command chips"
+python3 tools/docs_cmds.py
+
+echo "==> graphs"
+python3 tools/docs_graph.py
+
+echo "==> reference fill"
+python3 tools/docs_api.py
+
 echo "==> link pass"
 python3 tools/docs_links.py
 

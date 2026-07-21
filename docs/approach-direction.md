@@ -1,4 +1,4 @@
-# Approach Direction — the Home app Left/Front/Right control
+# Approach Direction
 
 How the Apple Home app's "Approach Direction" control is exposed by an Aliro lock, and
 every trap hit making it appear on the ESP32-S3 port. Validated on silicon 2026-07-21:
