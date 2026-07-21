@@ -1,0 +1,665 @@
+<!doctype html>
+<!--
+  Copyright (c) 2026 asxeem
+  SPDX-License-Identifier: ISC
+
+  openaliro walk-up digital twin — interactive web page.
+
+  A visitor drags a phone toward a door and the reader's real decision logic
+  reacts: BLE connect radius, Aliro session bring-up, UWB DS-TWR ranging
+  blocks, the range-integrity trust gate, the approach controller, the bolt.
+
+  The decision logic below is a line-cited port of the firmware; every
+  decision constant lives in the FW table and is verified against the C tree
+  by web-twin/check_constants.py (the drift gate). Environment knobs that are
+  NOT firmware (BLE radio range, noise probability, phase pacing) are marked
+  SIM where they appear. The model self-test in the footer replays the
+  scenario tests/host/test_twin.c asserts and must pass on every load.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openaliro — walk-up digital twin</title>
+<style>
+  :root {
+    /* Deliberately single-theme: a dark bench-instrument panel. */
+    --bg: #0f151c;
+    --panel: #161e27;
+    --panel2: #1c2631;
+    --line: #263240;
+    --ink: #d8e2ec;
+    --muted: #7d8fa0;
+    --amber: #f0a840;   /* UWB / measurement */
+    --cyan: #52b8d8;    /* BLE */
+    --green: #4cc27e;   /* unlocked / pass */
+    --red: #e0566a;     /* reject / spoof */
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    font-size: 15px; line-height: 1.45; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+    padding: .8rem 1.2rem; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 1.05rem; font-weight: 650; letter-spacing: .01em; }
+  header h1 .brand { color: var(--amber); }
+  header p { color: var(--muted); font-size: .85rem; }
+  main {
+    flex: 1; display: flex; gap: 1px; background: var(--line); min-height: 0;
+  }
+  #scene-wrap { flex: 1; min-width: 0; position: relative; background: var(--bg); }
+  #scene { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #scene.dragging { cursor: grabbing; }
+  #hint {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+    color: var(--muted); font-size: .8rem; background: color-mix(in srgb, var(--bg) 80%, transparent);
+    padding: .25rem .7rem; border: 1px solid var(--line); border-radius: 99px;
+    pointer-events: none; transition: opacity .5s;
+  }
+  aside {
+    width: 342px; flex-shrink: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 1px; background: var(--line);
+  }
+  section { background: var(--panel); padding: .75rem .9rem; }
+  section h2 {
+    font-size: .68rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--muted); margin-bottom: .55rem;
+  }
+  /* phase pipeline */
+  #pipeline { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .6rem; }
+  .phase {
+    font-family: var(--mono); font-size: .68rem; color: var(--muted);
+    padding: .18rem .45rem; border: 1px solid var(--line); border-radius: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .phase.lit { color: var(--ink); border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, var(--panel)); }
+  .phase.lit.uwb { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--panel)); }
+  .phase.lit.bolt { border-color: var(--green); background: color-mix(in srgb, var(--green) 14%, var(--panel)); }
+  /* readouts */
+  #readouts { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem .9rem; }
+  .ro .k { font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .ro .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+  .ro .v small { font-size: .68rem; color: var(--muted); }
+  #ro-dist .v { font-size: 1.7rem; color: var(--amber); }
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: .72rem;
+    padding: .1rem .5rem; border-radius: 4px; border: 1px solid var(--line);
+  }
+  .chip.locked { color: var(--ink); }
+  .chip.unlocked { color: #08130c; background: var(--green); border-color: var(--green); }
+  .chip.granted { color: #071216; background: var(--cyan); border-color: var(--cyan); }
+  .pips { display: inline-flex; gap: .25rem; vertical-align: middle; }
+  .pip { width: .55rem; height: .55rem; border-radius: 50%; border: 1px solid var(--muted); }
+  .pip.on { background: var(--amber); border-color: var(--amber); }
+  /* controls */
+  .ctl { display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem; }
+  .ctl label { flex: 1; font-size: .8rem; color: var(--muted); }
+  .ctl output { font-family: var(--mono); font-size: .78rem; min-width: 4.4ch; text-align: right; }
+  input[type=range] { flex: 1.4; accent-color: var(--amber); }
+  #ctl-ble input[type=range] { accent-color: var(--cyan); }
+  .ctl input[type=checkbox] { accent-color: var(--amber); }
+  .btnrow { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .2rem; }
+  button {
+    font-family: var(--sans); font-size: .8rem; color: var(--ink);
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
+    padding: .32rem .7rem; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+  button.primary { border-color: var(--amber); color: var(--amber); }
+  button.danger { border-color: var(--red); color: var(--red); }
+  button[aria-pressed="true"] { background: color-mix(in srgb, var(--amber) 18%, var(--panel2)); }
+  /* log */
+  #log { font-family: var(--mono); font-size: .7rem; max-height: 9.5rem; overflow-y: auto; }
+  #log div { padding: .06rem 0; color: var(--muted); }
+  #log div.hot { color: var(--ink); }
+  #log .t { color: var(--muted); opacity: .7; }
+  #log .ble { color: var(--cyan); } #log .uwb { color: var(--amber); }
+  #log .ok { color: var(--green); } #log .bad { color: var(--red); }
+  footer {
+    display: flex; gap: 1rem; flex-wrap: wrap; align-items: baseline;
+    padding: .5rem 1.2rem; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: .72rem;
+  }
+  footer code { font-family: var(--mono); font-size: .7rem; }
+  #selftest.pass { color: var(--green); }
+  #selftest.fail { color: var(--red); }
+  @media (max-width: 920px) {
+    main { flex-direction: column; }
+    #scene-wrap { min-height: 46vh; }
+    aside { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { #hint { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="brand">openaliro</span> walk-up digital twin</h1>
+  <p>the reader's real unlock decision logic, line-cited from the firmware — drag the phone or press Walk up</p>
+</header>
+<main>
+  <div id="scene-wrap">
+    <canvas id="scene"></canvas>
+    <div id="hint">drag the phone toward the door</div>
+  </div>
+  <aside>
+    <section>
+      <h2>Walk-up phases <span style="text-transform:none;letter-spacing:0">(aliro_lat.h:21-31)</span></h2>
+      <div id="pipeline"></div>
+    </section>
+    <section>
+      <h2>Readouts</h2>
+      <div id="readouts">
+        <div class="ro" id="ro-dist" style="grid-column:1/-1">
+          <div class="k">last latched range</div>
+          <div class="v"><span id="v-cm">—</span> <small>cm · true <span id="v-true">—</span> cm</small></div>
+        </div>
+        <div class="ro"><div class="k">median (filter)</div><div class="v"><span id="v-med">—</span> <small>cm</small></div></div>
+        <div class="ro"><div class="k">trust (layer 4)</div><div class="v"><span class="pips" id="v-trust"></span> <small id="v-trustn">0/3</small></div></div>
+        <div class="ro"><div class="k">dwell near·far</div><div class="v" id="v-dwell">0·0</div></div>
+        <div class="ro"><div class="k">BLE link</div><div class="v" id="v-ble"><small>—</small></div></div>
+        <div class="ro"><div class="k">Wallet</div><div class="v"><span class="chip locked" id="v-wallet">Secured</span></div></div>
+        <div class="ro"><div class="k">Bolt</div><div class="v"><span class="chip locked" id="v-bolt">LOCKED</span></div></div>
+      </div>
+    </section>
+    <section>
+      <h2>Controls</h2>
+      <div class="ctl"><label for="c-speed">walk speed</label>
+        <input id="c-speed" type="range" min="0.2" max="2.5" step="0.1" value="1.4"><output id="o-speed">1.4 m/s</output></div>
+      <div class="ctl"><label for="c-angle">approach angle</label>
+        <input id="c-angle" type="range" min="-70" max="70" step="5" value="0"><output id="o-angle">0°</output></div>
+      <div class="ctl"><label for="c-thresh">unlock threshold</label>
+        <input id="c-thresh" type="range" min="20" max="240" step="5" value="100"><output id="o-thresh">100 cm</output></div>
+      <div class="ctl" id="ctl-ble"><label for="c-ble">BLE radius <small>(SIM)</small></label>
+        <input id="c-ble" type="range" min="3" max="12" step="0.5" value="8"><output id="o-ble">8.0 m</output></div>
+      <div class="ctl"><label for="c-noise">range noise (bench-like spikes)</label>
+        <input id="c-noise" type="checkbox" checked></div>
+      <div class="btnrow">
+        <button id="b-walk" class="primary" aria-pressed="false">▶ Walk up</button>
+        <button id="b-away" aria-pressed="false">◀ Walk away</button>
+        <button id="b-spoof" class="danger" title="inject one implausible early-first-path block, as test_twin.c:207-213">Ghost-Peak spoof</button>
+        <button id="b-reset">Reset</button>
+      </div>
+    </section>
+    <section>
+      <h2>Event log</h2>
+      <div id="log"></div>
+    </section>
+  </aside>
+</main>
+<footer>
+  <span id="selftest">model self-test: …</span>
+  <span>decision constants are firmware-cited (file:line) and drift-gated by <code>web-twin/check_constants.py</code></span>
+</footer>
+
+<script>
+"use strict";
+
+/* ── FW: decision constants, one per line, verified against the C tree by
+ * check_constants.py. Format is load-bearing: `NAME: value, // path:line`. ── */
+const FW = {
+  FIRA_RANGE_NEG_TOL_CM: 30,   // modules/woz_uwb/src/fira/fira_session.h:41
+  FIRA_RANGE_MAX_CM: 3000,     // modules/woz_uwb/src/fira/fira_session.h:42
+  FIRA_RANGE_TRUST_K: 3,       // modules/woz_uwb/src/fira/fira_session.h:64
+  FIRA_RANGE_SPREAD_CM: 50,    // modules/woz_uwb/src/fira/fira_session.h:65
+  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:116
+  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:117
+  ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:118
+  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:119
+  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:120
+  ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:121
+  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:265
+  BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
+  SPOOF_CM: -400,              // tests/host/test_twin.c:211
+};
+
+/* The firmware's own walk-up phase names (aliro_lat.h:21-31). M4_DONE and up
+ * are the UWB half of the pipeline; BOLT_DRIVEN is the lock actuation. */
+const PHASES = ["BLE_CONNECT","OP05_RX","AUTH0_TX","AUTH1_DONE","EXCHANGE_DONE",
+                "AP_COMPLETED","M4_DONE","FIRST_RANGE","TRUSTED_RANGE","BOLT_DRIVEN"];
+const P = Object.fromEntries(PHASES.map((n,i)=>[n,i]));
+
+/* ── Range store + integrity gate: port of fira_session.c ─────────────────── */
+class RangeStore {
+  constructor(){ this.haveRange=false; this.lastCm=0; this.trust=0; this.listener=null; }
+  /* layer 1 plausibility band — fira_session.c:82-85 */
+  plausible(cm){ return cm >= -FW.FIRA_RANGE_NEG_TOL_CM && cm <= FW.FIRA_RANGE_MAX_CM; }
+  /* layer 4 consensus bit — fira_session.c:92-95 */
+  trusted(){ return this.trust >= FW.FIRA_RANGE_TRUST_K; }
+  /* per-block latch — fira_session.c:102-141 */
+  setCccRangeCm(cm){
+    if (!this.plausible(cm)) { this.trust = 0; return false; }   // fira_session.c:109-112
+    if (cm < 0) cm = 0;                                          // fira_session.c:114-116 (point-blank slop)
+    const delta = Math.abs(cm - this.lastCm);                    // fira_session.c:120
+    if (this.haveRange && delta <= FW.FIRA_RANGE_SPREAD_CM) {    // fira_session.c:121-127
+      if (this.trust < FW.FIRA_RANGE_TRUST_K) this.trust++;
+    } else {
+      this.trust = 1;
+    }
+    this.haveRange = true; this.lastCm = cm;                     // fira_session.c:130-135
+    if (this.listener) this.listener();                          // fira_session.c:137-140 (accepted latches only)
+    return true;
+  }
+  /* facade unlock seam — woz_uwb_facade.c:102-105 and :129-140 */
+  lastRangeCm(){ return this.haveRange ? this.lastCm : null; }
+  trustedRangeCm(){ return (this.haveRange && this.trusted()) ? this.lastCm : null; }
+}
+
+/* ── Approach controller: port of the ESP32 walk-up loop, app_main.cpp ────── */
+/* median of first n — app_main.cpp:175-193 */
+function rangeMedian(win, n){
+  const t = win.slice(0, n).sort((a,b)=>a-b);
+  return t[Math.floor(n/2)];
+}
+class ApproachController {
+  constructor(store, events){
+    this.store = store; this.ev = events;
+    this.locked = true; this.present = false;                    // app_main.cpp:255-256
+    this.win = new Array(FW.ALIRO_RANGE_MEDIAN_N).fill(0);
+    this.wlen = 0; this.wpos = 0;
+    this.nearDwell = 0; this.farDwell = 0;
+    this.lastActivityMs = 0; this.median = null;
+    this.unlockCm = FW.ALIRO_UNLOCK_RANGE_CM;                    // the threshold knob
+  }
+  /* one 200 ms wake — app_main.cpp:262-336; `active` = a block latched since
+   * the last wake (the task-notify count), NOT the raw timeout path. */
+  tick(nowMs, active){
+    const cm = this.store.trustedRangeCm();
+    const trusted = active && cm !== null;                       // app_main.cpp:268-270
+    if (active) this.lastActivityMs = nowMs;                     // app_main.cpp:272-274
+    if (trusted) {
+      if (!this.present) {                                       // app_main.cpp:276-286 (Wallet grant)
+        this.present = true; this.ev.grant(cm);
+      }
+      this.win[this.wpos] = cm;                                  // app_main.cpp:288-292
+      this.wpos = (this.wpos + 1) % FW.ALIRO_RANGE_MEDIAN_N;
+      if (this.wlen < FW.ALIRO_RANGE_MEDIAN_N) this.wlen++;
+      const f = this.median = rangeMedian(this.win, this.wlen);  // app_main.cpp:293
+      if (f <= this.unlockCm) {                                  // app_main.cpp:295-302
+        this.farDwell = 0;
+        if (this.locked && ++this.nearDwell >= FW.ALIRO_NEAR_DWELL) {
+          this.locked = false; this.ev.unlock(f);
+        }
+      } else if (f >= FW.ALIRO_RELOCK_RANGE_CM) {                // app_main.cpp:303-310
+        this.nearDwell = 0;
+        if (!this.locked && ++this.farDwell >= FW.ALIRO_FAR_DWELL) {
+          this.locked = true; this.ev.relock(f);
+        }
+      } else {                                                   // app_main.cpp:311-315 (dead band)
+        this.nearDwell = 0; this.farDwell = 0;
+      }
+    }
+    /* peer gone: no ranging activity at all — app_main.cpp:318-335 */
+    if (this.present && (nowMs - this.lastActivityMs) >= FW.ALIRO_PEER_GONE_MS) {
+      if (!this.locked) { this.locked = true; this.ev.relock(null); }
+      this.ev.secured();
+      this.present = false; this.wlen = 0; this.wpos = 0;
+      this.nearDwell = 0; this.farDwell = 0; this.median = null;
+    }
+  }
+}
+
+/* ── Model self-test: replay the scenario test_twin.c asserts ─────────────── */
+function selfTest(){
+  const r = [];
+  const ok = (name, cond) => r.push([name, !!cond]);
+  const s = new RangeStore();
+  s.setCccRangeCm(234);                                  // the twin's DS-TWR round latches 234 cm
+  ok("range.seen+cm", s.lastRangeCm() === 234);          // test_twin.c:201-202
+  ok("range.plausible", s.plausible(234));               // test_twin.c:203
+  ok("one_block.not_trusted", s.trustedRangeCm() === null); // test_twin.c:205
+  s.setCccRangeCm(FW.SPOOF_CM);                          // Ghost-Peak spoof
+  ok("spoof.range_not_reduced", s.lastRangeCm() === 234);   // test_twin.c:212
+  ok("spoof.not_trusted", s.trustedRangeCm() === null);     // test_twin.c:213
+  s.setCccRangeCm(120);
+  ok("earn.one", s.trustedRangeCm() === null);           // test_twin.c:219
+  s.setCccRangeCm(122);
+  ok("earn.two", s.trustedRangeCm() === null);           // test_twin.c:221
+  s.setCccRangeCm(121);
+  ok("earn.k_reached", s.trustedRangeCm() === 121);      // test_twin.c:223-224
+  /* controller: trusted blocks at 80 cm move the bolt after NEAR_DWELL ticks */
+  let unlocked = false;
+  const c = new ApproachController(s, { grant(){}, unlock(){ unlocked = true; }, relock(){}, secured(){} });
+  for (let i = 0; i < FW.ALIRO_NEAR_DWELL + 1; i++){ s.setCccRangeCm(80); c.tick(i*FW.CTRL_TICK_MS, true); }
+  ok("controller.unlock_after_dwell", unlocked);
+  const fails = r.filter(x=>!x[1]);
+  const el = document.getElementById("selftest");
+  el.textContent = "model self-test: " + (fails.length ? "FAIL " + fails.map(f=>f[0]).join(",")
+                    : r.length + "/" + r.length + " vs test_twin.c");
+  el.className = fails.length ? "fail" : "pass";
+  for (const [name, pass] of r) if (!pass) console.error("twin self-test FAIL:", name);
+  return fails.length === 0;
+}
+
+/* ── Simulation world ─────────────────────────────────────────────────────── */
+/* Geometry in metres; the reader (on the door) is the origin. The phone
+ * approach-connects when it hears the reader's 0xFFF2 service-data advert
+ * (aliro_ble.h:86-91); BLE radio range is physics, not a firmware constant,
+ * so the radius ring is an environment slider (SIM). */
+const sim = {
+  phone: { x: -9, y: 0 },        // metres, reader at (0,0)
+  walking: 0,                    // 0 idle, +1 toward door, -1 away
+  connected: false,
+  sessionActive: false,
+  phase: -1,                     // highest aliro_lat mark this walk-up
+  store: new RangeStore(),
+  ctrl: null,
+  t: 0,                          // sim clock, ms
+  blockAcc: 0, tickAcc: 0, blockN: 0,
+  activeSinceTick: false,
+  spoofArmed: false,
+  bleRadius: 8, speed: 1.4, angleDeg: 0, noise: true,
+  trueCm(){ return Math.round(Math.hypot(this.phone.x, this.phone.y) * 100); },
+};
+
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+function log(cls, msg){
+  const d = document.createElement("div");
+  d.className = "hot";
+  d.innerHTML = `<span class="t">${(sim.t/1000).toFixed(1).padStart(5)}s</span> <span class="${cls}">${msg}</span>`;
+  logEl.prepend(d);
+  setTimeout(()=>d.classList.remove("hot"), 900);
+  while (logEl.children.length > 40) logEl.lastChild.remove();
+}
+function mark(phase){ if (phase > sim.phase) sim.phase = phase; }
+
+const events = {
+  grant(cm){ mark(P.TRUSTED_RANGE); log("uwb", `trusted range ${cm} cm — granting (Wallet notify)`); },
+  unlock(f){ mark(P.BOLT_DRIVEN); log("ok", `approach ${f} cm (median) — UNLOCK, bolt drawn`); },
+  relock(f){ log("ok", f === null ? "relock (bolt thrown)" : `departed ${f} cm (median) — RELOCK`); },
+  secured(){ log("ble", "peer gone 1500 ms silent — Wallet Secured"); },
+};
+
+function resetWorld(){
+  sim.store = new RangeStore();
+  sim.ctrl = new ApproachController(sim.store, events);
+  sim.ctrl.unlockCm = +$("c-thresh").value;
+  sim.store.listener = () => {                       // on_uwb_range, app_main.cpp:197-215
+    sim.activeSinceTick = true;
+    mark(P.FIRST_RANGE);
+    if (sim.store.trustedRangeCm() !== null) mark(P.TRUSTED_RANGE);
+  };
+  sim.connected = false; sim.sessionActive = false; sim.phase = -1;
+  sim.blockAcc = sim.tickAcc = sim.blockN = 0;
+  sim.activeSinceTick = false; sim.spoofArmed = false;
+}
+
+function bleConnect(){
+  sim.connected = true;
+  sim.phase = -1; mark(P.BLE_CONNECT);               // aliro_lat_begin: fresh trace, stamp t=0
+  log("ble", "BLE connect (heard the 0xFFF2 advert)");
+}
+function bleDisconnect(){
+  sim.connected = false; sim.sessionActive = false;
+  log("ble", "BLE disconnect (left radio range)");
+}
+
+/* Advance the credential-auth ladder one phase per controller tick. Pacing is
+ * SIM (real phase durations are bench-measured, not compile-time constants);
+ * the phase names and order are the firmware's (aliro_lat.h:21-31). */
+function authAdvance(){
+  if (sim.phase >= P.M4_DONE) return;
+  mark(sim.phase + 1);
+  if (sim.phase === P.M4_DONE){
+    sim.sessionActive = true;
+    log("uwb", "M4 done — UWB session ACTIVE, DS-TWR blocks every 192 ms");
+  }
+}
+
+/* One 192 ms ranging block (uwb_selftest.c:36): measure, condition, latch. */
+function rangingBlock(){
+  sim.blockN++;
+  let cm;
+  if (sim.spoofArmed){
+    sim.spoofArmed = false;
+    cm = FW.SPOOF_CM;                                // test_twin.c:211
+    const before = sim.store.lastRangeCm();
+    sim.store.setCccRangeCm(cm);
+    log("bad", `Ghost-Peak spoof (${cm} cm) REJECTED — layer 1; range stays ` +
+               `${before === null ? "—" : before + " cm"}, trust reset`);
+    return;
+  }
+  cm = sim.trueCm();
+  if (sim.noise){
+    /* Per-block spikes are firmware-documented bench behaviour: consecutive
+     * blocks swung 70 mm -> 1604 mm -> 112 mm (app_main.cpp:242-243). The
+     * ~150 cm spike magnitude cites that line; the 6% rate + small jitter
+     * are SIM. This is exactly the noise the median filter exists to kill. */
+    cm += Math.round((Math.random() + Math.random() - 1) * 6);
+    if (Math.random() < 0.06) cm += 1500 + Math.round(Math.random() * 100);
+  }
+  const before = sim.store.trust;
+  sim.store.setCccRangeCm(cm);
+  if (sim.store.trust === 1 && before >= 1)
+    log("uwb", `block ${sim.blockN}: ${cm} cm outlier — trust run restarts`);
+}
+
+/* ── Fixed-step timers off the sim clock ──────────────────────────────────── */
+function step(dtMs){
+  sim.t += dtMs;
+  const d = Math.hypot(sim.phone.x, sim.phone.y);
+  /* walking */
+  if (sim.walking !== 0 && d > 0.001){
+    const v = sim.speed * sim.walking * dtMs / 1000;
+    const nd = Math.max(0.15, Math.min(14, d - v));
+    sim.phone.x *= nd / d; sim.phone.y *= nd / d;
+    if (nd <= 0.15 || nd >= 14) setWalking(0);
+  }
+  /* BLE link follows the radius ring */
+  const dist = Math.hypot(sim.phone.x, sim.phone.y);
+  if (!sim.connected && dist <= sim.bleRadius) bleConnect();
+  else if (sim.connected && dist > sim.bleRadius) bleDisconnect();
+  /* UWB blocks at 192 ms while the session is up */
+  if (sim.sessionActive){
+    sim.blockAcc += dtMs;
+    while (sim.blockAcc >= FW.BLOCK_MS){ sim.blockAcc -= FW.BLOCK_MS; rangingBlock(); }
+  }
+  /* controller + auth ladder at the 200 ms task tick (app_main.cpp:265) */
+  sim.tickAcc += dtMs;
+  while (sim.tickAcc >= FW.CTRL_TICK_MS){
+    sim.tickAcc -= FW.CTRL_TICK_MS;
+    if (sim.connected) authAdvance();
+    sim.ctrl.tick(sim.t, sim.activeSinceTick);
+    sim.activeSinceTick = false;
+  }
+}
+
+/* ── Canvas ───────────────────────────────────────────────────────────────── */
+const cv = $("scene"), cx = cv.getContext("2d");
+let view = { scale: 50, ox: 0, oy: 0 };
+function resize(){
+  const r = cv.parentElement.getBoundingClientRect();
+  cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio;
+  const m = 0.6; // margin, metres
+  view.scale = Math.min(cv.width / (12 + 2*m), cv.height / (9 + 2*m));
+  view.ox = cv.width - (0.5 + m) * view.scale;   // reader near the right edge
+  view.oy = cv.height / 2;
+}
+addEventListener("resize", resize);
+const px = (x,y) => [view.ox + x*view.scale, view.oy + y*view.scale];
+
+function ring(rM, color, dash, label){
+  const [ox,oy] = px(0,0), r = rM*view.scale;
+  cx.beginPath(); cx.setLineDash(dash); cx.strokeStyle = color; cx.lineWidth = devicePixelRatio;
+  cx.arc(ox, oy, r, 0, 2*Math.PI); cx.stroke(); cx.setLineDash([]);
+  if (label){
+    cx.fillStyle = color; cx.font = `${10*devicePixelRatio}px ${getComputedStyle(document.body).getPropertyValue("--mono")}`;
+    cx.textAlign = "center";
+    cx.fillText(label, ox - r * 0.7071, oy - r * 0.7071 - 4*devicePixelRatio);
+  }
+}
+
+function draw(){
+  const css = getComputedStyle(document.documentElement);
+  const C = n => css.getPropertyValue(n).trim();
+  cx.clearRect(0,0,cv.width,cv.height);
+  const dpr = devicePixelRatio;
+  /* 1 m floor grid */
+  cx.strokeStyle = C("--panel2"); cx.lineWidth = dpr * 0.7;
+  for (let x = -14; x <= 1; x++){ const [gx] = px(x,0); cx.beginPath(); cx.moveTo(gx,0); cx.lineTo(gx,cv.height); cx.stroke(); }
+  for (let y = -8; y <= 8; y++){ const [,gy] = px(0,y); cx.beginPath(); cx.moveTo(0,gy); cx.lineTo(cv.width,gy); cx.stroke(); }
+  /* rings: relock, unlock threshold, BLE radius */
+  ring(sim.bleRadius, C("--cyan"), [6*dpr,6*dpr], "BLE " + sim.bleRadius.toFixed(1) + " m (SIM)");
+  ring(FW.ALIRO_RELOCK_RANGE_CM/100, C("--muted"), [3*dpr,5*dpr], "relock 250 cm");
+  ring(sim.ctrl.unlockCm/100, C("--amber"), [], "unlock " + sim.ctrl.unlockCm + " cm");
+  /* wall + door + bolt */
+  const [wx] = px(0.35, 0);
+  cx.fillStyle = C("--line");
+  cx.fillRect(wx, 0, 5*dpr, cv.height);
+  const doorH = 1.1 * view.scale;
+  cx.fillStyle = sim.ctrl.locked ? C("--panel2") : "#233b2d";
+  cx.fillRect(wx - 3*dpr, view.oy - doorH/2, 8*dpr, doorH);
+  cx.strokeStyle = sim.ctrl.locked ? C("--muted") : C("--green");
+  cx.lineWidth = dpr; cx.strokeRect(wx - 3*dpr, view.oy - doorH/2, 8*dpr, doorH);
+  /* bolt bar: slides out of the frame when locked */
+  cx.fillStyle = sim.ctrl.locked ? C("--ink") : C("--green");
+  const boltW = 0.3 * view.scale;
+  cx.fillRect(wx - 3*dpr - (sim.ctrl.locked ? boltW : boltW*0.25), view.oy - 3*dpr,
+              (sim.ctrl.locked ? boltW : boltW*0.25) + 3*dpr, 6*dpr);
+  /* reader on the door */
+  const [rx,ry] = px(0,0);
+  cx.fillStyle = C("--amber"); cx.beginPath(); cx.arc(rx, ry, 4*dpr, 0, 2*Math.PI); cx.fill();
+  /* UWB activity arcs from the reader */
+  if (sim.sessionActive && !matchMedia("(prefers-reduced-motion: reduce)").matches){
+    const ph = (sim.t % 1000) / 1000;
+    for (const k of [0, .5]){
+      const a = (ph + k) % 1;
+      cx.strokeStyle = C("--amber"); cx.globalAlpha = (1-a) * 0.35; cx.lineWidth = dpr;
+      cx.beginPath(); cx.arc(rx, ry, (0.3 + a*1.6) * view.scale, Math.PI*0.6, Math.PI*1.4); cx.stroke();
+    }
+    cx.globalAlpha = 1;
+  }
+  /* distance line + phone */
+  const [phx, phy] = px(sim.phone.x, sim.phone.y);
+  cx.strokeStyle = C("--muted"); cx.setLineDash([2*dpr,4*dpr]); cx.lineWidth = dpr;
+  cx.beginPath(); cx.moveTo(rx,ry); cx.lineTo(phx,phy); cx.stroke(); cx.setLineDash([]);
+  cx.fillStyle = C("--muted");
+  cx.font = `${10*dpr}px ${css.getPropertyValue("--mono")}`;
+  cx.textAlign = "center";
+  cx.fillText((sim.trueCm()/100).toFixed(2) + " m", (rx+phx)/2, (ry+phy)/2 - 6*dpr);
+  const pw = 13*dpr, phh = 24*dpr;
+  cx.fillStyle = sim.connected ? C("--cyan") : C("--panel2");
+  cx.strokeStyle = C("--ink"); cx.lineWidth = dpr;
+  cx.beginPath(); cx.roundRect(phx-pw/2, phy-phh/2, pw, phh, 3*dpr); cx.fill(); cx.stroke();
+}
+
+/* ── UI wiring ────────────────────────────────────────────────────────────── */
+const pipelineEl = $("pipeline");
+for (const [i, name] of PHASES.entries()){
+  const d = document.createElement("div");
+  d.className = "phase" + (i >= P.M4_DONE ? " uwb" : "") + (i === P.BOLT_DRIVEN ? " bolt" : "");
+  d.textContent = name; d.id = "ph-" + i;
+  pipelineEl.append(d);
+}
+const trustEl = $("v-trust");
+for (let i = 0; i < FW.FIRA_RANGE_TRUST_K; i++){
+  const s = document.createElement("span"); s.className = "pip"; trustEl.append(s);
+}
+
+function render(){
+  for (let i = 0; i < PHASES.length; i++){
+    const el = $("ph-" + i);
+    el.classList.toggle("lit", sim.phase >= i);
+    /* keep the uwb/bolt tint classes; lit is the only toggle */
+  }
+  const last = sim.store.lastRangeCm();
+  $("v-cm").textContent = last === null ? "—" : last;
+  $("v-true").textContent = sim.trueCm();
+  $("v-med").textContent = sim.ctrl.median === null ? "—" : sim.ctrl.median;
+  [...trustEl.children].forEach((p,i)=>p.classList.toggle("on", i < sim.store.trust));
+  $("v-trustn").textContent = sim.store.trust + "/" + FW.FIRA_RANGE_TRUST_K;
+  $("v-dwell").textContent = sim.ctrl.nearDwell + "·" + sim.ctrl.farDwell;
+  $("v-ble").innerHTML = sim.connected
+    ? '<span class="chip granted">connected</span>'
+    : '<small>advertising 0xFFF2</small>';
+  $("v-wallet").textContent = sim.ctrl.present ? "Unsecured" : "Secured";
+  $("v-wallet").className = "chip " + (sim.ctrl.present ? "granted" : "locked");
+  $("v-bolt").textContent = sim.ctrl.locked ? "LOCKED" : "UNLOCKED";
+  $("v-bolt").className = "chip " + (sim.ctrl.locked ? "locked" : "unlocked");
+}
+
+function setWalking(dir){
+  sim.walking = dir;
+  $("b-walk").setAttribute("aria-pressed", String(dir === 1));
+  $("b-away").setAttribute("aria-pressed", String(dir === -1));
+}
+$("b-walk").onclick = () => setWalking(sim.walking === 1 ? 0 : 1);
+$("b-away").onclick = () => setWalking(sim.walking === -1 ? 0 : -1);
+$("b-spoof").onclick = () => {
+  if (!sim.sessionActive){ log("bad", "spoof needs an active UWB session"); return; }
+  sim.spoofArmed = true;
+};
+$("b-reset").onclick = () => {
+  resetWorld();
+  sim.phone = { x: -9, y: 0 }; setWalking(0);
+  applyAngle(); logEl.innerHTML = ""; log("ble", "reset — reader advertising");
+};
+
+function bindRange(id, out, fmt, apply){
+  $(id).oninput = () => { $(out).textContent = fmt($(id).value); apply(+$(id).value); };
+  $(id).oninput();
+}
+bindRange("c-speed", "o-speed", v => (+v).toFixed(1) + " m/s", v => sim.speed = v);
+function applyAngle(){
+  const d = Math.hypot(sim.phone.x, sim.phone.y);
+  const a = Math.PI + sim.angleDeg * Math.PI/180;  // 0° = straight out from the door
+  sim.phone.x = d * Math.cos(a); sim.phone.y = d * Math.sin(a);
+}
+bindRange("c-angle", "o-angle", v => v + "°", v => { sim.angleDeg = v; applyAngle(); });
+bindRange("c-thresh", "o-thresh", v => v + " cm", v => { if (sim.ctrl) sim.ctrl.unlockCm = v; });
+bindRange("c-ble", "o-ble", v => (+v).toFixed(1) + " m", v => sim.bleRadius = v);
+$("c-noise").onchange = () => sim.noise = $("c-noise").checked;
+
+/* drag the phone */
+let dragging = false;
+cv.addEventListener("pointerdown", e => {
+  const r = cv.getBoundingClientRect();
+  const mx = (e.clientX - r.left) * devicePixelRatio, my = (e.clientY - r.top) * devicePixelRatio;
+  const [phx, phy] = px(sim.phone.x, sim.phone.y);
+  if (Math.hypot(mx-phx, my-phy) < 40 * devicePixelRatio){
+    dragging = true; cv.classList.add("dragging"); cv.setPointerCapture(e.pointerId);
+    setWalking(0); $("hint").style.opacity = "0";
+  }
+});
+cv.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const r = cv.getBoundingClientRect();
+  const wx = ((e.clientX - r.left) * devicePixelRatio - view.ox) / view.scale;
+  const wy = ((e.clientY - r.top) * devicePixelRatio - view.oy) / view.scale;
+  const d = Math.hypot(wx, wy) || 0.001;
+  const cl = Math.max(0.15, Math.min(14, d));
+  sim.phone.x = wx * cl/d; sim.phone.y = wy * cl/d;
+  /* keep the angle slider honest: 0° = straight out from the door */
+  const deg = Math.round(((Math.atan2(wy, wx) * 180/Math.PI - 180) + 540) % 360 - 180);
+  sim.angleDeg = Math.max(-70, Math.min(70, deg));
+  $("c-angle").value = sim.angleDeg;
+  $("o-angle").textContent = sim.angleDeg + "°";
+});
+const endDrag = () => { dragging = false; cv.classList.remove("dragging"); };
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+
+/* ── Main loop ────────────────────────────────────────────────────────────── */
+resetWorld();
+resize();
+selfTest();
+log("ble", "reader advertising — drag the phone or press Walk up");
+let lastT = performance.now();
+function frame(now){
+  const dt = Math.min(100, now - lastT); lastT = now;
+  step(dt);
+  draw();
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
