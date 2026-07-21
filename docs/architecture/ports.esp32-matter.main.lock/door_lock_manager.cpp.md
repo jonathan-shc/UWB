@@ -7,24 +7,28 @@ BoltLockManager: Matter door lock cluster backing store for the ESP32 port. Impl
 
 ## API
 
-### `bool ReadOptionalConfigBlob(ESP32Config::Key key, uint8_t *data, size_t dataLen)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:34`
+### `bool ReadOptionalConfigBlob(ESP32Config::Key key, uint8_t *data, size_t dataLen, bool *outStale)`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:39`
 
 Read an optional fixed-size config blob into data. Treats "config not found" as success (the blob
-is optional and data is left untouched), logs and returns false on any other read error or on a
-size mismatch between the stored value and dataLen.
+is optional and data is left untouched), logs and returns false on any other read error.
+A size mismatch means the blob was written by a build whose record layout differs from this one
+(for example EmberAfPluginDoorLockUserInfo growing across a CHIP update). That is a stale on-disk
+format, not a read failure: the partially-filled buffer is unusable, so *outStale is set and the
+caller reinitialises and rewrites every table. Reporting it as a failure instead would fail
+InitLockState() on every boot with no path back to a good state.
 
 **called by** `ReadConfigValues`
 
 ### `bool WriteConfigBlob(ESP32Config::Key key, const uint8_t *data, size_t dataLen)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:53`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:59`
 
 Write a fixed-size config blob to persistent storage. Logs and returns false on write failure.
 
 **called by** `ReadConfigValues`, `SetCredential`, `SetHolidaySchedule`, `SetUser`, `SetWeekdaySchedule`, `SetYeardaySchedule`
 
 ### `CHIP_ERROR BoltLockManager::Init(DataModel::Nullable<DoorLock::DlLockState> state, LockParam lockParam)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:69`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:75`
 
 Validate the configured lock parameters against this platform's fixed capacity limits
 (users, credentials per user, weekday/yearday schedules per user, holiday schedules) and store
@@ -34,14 +38,14 @@ CHIP_NO_ERROR. The state parameter is accepted but unused.
 **called by** `InitLockState`
 
 ### `bool BoltLockManager::IsValidUserIndex(uint16_t userIndex)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:107`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:113`
 
 Check whether userIndex is a valid user index (less than kMaxUsers).
 
 **called by** `GetUser`, `GetWeekdaySchedule`, `GetYeardaySchedule`, `SetUser`, `SetWeekdaySchedule`, `SetYeardaySchedule`
 
 ### `bool BoltLockManager::IsValidCredentialIndex(uint16_t credentialIndex, CredentialTypeEnum type)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:114`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:120`
 
 Check whether credentialIndex is valid for the given credential type. Programming PIN credentials
 require index 0; all other types require an index less than kMaxCredentialsPerUser.
@@ -49,7 +53,7 @@ require index 0; all other types require an index less than kMaxCredentialsPerUs
 **called by** `GetCredential`, `SetCredential`, `UserIndexForAliroCredential`
 
 ### `uint16_t BoltLockManager::CredentialStorageIndex(uint16_t credentialIndex, CredentialTypeEnum type) const`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:124`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:130`
 
 Compute the flat storage index for a credential of the given type and per-user index, packing
 type and index into a single slot number (type * kMaxCredentialsPerUser + credentialIndex).
@@ -57,7 +61,7 @@ type and index into a single slot number (type * kMaxCredentialsPerUser + creden
 **called by** `GetCredential`, `SetCredential`, `UserIndexForAliroCredential`, `ValidatePIN`
 
 ### `bool BoltLockManager::IsValidWeekdayScheduleIndex(uint8_t scheduleIndex)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:131`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:137`
 
 Check whether scheduleIndex is a valid weekday schedule index (less than
 kMaxWeekdaySchedulesPerUser).
@@ -65,7 +69,7 @@ kMaxWeekdaySchedulesPerUser).
 **called by** `GetWeekdaySchedule`, `SetWeekdaySchedule`
 
 ### `bool BoltLockManager::IsValidYeardayScheduleIndex(uint8_t scheduleIndex)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:138`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:144`
 
 Check whether scheduleIndex is a valid yearday schedule index (less than
 kMaxYeardaySchedulesPerUser).
@@ -73,23 +77,28 @@ kMaxYeardaySchedulesPerUser).
 **called by** `GetYeardaySchedule`, `SetYeardaySchedule`
 
 ### `bool BoltLockManager::IsValidHolidayScheduleIndex(uint8_t scheduleIndex)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:144`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:150`
 
 Check whether scheduleIndex is a valid holiday schedule index (less than kMaxHolidaySchedules).
 
 **called by** `GetHolidaySchedule`, `SetHolidaySchedule`
 
 ### `bool BoltLockManager::ReadConfigValues()`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:152`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:164`
 
 Loads all persisted door-lock state (users, credentials, names, credential data, per-user credential links, weekday/yearday/holiday schedules) from NVM into the in-memory tables.
-Detects a stale database format by checking whether credential slot 0 is occupied with a non-programming-PIN type (an old mixed-type layout); if so, clears all in-memory user and credential tables and rewrites the affected blobs to NVM.
+Detects a stale database, either by a blob whose stored size does not match this build's table
+size or by credential slot 0 holding a non-programming-PIN type (an old mixed-type layout); in
+either case clears every in-memory table and rewrites all blobs to NVM.
 Returns true if all blob reads (and, if triggered, all stale-format rewrites) succeed; false if any read or rewrite fails.
+Every blob is sized by its own array via sizeof, never by the runtime LockParams counts. The
+counts come from Matter attributes and can differ from the compiled capacity, which would make
+the read length disagree with the write length and re-flag the blob as stale on every boot.
 
 **called by** `InitLockState`  ·  **calls** `ReadOptionalConfigBlob`, `WriteConfigBlob`
 
 ### `void BoltLockManager::Lock(EndpointId endpointId, OperationSourceEnum source, const DataModel::Nullable<uint16_t> &userIndex)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:207`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:228`
 
 Lock the bolt on the given endpoint, updating the Matter door lock cluster state and the status
 LED. Records source as the cause of the lock transition.
@@ -97,7 +106,7 @@ userIndex: one-indexed user the operation is attributed to in the LockOperation 
 when the operation cannot be traced to a stored user.
 
 ### `void BoltLockManager::Unlock(EndpointId endpointId, OperationSourceEnum source, const DataModel::Nullable<uint16_t> &userIndex)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:217`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:238`
 
 Unlock the bolt on the given endpoint, updating the Matter door lock cluster state and the status
 LED. Drives the LED's Aliro-specific indication when source is kAliro.
@@ -105,7 +114,7 @@ userIndex: one-indexed user the operation is attributed to in the LockOperation 
 when the operation cannot be traced to a stored user.
 
 ### `uint16_t BoltLockManager::UserIndexForAliroCredential(const ByteSpan &credentialData)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:230`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:251`
 
 Find the user that owns a given Aliro endpoint key, so an approach unlock can be attributed to a
 person in the LockOperation event rather than reported anonymously.
@@ -118,7 +127,7 @@ Returns the one-indexed user index, or 0 if no occupied user owns a matching cre
 **calls** `CredentialStorageIndex`, `IsValidCredentialIndex`
 
 ### `bool BoltLockManager::GetUser(EndpointId endpointId, uint16_t userIndex, EmberAfPluginDoorLockUserInfo &user)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:263`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:284`
 
 Looks up a stored user by index for the Matter door lock cluster.
 userIndex: one-indexed by the caller; decremented here and validated against kMaxUsers.
@@ -128,7 +137,7 @@ Returns true if userIndex is valid, whether or not the slot is occupied; returns
 **calls** `IsValidUserIndex`
 
 ### `bool BoltLockManager::SetUser(EndpointId endpointId, uint16_t userIndex, FabricIndex creator, FabricIndex modifier, const CharSpan &userName, uint32_t uniqueId, UserStatusEnum userStatus, UserTypeEnum usertype, CredentialRuleEnum credentialRule, const CredentialStruct * credentials, size_t totalCredentials)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:307`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:328`
 
 Stores a user record by index for the Matter door lock cluster, persisting it and its credential links to NVM.
 userIndex: one-indexed by the caller; decremented here and validated against kMaxUsers.
@@ -140,7 +149,7 @@ Returns false if userIndex is invalid, userName is too long, totalCredentials is
 **calls** `IsValidUserIndex`, `WriteConfigBlob`
 
 ### `bool BoltLockManager::GetCredential(EndpointId endpointId, uint16_t credentialIndex, CredentialTypeEnum credentialType, EmberAfPluginDoorLockCredentialInfo &credential)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:372`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:393`
 
 Looks up a stored credential by index and type for the Matter door lock cluster.
 Programming-PIN indices are used as-is; all other credential types are one-indexed by the caller and decremented here.
@@ -153,7 +162,7 @@ Returns true if credentialIndex is valid, whether or not the slot is occupied; r
 **calls** `CredentialStorageIndex`, `IsValidCredentialIndex`
 
 ### `bool BoltLockManager::SetCredential(EndpointId endpointId, uint16_t credentialIndex, FabricIndex creator, FabricIndex modifier, DlCredentialStatus credentialStatus, CredentialTypeEnum credentialType, const ByteSpan &credentialData)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:417`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:438`
 
 Stores a credential by index and type for the Matter door lock cluster, persisting it to NVM.
 Programming-PIN indices are used as-is; all other credential types are one-indexed by the caller and decremented here.
@@ -168,7 +177,7 @@ Returns true on success; false if credentialIndex is invalid, credentialData exc
 **calls** `CredentialStorageIndex`, `IsValidCredentialIndex`, `WriteConfigBlob`
 
 ### `DlStatus BoltLockManager::GetWeekdaySchedule(EndpointId endpointId, uint8_t weekdayIndex, uint16_t userIndex, EmberAfPluginDoorLockWeekDaySchedule &schedule)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:457`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:478`
 
 Looks up a stored weekday schedule by weekday index and user index for the Matter door lock cluster.
 weekdayIndex, userIndex: both one-indexed by the caller; decremented here and validated against their respective max counts.
@@ -178,7 +187,7 @@ Returns DlStatus::kFailure if either index is 0 or out of range, kNotFound if th
 **calls** `IsValidUserIndex`, `IsValidWeekdayScheduleIndex`
 
 ### `DlStatus BoltLockManager::SetWeekdaySchedule(EndpointId endpointId, uint8_t weekdayIndex, uint16_t userIndex, DlScheduleStatus status, DaysMaskMap daysMask, uint8_t startHour, uint8_t startMinute, uint8_t endHour, uint8_t endMinute)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:483`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:504`
 
 Stores a weekday schedule by weekday index and user index for the Matter door lock cluster, persisting it to NVM.
 weekdayIndex, userIndex: both one-indexed by the caller; decremented here and validated against their respective max counts.
@@ -188,7 +197,7 @@ Returns DlStatus::kFailure if either index is 0, out of range, or the NVM write 
 **calls** `IsValidUserIndex`, `IsValidWeekdayScheduleIndex`, `WriteConfigBlob`
 
 ### `DlStatus BoltLockManager::GetYeardaySchedule(EndpointId endpointId, uint8_t yearDayIndex, uint16_t userIndex, EmberAfPluginDoorLockYearDaySchedule &schedule)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:518`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:538`
 
 Looks up a stored yearday schedule by yearday index and user index for the Matter door lock cluster.
 yearDayIndex, userIndex: both one-indexed by the caller; decremented here and validated against their respective max counts.
@@ -198,7 +207,7 @@ Returns DlStatus::kFailure if either index is 0 or out of range, kNotFound if th
 **calls** `IsValidUserIndex`, `IsValidYeardayScheduleIndex`
 
 ### `DlStatus BoltLockManager::SetYeardaySchedule(EndpointId endpointId, uint8_t yearDayIndex, uint16_t userIndex, DlScheduleStatus status, uint32_t localStartTime, uint32_t localEndTime)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:544`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:564`
 
 Stores a yearday schedule by yearday index and user index for the Matter door lock cluster, persisting it to NVM.
 yearDayIndex, userIndex: both one-indexed by the caller; decremented here and validated against their respective max counts.
@@ -208,7 +217,7 @@ Returns DlStatus::kFailure if either index is 0, out of range, or the NVM write 
 **calls** `IsValidUserIndex`, `IsValidYeardayScheduleIndex`, `WriteConfigBlob`
 
 ### `DlStatus BoltLockManager::GetHolidaySchedule(EndpointId endpointId, uint8_t holidayIndex, EmberAfPluginDoorLockHolidaySchedule &schedule)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:575`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:594`
 
 Looks up a stored holiday schedule by index for the Matter door lock cluster.
 holidayIndex: one-indexed by the caller; decremented here and validated against kMaxHolidaySchedules.
@@ -218,7 +227,7 @@ Returns DlStatus::kFailure if holidayIndex is 0 or out of range, kNotFound if th
 **calls** `IsValidHolidayScheduleIndex`
 
 ### `DlStatus BoltLockManager::SetHolidaySchedule(EndpointId endpointId, uint8_t holidayIndex, DlScheduleStatus status, uint32_t localStartTime, uint32_t localEndTime, OperatingModeEnum operatingMode)`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:598`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:617`
 
 Stores a holiday schedule by index for the Matter door lock cluster, persisting it to NVM.
 holidayIndex: one-indexed by the caller; decremented here and validated against kMaxHolidaySchedules.
@@ -228,13 +237,13 @@ Returns DlStatus::kFailure if holidayIndex is 0, out of range, or the NVM write 
 **calls** `IsValidHolidayScheduleIndex`, `WriteConfigBlob`
 
 ### `const char * BoltLockManager::lockStateToString(DlLockState lockState) const`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:624`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:643`
 
 Return a human-readable string for a DlLockState value ("Not Fully Locked", "Locked", "Unlocked",
 "Unlatched"), or "Unknown" for kUnknownEnumValue or any unrecognized value.
 
 ### `bool BoltLockManager::ValidatePIN(EndpointId endpointId, const Optional<ByteSpan> &pin, OperationErrorEnum &err) const`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:648`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:667`
 
 Validates an optional PIN against the door lock's stored PIN credentials for a remote operation.
 If no PIN is supplied, succeeds unless the RequirePINforRemoteOperation attribute is true (defaults to not required if the attribute read fails). If a PIN is supplied, succeeds if it exact-matches any occupied PIN credential slot.
@@ -246,7 +255,7 @@ Returns true if no PIN was required or a match was found; false otherwise.
 **calls** `CredentialStorageIndex`
 
 ### `CHIP_ERROR BoltLockManager::InitLockState()`
-`ports/esp32-matter/main/lock/door_lock_manager.cpp:688`
+`ports/esp32-matter/main/lock/door_lock_manager.cpp:707`
 
 Initializes the door lock's runtime state: reads the initial lock state and per-endpoint user/credential capacity attributes (falling back to 5 credentials-per-user and 10 users on read failure), initializes BoltLockMgr with those limits, then loads persisted state from NVM.
 Returns CHIP_NO_ERROR on success; the error from BoltLockMgr().Init() if lock-parameter validation fails; CHIP_ERROR_PERSISTED_STORAGE_VALUE_NOT_FOUND if loading persisted config fails.
