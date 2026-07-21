@@ -30,6 +30,13 @@ itself so nothing is hand-curated to drift:
     path, the "depends on" rows become compact base-name chips (full path
     on hover) instead of comma-separated full paths, and the blurbs drop
     the "@file <name> — " prefix that would repeat the heading above them.
+    The chip and prefix tidy also runs on every module reference page,
+    whose "used by" rows and hero blurbs carry the same noise.
+  * every graph gets a full-screen control: the wrap pins over the viewport
+    with the same drag/zoom behavior, and Esc or the button collapses it.
+  * a sitewide sidebar shim regroups the flat guide list under the same
+    topic captions the landing page derives, and marks each reference
+    directory group with its cluster's color dot from the graphs.
 
 Idempotent for the same reason docs_media.py is: when the page generator is
 not configured, the earlier passes run over a site/ kept from a previous
@@ -40,6 +47,7 @@ after docs_github.py and before the link pass.
 from __future__ import annotations
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -60,8 +68,14 @@ NAV_ANCHOR = '<script defer src="nav.js"></script>'
 # render already uses the tightened layout.
 PRE_SHIM = """<style>.graph-wrap figcaption{margin:.7rem 0 0;font-size:.82rem;color:var(--muted);text-align:center}
 .gv-over .graph-tools{display:none}
-.graph-wrap:not(.gv-over) .graph-shell{cursor:grab}
-.graph-wrap:not(.gv-over) .graph-shell.dragging{cursor:grabbing;user-select:none}
+.graph-shell{cursor:grab}
+.graph-shell.dragging{cursor:grabbing;user-select:none}
+.graph-wrap.gv-full{position:fixed;inset:0;z-index:70;margin:0;padding:.9rem 1.1rem .7rem;background:var(--surface);display:flex;flex-direction:column}
+.graph-wrap.gv-full .graph-shell{flex:1;max-height:none}
+.graph-wrap.gv-full figcaption{flex:none;margin:.6rem 0 0}
+.gv-over.gv-full .graph-tools{display:flex}
+body.gv-lock{overflow:hidden}
+body.gv-lock .doc{animation:none}
 .arch-sec h2 .arch-dir{display:block;font-size:.7rem;font-weight:500;color:var(--faint);font-family:var(--mono);letter-spacing:.04em;margin:0 0 .25rem}</style>
 <script defer id="gv-pre">
 (function(){if(!window.mermaid)return;var orig=mermaid.initialize.bind(mermaid);
@@ -78,18 +92,38 @@ if(c.themeVariables)c.themeVariables.fontSize="15px";orig(c)};})();
 # page at its edges. Fail-soft: no diagrams, no tools, or no CDN and the
 # interval just expires.
 FIT_SHIM = """<script defer id="gv-fit">
-(function(){var n=0,t=setInterval(function(){n++;
+(function(){
+function gvFull(w,x){var shell=w.querySelector(".graph-shell"),svg=shell&&shell.querySelector("svg");
+var on=!w.classList.contains("gv-full");
+if(on){w.dataset.pk=w.dataset.zoom||"1";w.dataset.pl=shell.scrollLeft;w.dataset.pt=shell.scrollTop;
+w.classList.add("gv-full");document.body.classList.add("gv-lock");
+var f=w.querySelector(".graph-tools button[title='Fit to width']");if(f)f.click()}
+else{w.classList.remove("gv-full");document.body.classList.remove("gv-lock");
+if(svg&&w.dataset.pk){var nat=svg.getBoundingClientRect().width/parseFloat(w.dataset.zoom||"1");
+svg.style.width=nat*w.dataset.pk+"px";w.dataset.zoom=w.dataset.pk;
+shell.scrollLeft=w.dataset.pl;shell.scrollTop=w.dataset.pt}}
+x.textContent=on?"\\u2715":"\\u2922";
+x.title=on?"Exit full screen (esc)":"Full screen";x.setAttribute("aria-label",x.title)}
+addEventListener("keydown",function(e){if(e.key!=="Escape")return;
+var f=document.querySelector(".graph-wrap.gv-full");
+if(f){var x=f.querySelector(".gv-x");if(x)x.click()}});
+var n=0,t=setInterval(function(){n++;
 var wraps=document.querySelectorAll(".graph-wrap");var done=0;
 wraps.forEach(function(w){var svg=w.querySelector("svg"),shell=w.querySelector(".graph-shell"),
 b=w.querySelector(".graph-tools button[title='Fit to width']");
-if(svg&&b){done++;if(!w.dataset.fitted){w.dataset.fitted=1;
+if(svg&&b){done++;
+if(!w.querySelector(".gv-x")){var x=document.createElement("button");
+x.type="button";x.className="gv-x";x.textContent="\\u2922";x.title="Full screen";
+x.setAttribute("aria-label","Full screen");x.onclick=function(){gvFull(w,x)};
+b.parentNode.appendChild(x)}
+if(!w.dataset.fitted){w.dataset.fitted=1;
 var h=w.dataset.gvHome&&svg.querySelector('[id*="-'+w.dataset.gvHome+'-"]');
 if(h){var hr=h.getBoundingClientRect(),sr=shell.getBoundingClientRect();
 shell.scrollLeft+=hr.left-sr.left-48;
 shell.scrollTop+=hr.top-sr.top-(shell.clientHeight-hr.height)/2}
 else if(svg.getBoundingClientRect().width>shell.clientWidth)b.click()}}});
 if(wraps.length&&done===wraps.length)clearInterval(t);else if(n>60)clearInterval(t)},120);
-document.querySelectorAll(".graph-wrap:not(.gv-over)").forEach(function(w){
+document.querySelectorAll(".graph-wrap").forEach(function(w){
 var shell=w.querySelector(".graph-shell");if(!shell)return;
 function setK(nk,cx,cy){var svg=shell.querySelector("svg");if(!svg)return;
 var k=parseFloat(w.dataset.zoom||"1");nk=Math.max(.2,Math.min(2.5,nk));if(nk===k)return;
@@ -120,7 +154,7 @@ OVER_CAPTION = (
 DETAIL_CAPTION = (
     "Every module and its imports, grouped and color-keyed by directory. "
     "Opens on the entry point; drag to pan, &#8984;&#8202;scroll or pinch "
-    "to zoom, or use the per-module sections below."
+    "to zoom, &#10530; for full screen, or use the per-module sections below."
 )
 
 # Categorical hues for the directory clusters, one slot per cluster in fixed
@@ -261,7 +295,11 @@ def figures(page: str, mermaid: str) -> tuple[str, dict[str, int]]:
 
     esc = lambda t: html.escape("\n".join(t), quote=False)
     home_attr = f' data-gv-home="{home}"' if home else ""
+    slot_json = json.dumps({c: i for c, i in slots.items()}, sort_keys=True)
     block = (
+        # the cluster -> color-slot map, kept machine-readable so a rerun
+        # over an already-restructured page can rebuild the sidebar shim
+        f'<script type="application/json" id="gv-slots">{slot_json}</script>\n'
         f"{color_css(names, clusters)}\n"
         f'<figure class="graph-wrap gv-over"><div class="graph-shell">'
         f'<pre class="mermaid">{esc(over)}</pre></div>\n'
@@ -277,9 +315,36 @@ HEAD_RE = re.compile(
     r'<h2><a href="([^"]+)"><code>([\w./-]+/)([\w.-]+)</code></a></h2>'
 )
 CHIP_RE = re.compile(r'<a href="([^"]+)"><code>([\w./-]+)</code></a>(?:,\s*)?')
-CHIPS_BLOCK_RE = re.compile(r'(<p class="chips">depends on )(.*?)(</p>)', re.S)
+CHIPS_BLOCK_RE = re.compile(
+    r'(<p class="chips">(?:depends on|used by) )(.*?)(</p>)', re.S
+)
 ATFILE_RE = re.compile(r"<p>@file [\w.-]+ — ")
 ATFILE_BARE_RE = re.compile(r"<p>@file [\w.-]+</p>\n?")
+LEDE_RE = re.compile(r'(<p class="lede">)@file [\w.-]+ — ')
+LEDE_BARE_RE = re.compile(r'<p class="lede">@file [\w.-]+(?:…|\.{3})?</p>\n?')
+
+
+def chip(m: re.Match) -> str:
+    path = m.group(2)
+    return (
+        f'<a href="{m.group(1)}" title="{path}">'
+        f'<code>{path.rsplit("/", 1)[-1]}</code></a> '
+    )
+
+
+def chips_block(m: re.Match) -> str:
+    return m.group(1) + CHIP_RE.sub(chip, m.group(2)).rstrip() + m.group(3)
+
+
+def tidy_page(page: str) -> str:
+    """The same de-noising the architecture sections get, on a module page:
+    base-name chips with the full path on hover, and no "@file <name> — "
+    prefix repeating the file name the hero already shows."""
+    page = CHIPS_BLOCK_RE.sub(chips_block, page)
+    page = LEDE_RE.sub(r"\1", page)
+    page = LEDE_BARE_RE.sub("", page)
+    page = ATFILE_RE.sub("<p>", page)
+    return ATFILE_BARE_RE.sub("", page)
 
 
 def tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]:
@@ -302,20 +367,80 @@ def tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]:
             f'<a href="{m.group(1)}"><code>{m.group(3)}</code></a></h2>'
         )
 
-    def chip(m: re.Match) -> str:
-        path = m.group(2)
-        return f'<a href="{m.group(1)}" title="{path}"><code>{path.rsplit("/", 1)[-1]}</code></a> '
-
-    def chips(m: re.Match) -> str:
-        return m.group(1) + CHIP_RE.sub(chip, m.group(2)).rstrip() + m.group(3)
-
     page, heads = HEAD_RE.subn(head, page)
-    page, blocks = CHIPS_BLOCK_RE.subn(chips, page)
+    page, blocks = CHIPS_BLOCK_RE.subn(chips_block, page)
     # with short headings, a blurb's "@file <name> — " prefix just repeats
     # the heading directly above it
     page = ATFILE_RE.sub("<p>", page)
     page = ATFILE_BARE_RE.sub("", page)
     return page, heads, blocks
+
+
+SLOTS_RE = re.compile(
+    r'<script type="application/json" id="gv-slots">(\{.*?\})</script>'
+)
+BUCKET_RE = re.compile(
+    r'<div class="row-cap">([^<]+)</div>\s*<ul class="rows">(.*?)</ul>', re.S
+)
+ROW_HREF_RE = re.compile(r'<li><a href="([\w.-]+)\.html"')
+
+# Runs after nav.js has built the sidebar tree: regroups the flat guide list
+# under the same topic captions the landing page renders, and marks each
+# reference directory group with its graph cluster's color dot. The color
+# variables are re-declared here because the graph page's copy only ships
+# with the architecture page. Data is baked in at build time (__SLOT__,
+# __BUCKETS__, __VARS__); lookups that miss are simply skipped.
+SIDE_TMPL = """<style>:root{__LIGHT__}
+:root[data-theme="dark"]{__DARK__}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){__DARK__}}
+.gv-dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:var(--c);margin-right:.4em}
+.tree-subcap{padding:.85rem .6rem .15rem;font-size:.6rem;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.group-h .gv-dot{width:.5em;height:.5em;flex:none}</style>
+<script id="gv-side">
+(function(){function go(){var tree=document.getElementById("tree");if(!tree)return;
+var SLOT=__SLOT__,BUCKETS=__BUCKETS__;
+function clus(d){d=d.replace(/^modules\\//,"");
+var m=d.match(/^woz_uwb\\/src\\/([a-z_]+)/);return m?"woz_uwb/"+m[1]:d.split("/")[0]}
+var cap="";
+Array.prototype.slice.call(tree.children).forEach(function(el){
+if(el.classList.contains("tree-cap")){cap=el.textContent;return}
+if(!el.classList.contains("group"))return;
+var h=el.querySelector(".group-h");if(!h||h.querySelector(".gv-dot"))return;
+var rest=h.textContent.replace(/^\\s*\\u2304\\s*/,"").trim();
+var dir=(cap==="repository"?"":cap+"/")+rest;
+var s=SLOT[clus(dir)];if(s==null)return;
+var d=document.createElement("i");d.className="gv-dot";
+d.style.setProperty("--c","var(--gv"+s+")");
+h.insertBefore(d,h.childNodes[1]||null)});
+var g=tree.querySelector(".item-g"),gbox=g&&g.parentElement;
+if(gbox&&BUCKETS.length){var bySlug={};
+Array.prototype.slice.call(gbox.children).forEach(function(a){
+var m=(a.getAttribute("href")||"").match(/^([\\w.-]+)\\.html/);if(m)bySlug[m[1]]=a});
+var frag=document.createDocumentFragment(),used={};
+BUCKETS.forEach(function(b){
+var hit=b[1].filter(function(s){return bySlug[s]});if(!hit.length)return;
+var c=document.createElement("div");c.className="tree-subcap";c.textContent=b[0];
+frag.appendChild(c);
+hit.forEach(function(s){frag.appendChild(bySlug[s]);used[s]=1})});
+var left=Object.keys(bySlug).filter(function(s){return !used[s]});
+if(left.length){var c=document.createElement("div");c.className="tree-subcap";
+c.textContent="More";frag.appendChild(c);
+left.forEach(function(s){frag.appendChild(bySlug[s])})}
+gbox.textContent="";gbox.appendChild(frag)}}
+if(document.readyState==="loading")addEventListener("DOMContentLoaded",go);
+else go()})();
+</script>"""
+
+
+def side_shim(slots: dict[str, int], buckets: list[tuple[str, list[str]]]) -> str:
+    light = ";".join(f"--gv{i}:{PALETTE[i % 8][0]}" for i in range(len(slots)))
+    dark = ";".join(f"--gv{i}:{PALETTE[i % 8][1]}" for i in range(len(slots)))
+    return (
+        SIDE_TMPL.replace("__LIGHT__", light)
+        .replace("__DARK__", dark)
+        .replace("__SLOT__", json.dumps(slots, sort_keys=True))
+        .replace("__BUCKETS__", json.dumps(buckets))
+    )
 
 
 def main() -> int:
@@ -328,6 +453,9 @@ def main() -> int:
     slots: dict[str, int] = {}
     if 'class="graph-wrap gv-over"' in page:
         print("    architecture graphs already restructured")
+        m = SLOTS_RE.search(page)
+        if m:
+            slots = json.loads(m.group(1))
     else:
         m = FIGURE_RE.search(page)
         if not m:
@@ -361,24 +489,44 @@ def main() -> int:
     if dirty:
         ARCH.write_bytes(page.encode())
 
-    shimmed = kept = 0
+    # sidebar shim data: the guide topics come from the landing page's own
+    # captioned guide groups, so the grouping never drifts from it
+    buckets: list[tuple[str, list[str]]] = []
+    index = SITE / "index.html"
+    if index.is_file():
+        for m in BUCKET_RE.finditer(index.read_text()):
+            slugs = ROW_HREF_RE.findall(m.group(2))
+            if slugs:
+                buckets.append((m.group(1), slugs))
+    side = side_shim(slots, buckets).encode()
+
+    shimmed = kept = tidied = sided = 0
     anchor = NAV_ANCHOR.encode()
     for p in sorted(SITE.glob("*.html")):
         content = p.read_bytes()
-        if b'class="mermaid"' not in content:
-            continue
-        if b'id="gv-pre"' in content:
-            kept += 1
-            continue
-        if anchor not in content:
-            continue
-        content = content.replace(
-            anchor, PRE_SHIM.encode() + anchor + FIT_SHIM.encode(), 1
-        )
-        p.write_bytes(content)
-        shimmed += 1
+        orig = content
+        if p != ARCH:
+            text = content.decode()
+            t = tidy_page(text)
+            if t != text:
+                tidied += 1
+                content = t.encode()
+        if b'class="mermaid"' in content:
+            if b'id="gv-pre"' in content:
+                kept += 1
+            elif anchor in content:
+                content = content.replace(
+                    anchor, PRE_SHIM.encode() + anchor + FIT_SHIM.encode(), 1
+                )
+                shimmed += 1
+        if b'id="gv-side"' not in content and anchor in content:
+            content = content.replace(anchor, anchor + side, 1)
+            sided += 1
+        if content != orig:
+            p.write_bytes(content)
     note = f" ({kept} already shimmed)" if kept else ""
     print(f"    layout + auto-fit shims on {shimmed} page(s){note}")
+    print(f"    {tidied} page(s) de-noised, sidebar shim on {sided} page(s)")
     return 0
 
 

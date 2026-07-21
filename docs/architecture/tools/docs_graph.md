@@ -32,6 +32,13 @@ itself so nothing is hand-curated to drift:
     path, the "depends on" rows become compact base-name chips (full path
     on hover) instead of comma-separated full paths, and the blurbs drop
     the "@file <name> — " prefix that would repeat the heading above them.
+    The chip and prefix tidy also runs on every module reference page,
+    whose "used by" rows and hero blurbs carry the same noise.
+  * every graph gets a full-screen control: the wrap pins over the viewport
+    with the same drag/zoom behavior, and Esc or the button collapses it.
+  * a sitewide sidebar shim regroups the flat guide list under the same
+    topic captions the landing page derives, and marks each reference
+    directory group with its cluster's color dot from the graphs.
 
 Idempotent for the same reason docs_media.py is: when the page generator is
 not configured, the earlier passes run over a site/ kept from a previous
@@ -41,7 +48,7 @@ after docs_github.py and before the link pass.
 ## API
 
 ### `stem_dirs(page: str) -> dict[str, str]`
-`tools/docs_graph.py:154`
+`tools/docs_graph.py:188`
 
 module name -> its source directory, from the page's file headings.
 
@@ -51,7 +58,7 @@ is the one the import graph describes, so modules/ wins.
 **called by** `figures`
 
 ### `color_css(names: list[str], clusters: dict[str, set[str]]) -> str`
-`tools/docs_graph.py:177`
+`tools/docs_graph.py:211`
 
 Theme-aware cluster colors: tinted node fills, hue strokes, dot vars.
 
@@ -61,8 +68,17 @@ win over the OS preference in both directions.
 
 **called by** `figures`
 
+### `tidy_page(page: str) -> str`
+`tools/docs_graph.py:339`
+
+The same de-noising the architecture sections get, on a module page:
+base-name chips with the full path on hover, and no "@file <name> — "
+prefix repeating the file name the hero already shows.
+
+**called by** `main`
+
 ### `tidy_sections(page: str, slots: dict[str, int]) -> tuple[str, int, int]`
-`tools/docs_graph.py:285`
+`tools/docs_graph.py:350`
 
 Short file-name headings with a directory eyebrow; base-name chips.
 
@@ -71,15 +87,16 @@ eyebrow, correlating each section with the graphs above.
 
 **called by** `main`
 
-<details><summary>Undocumented (8)</summary>
+<details><summary>Undocumented (9)</summary>
 
 - `parse_edges`
 - `cluster_of`
 - `figures`
 - `cluster_key`
-- `head`
 - `chip`
-- `chips`
+- `chips_block`
+- `head`
+- `side_shim`
 - `main`
 
 </details>
