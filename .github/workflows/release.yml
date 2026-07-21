@@ -1,0 +1,187 @@
+# Release flash bundles — on a version tag, build the two end-user targets and
+# attach self-contained bundles (firmware + flash script + FLASH.md) to a
+# GitHub release. Bundle sources live in release/<target>/.
+#
+# Deliberately cache-free, unlike firmware-builds.yml: a release binary must
+# not depend on restored CI state (a poisoned workspace or compiler cache would
+# flow straight into shipped firmware), and releases are rare enough that a
+# cold build is a price worth paying. Same containers and scripts as
+# firmware-builds.yml, so a green gate there predicts a green build here.
+#
+# A workflow_dispatch run from a branch exercises the whole pipeline and leaves
+# the bundles as run artifacts; the release itself is created only for tags.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Only the release job needs more than read; it raises its own scope.
+permissions:
+  contents: read
+
+# One release build at a time per ref, and never cancel one mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  # nRF5340 DK: cold-bootstrap the pinned west workspace, build the sysbuild
+  # image, and bundle both cores' hex files with the flash script + guide.
+  nrf5340dk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      # Same digest as firmware-builds.yml; see there for the BASH_ENV /
+      # ALIRO_TOOLCHAIN=env rationale.
+      image: ghcr.io/nrfconnect/sdk-nrf-toolchain@sha256:f24d8932ff081ebcd8da9c248f4449bdabe461c0620a7a4ac9e95eb577ba2276 # v3.3.0
+    env:
+      ALIRO_TOOLCHAIN: env
+      ALIRO_SHALLOW: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: bootstrap the workspace
+        # One retry: bootstrap is resumable (fetch sentinel), so a transient
+        # fetch failure costs a resume, not the whole multi-GB fetch.
+        run: |
+          ./scripts/bootstrap.sh || {
+            echo "::warning::bootstrap failed once — retrying (resumes the fetch)"
+            ./scripts/bootstrap.sh
+          }
+      - name: build (nrf5340dk/nrf5340/cpuapp, sysbuild)
+        run: ./scripts/build.sh build
+      - name: assemble the bundle
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          out=dist/openaliro-nrf5340dk
+          mkdir -p "$out"
+          cp build/merged.hex build/merged_CPUNET.hex "$out"/
+          cp release/nrf5340dk/FLASH.md release/nrf5340dk/flash.sh "$out"/
+          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/asxeem/openaliro\n' \
+            "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openaliro-nrf5340dk
+          path: dist/openaliro-nrf5340dk
+          if-no-files-found: error
+
+  # ESP32-S3 Matter lock: fetch + install esp-matter at the bench-validated
+  # revision, build the app, and merge bootloader + partition table + app into
+  # one image flashable at 0x0.
+  esp32-matter-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: espressif/idf@sha256:b9f2d6ea1c19e0c9f7959bdb74a9e3c775642f9d0f3b841937c5fa3363db892b # v5.5.4
+    env:
+      # The bench-validated esp-matter revision (same as firmware-builds.yml).
+      ESP_MATTER_REV: 93b168027bf95f4e467230345ad1f2d147eb1f6b
+      ESP_MATTER_PATH: /opt/esp/esp-matter
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: fetch + install esp-matter
+        # Pinned-SHA clone (git clone --branch takes no SHA, so init + fetch),
+        # then the setup esp-matter documents: shallow esp32 submodules and
+        # install.sh, minus the chip-tool/chip-cert host tools the firmware
+        # build never runs. One from-scratch retry absorbs transient fetch
+        # failures. Subshell + && chain on purpose: the cd stays contained,
+        # and `set -e` is suppressed inside a `||` context, so an explicit
+        # chain is the only reliable early-exit.
+        run: |
+          . "$IDF_PATH/export.sh"
+          setup() (
+            rm -rf "$ESP_MATTER_PATH" &&
+            git init -q "$ESP_MATTER_PATH" &&
+            cd "$ESP_MATTER_PATH" &&
+            git remote add origin https://github.com/espressif/esp-matter.git &&
+            git fetch -q --depth 1 origin "$ESP_MATTER_REV" &&
+            git checkout -q FETCH_HEAD &&
+            git submodule update --init --depth 1 &&
+            ./connectedhomeip/connectedhomeip/scripts/checkout_submodules.py \
+              --platform esp32 linux --shallow &&
+            ./install.sh --no-host-tool
+          )
+          setup || {
+            echo "::warning::esp-matter setup failed once — retrying from scratch"
+            setup
+          }
+      - name: build the matter-lock app (esp32s3) and merge one image
+        working-directory: ports/esp32/apps/matter-lock
+        run: |
+          . "$IDF_PATH/export.sh"
+          . "$ESP_MATTER_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
+          idf.py merge-bin -o openaliro-matter-lock.bin
+      - name: assemble the bundle
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          out=dist/openaliro-esp32-matter-lock
+          mkdir -p "$out"
+          cp ports/esp32/apps/matter-lock/build/openaliro-matter-lock.bin "$out"/
+          cp release/esp32-matter-lock/FLASH.md release/esp32-matter-lock/flash.sh "$out"/
+          printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/asxeem/openaliro\n' \
+            "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openaliro-esp32-matter-lock
+          path: dist/openaliro-esp32-matter-lock
+          if-no-files-found: error
+
+  # Zip each bundle and publish the release. Tags only: a dispatch run stops at
+  # the artifacts above.
+  release:
+    needs: [nrf5340dk, esp32-matter-lock]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release and upload its assets
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: dist
+      - name: package the bundles
+        # Artifact transport drops file modes, so restore the scripts' exec bit
+        # before zipping.
+        run: |
+          chmod +x dist/*/flash.sh
+          mkdir out
+          for d in dist/*/; do
+            b="$(basename "$d")"
+            (cd dist && zip -qr "../out/$b.zip" "$b")
+          done
+          (cd out && sha256sum ./*.zip > SHA256SUMS.txt)
+          ls -l out
+      - name: create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          notes="$(mktemp)"
+          {
+            echo "Self-contained flash bundles: each zip holds the firmware, a flash"
+            echo "script, and a FLASH.md with the hardware list, wiring, and first-run"
+            echo "steps. Evaluation firmware with Matter test certificates."
+            echo
+            echo "| Bundle | Hardware | What you get |"
+            echo "|---|---|---|"
+            echo "| openaliro-nrf5340dk | nRF5340 DK + DWM3000EVB + X-NUCLEO-NFC12A1 | NFC tap + UWB approach unlock, Matter over Thread |"
+            echo "| openaliro-esp32-matter-lock | ESP32-S3 + DWM3000EVB | Matter lock over Wi-Fi, BLE + UWB approach unlock |"
+            echo
+            echo '```'
+            cat out/SHA256SUMS.txt
+            echo '```'
+          } > "$notes"
+          gh release create "$TAG" --repo "$REPO" --verify-tag \
+            --title "openaliro $TAG" --notes-file "$notes" \
+            out/*.zip out/SHA256SUMS.txt
