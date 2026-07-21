@@ -300,6 +300,98 @@ int main(void)
 	T_OK("split.noC.enc=S1", memcmp(ek, blk160 + 32, 32) == 0);
 	T_OK("split.noC.dec=S2", memcmp(dk, blk160 + 64, 32) == 0);
 
+	printf("\n== expedited-fast phase (Aliro §14.3/§14.4 worked example) ==\n");
+	{
+		/* §14.3: Kpersistent = derive_key32(IKM=Kdh, salt=salt_persistent,
+		 * info=credential_ephemeral_pub_x). salt_persistent (type 2) appends the
+		 * Access Credential public-key X. NFC transport (iface 0x5E), standard
+		 * AUTH0 flag 0x0001 (command_parameters 0x00 || auth_policy 0x01). */
+		uint8_t kdh[32], rgik_x[32], reph_x[32], f_rid[32], s3opt[32], a5[16];
+		uint8_t f_txid[16], ceph_x[32], fsalt[ALIRO_SALT_MAX], kpers[32];
+		size_t fsalt_len = 0;
+		int a5n = uh(a5, "a508800200005c020100");
+
+		uh(kdh, "cd227f01f917ad1dd5252db51c5ad3da1c3028be750a0f4e69c6a5624fca271c");
+		uh(rgik_x, "b62d9b8f494f2f43a07a7db7e965865d04feeabe4e9c3b8a2f5a544ee2a9c60f");
+		uh(reph_x, "9696afe33de58b7d3253d1cba86d14147c16d455e8a27373b38d454af21b70e7");
+		uh(f_rid, "00112233445566778899aabbccddeeffffeeddccbbaa99887766554433221100");
+		uh(s3opt, "88f6f8f2f1e35a58879e72d9ea81957e8964c3d3c566eb9d41c83d0d8c63a230");
+		uh(f_txid, "4165a83667ad0af5ab115247424822e0");
+		uh(ceph_x, "5d75ab60136a2c54ff27b799ee157f3f3329435c0df608de904c920ac29f72bd");
+
+		T_OK("kpers.salt.build",
+		     aliro_salt_build(ALIRO_SALT_KPERSISTENT, f_txid, rgik_x, reph_x, f_rid,
+				      ALIRO_IFACE_NFC, 0x0100, 0x00, 0x01, s3opt, a5, (size_t)a5n,
+				      fsalt, &fsalt_len) == 0);
+		aliro_crypto_derive_key32(kdh, fsalt, fsalt_len, ceph_x, kpers);
+		chk("kpersistent", kpers, 32,
+		    "dd309b1738bcec549f4d6e73c6d15bf595f783d729c8ac0fa7a76ec6c8821a2d");
+	}
+	{
+		/* §14.4: fast block = derive_block(IKM=Kpersistent, salt=salt_fast,
+		 * info=credential_ephemeral_pub_x), then cryptogram verify. Fast AUTH0 flag
+		 * 0x0101 (command_parameters 0x01 || auth_policy 0x01). */
+		uint8_t kpers[32], rgik_x[32], reph_x[32], f_rid[32], s3opt[32], a5[16];
+		uint8_t f_txid[16], ceph_x[32], fsalt[ALIRO_SALT_MAX], fblk[160];
+		size_t fsalt_len = 0;
+		int a5n = uh(a5, "a508800200005c020100");
+
+		uh(kpers, "dd309b1738bcec549f4d6e73c6d15bf595f783d729c8ac0fa7a76ec6c8821a2d");
+		uh(rgik_x, "b62d9b8f494f2f43a07a7db7e965865d04feeabe4e9c3b8a2f5a544ee2a9c60f");
+		uh(reph_x, "de8639f30ff8c502559db84059dbc7fde720044a7ed8717eddf0481315313ed3");
+		uh(f_rid, "00112233445566778899aabbccddeeffffeeddccbbaa99887766554433221100");
+		uh(s3opt, "88f6f8f2f1e35a58879e72d9ea81957e8964c3d3c566eb9d41c83d0d8c63a230");
+		uh(f_txid, "2701e4fe10d21e15b216c550b0c5ee68");
+		uh(ceph_x, "507806c74a52a8e9b34d0796e4e2382ab6f9d9d7417179fc338429bda1c2fff9");
+
+		T_OK("fast.salt.build",
+		     aliro_salt_build(ALIRO_SALT_CRYPTOGRAM, f_txid, rgik_x, reph_x, f_rid,
+				      ALIRO_IFACE_NFC, 0x0100, 0x01, 0x01, s3opt, a5, (size_t)a5n,
+				      fsalt, &fsalt_len) == 0);
+		chk("fast.salt", fsalt, fsalt_len,
+		    "b62d9b8f494f2f43a07a7db7e965865d04feeabe4e9c3b8a2f5a544ee2a9c60f"
+		    "566f6c6174696c654661737400112233445566778899aabbccddeeffffeeddcc"
+		    "bbaa998877665544332211005e5c020100de8639f30ff8c502559db84059dbc7"
+		    "fde720044a7ed8717eddf0481315313ed32701e4fe10d21e15b216c550b0c5ee"
+		    "680101a508800200005c02010088f6f8f2f1e35a58879e72d9ea81957e8964c3"
+		    "d3c566eb9d41c83d0d8c63a230");
+
+		aliro_crypto_derive_block(kpers, fsalt, fsalt_len, ceph_x, fblk);
+		chk("fast.CryptogramSK", fblk + ALIRO_CRYPTOGRAM_SK_OFFSET, 32,
+		    "46b35933b497ead9d72e024b267ce1db9a59ba54fc73d46bda3149a8b047bcaf");
+		chk("fast.ExpeditedSKReader", fblk + 32, 32,
+		    "e1010bdbdc2acf8e9ca3a31680439995aca6261500e870eb349b24ab909b1982");
+		chk("fast.ExpeditedSKDevice", fblk + 64, 32,
+		    "aa3d35bf0b073b1321404fc49c4d0fd8a31828f13f4d2fa27da3290796807666");
+		chk("fast.BleSK", fblk + ALIRO_BLESK_OFFSET, 32,
+		    "576603533baa95bbcf91ceee39dfc8b07e1d09b0eefbf2b7d10648cf038e4563");
+		chk("fast.URSK", fblk + ALIRO_URSK_OFFSET, 32,
+		    "c967a070ea1c609352632cfaca5ed0bd20ee554226163bc27fe0075313d9f8fe");
+
+		/* The fast block uses the without-C layout, so split(block,0) yields the
+		 * fast secure-channel keys ExpeditedSKReader (enc) / ExpeditedSKDevice (dec). */
+		uint8_t fe[32], fd[32], fu[32];
+
+		aliro_crypto_split(fblk, 0, fe, fd, fu);
+		T_OK("fast.split=ExpeditedSK",
+		     memcmp(fe, fblk + 32, 32) == 0 && memcmp(fd, fblk + 64, 32) == 0);
+
+		/* §8.3.1.11: verify the cryptogram under CryptogramSK (IV=0, no AAD). */
+		uint8_t csk[32], crg[ALIRO_CRYPTOGRAM_LEN], pt[ALIRO_CRYPTOGRAM_LEN];
+
+		uh(csk, "46b35933b497ead9d72e024b267ce1db9a59ba54fc73d46bda3149a8b047bcaf");
+		uh(crg, "ba76234a1e427f9e463106251fb9e9edc5f5812f59fd887d4e57eb0bc544b7cb"
+			"9d368c4dedadf782d520a91f9666b9091e0973894522c04b142f6447b596942a");
+		T_OK("cryptogram.verify",
+		     aliro_crypto_verify_cryptogram(csk, crg, ALIRO_CRYPTOGRAM_LEN, pt) == 0);
+		chk("cryptogram.plaintext", pt, ALIRO_CRYPTOGRAM_LEN - ALIRO_GCM_TAG_LEN,
+		    "5e02003f911400000000000000000000000000000000000000009214000000"
+		    "0000000000000000000000000000000000");
+		csk[0] ^= 1;
+		T_OK("cryptogram.wrong-key-rejected",
+		     aliro_crypto_verify_cryptogram(csk, crg, ALIRO_CRYPTOGRAM_LEN, pt) < 0);
+	}
+
 	if (fails) {
 		printf("\nRESULT: %d FAIL\n", fails);
 		return 1;

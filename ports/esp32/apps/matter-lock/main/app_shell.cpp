@@ -9,6 +9,7 @@
 
 #include <esp_console.h>
 #include <esp_app_desc.h>
+#include <esp_log.h>
 #include <esp_idf_version.h>
 #include <linenoise/linenoise.h>
 
@@ -21,6 +22,7 @@
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader.h>
 #include <woz_uwb_facade.h>
+#include <woz_diag.h> // woz_uwb_diag_on — the raw per-frame UWB trace gate
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -176,6 +178,24 @@ static int cmd_aliro(int argc, char **argv)
 	printf("usage: aliro <prov|trust|clear>\n");
 	return 0;
 }
+
+// Shell handler for "uwbdiag": toggles the raw per-frame UWB trace (cia#/PREPOLL/
+// POLL/RESPTX/FINALDATA/DIST/GATE). Boot default off: the trace prints
+// synchronously from the UWB task and costs ranging-slot deadlines, so turn it
+// on only to debug the radio path. With no argument, prints the current state.
+static int cmd_uwbdiag(int argc, char **argv)
+{
+	if (argc == 2 && strcmp(argv[1], "on") == 0) {
+		woz_uwb_diag_on = 1;
+	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
+		woz_uwb_diag_on = 0;
+	} else if (argc != 1) {
+		printf("usage: uwbdiag [on|off]\n");
+		return 0;
+	}
+	printf("uwb per-frame trace: %s\n", woz_uwb_diag_on ? "on" : "off");
+	return 0;
+}
 #endif /* CONFIG_ENABLE_ALIRO_BLE_UWB */
 
 /* Both bolt commands hop to the Matter task: BoltLockMgr drives cluster
@@ -223,7 +243,46 @@ static int cmd_factoryreset(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 	printf("factory reset: erasing and rebooting\n");
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+	/* esp_matter::factory_reset() erases only Matter's own NVS namespaces; the
+	 * Aliro reader identity + trust store live in "aliro_prov" and would
+	 * survive, so the old home's phones could still authenticate after the
+	 * reset. Revert to the dev identity (RAM + NVS) before rebooting. */
+	aliro_reader_provision_clear();
+#endif
 	esp_matter::factory_reset();
+	return 0;
+}
+
+/* Runtime log knob: the boot default is WARN (blocking UART writes in the
+ * protocol callbacks cost walk-up latency), so bench diagnostics need a way
+ * back up without a reflash. The compile-time ceiling is DEBUG
+ * (CONFIG_LOG_MAXIMUM_LEVEL); note the shared woz_aliro/woz_uwb sources log
+ * under their module tags (aliro_reader, aliro_ranging, ...). */
+static int cmd_log(int argc, char **argv)
+{
+	static const struct {
+		const char *name;
+		esp_log_level_t level;
+	} levels[] = {
+		{"none", ESP_LOG_NONE},   {"error", ESP_LOG_ERROR}, {"warn", ESP_LOG_WARN},
+		{"info", ESP_LOG_INFO},   {"debug", ESP_LOG_DEBUG}, {"verbose", ESP_LOG_VERBOSE},
+	};
+
+	if (argc == 3) {
+		for (size_t i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
+			if (strcmp(argv[2], levels[i].name) == 0) {
+				esp_log_level_set(argv[1], levels[i].level);
+				printf("log: %s -> %s\n", argv[1], levels[i].name);
+				return 0;
+			}
+		}
+	}
+	printf("usage: log <tag|*> <none|error|warn|info|debug|verbose>\n"
+	       "boot default warn; compile-time ceiling debug\n"
+	       "note: chip[..] progress/detail logs are compiled out; only chip errors\n"
+	       "remain, and they respond to * only (rebuild with\n"
+	       "CONFIG_LOG_DEFAULT_LEVEL_INFO=y for full chip diagnostics)\n");
 	return 0;
 }
 
@@ -283,7 +342,16 @@ void app_shell_start(void)
 			 "empty trust store",
 		 .hint = NULL,
 		 .func = cmd_aliro},
+		{.command = "uwbdiag",
+		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off; "
+			 "costs slot deadlines)",
+		 .hint = NULL,
+		 .func = cmd_uwbdiag},
 #endif
+		{.command = "log",
+		 .help = "log <tag|*> <level>: runtime log level (boot default warn)",
+		 .hint = NULL,
+		 .func = cmd_log},
 		{.command = "factoryreset",
 		 .help = "erase all Matter state and reboot",
 		 .hint = NULL,

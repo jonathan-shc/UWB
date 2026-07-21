@@ -33,6 +33,7 @@
 #include "mbedtls/aes.h"
 
 #include "aliro_ble.h"
+#include "aliro_lat.h"
 
 static const char *TAG = "aliro_ble";
 
@@ -348,8 +349,45 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 			 event->connect.status);
 		if (event->connect.status != 0) {
 			aliro_advertise(); /* failed; keep advertising */
+			return 0;
+		}
+		aliro_lat_begin(); /* walk-up t=0 */
+		{
+			/* The Aliro transaction is 15-20 lock-step round trips, so the
+			 * connection interval is nearly linear latency. Ask for Apple's
+			 * 15 ms floor (units: interval 1.25 ms, timeout 10 ms); iOS may
+			 * settle anywhere in [15, 30] ms — still well under its ~30+ ms
+			 * default. Best-effort: a rejected request keeps the old params. */
+			struct ble_gap_upd_params params = {
+				.itvl_min = 12, /* 15 ms */
+				.itvl_max = 24, /* 30 ms */
+				.latency = 0,
+				.supervision_timeout = 400, /* 4 s */
+			};
+			int rc = ble_gap_update_params(event->connect.conn_handle, &params);
+
+			if (rc != 0) {
+				ESP_LOGW(TAG, "conn param update request rc=%d", rc);
+			}
 		}
 		return 0;
+	case BLE_GAP_EVENT_CONN_UPDATE: {
+		/* W so it lands in the default WARN console: this one line per connect
+		 * is the only evidence of whether iOS honored the 15 ms interval
+		 * request above (the interval bounds the lock-step transaction). */
+		struct ble_gap_conn_desc desc;
+
+		if (event->conn_update.status == 0 &&
+		    ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0) {
+			ESP_LOGW(TAG, "conn update: itvl=%u us latency=%u timeout=%u ms",
+				 (unsigned)desc.conn_itvl * 1250u, desc.conn_latency,
+				 (unsigned)desc.supervision_timeout * 10u);
+		} else {
+			ESP_LOGW(TAG, "conn update failed: status=%d",
+				 event->conn_update.status);
+		}
+		return 0;
+	}
 	case BLE_GAP_EVENT_DISCONNECT:
 		ESP_LOGI(TAG, "GAP disconnect reason=%d", event->disconnect.reason);
 		aliro_advertise();

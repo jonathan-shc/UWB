@@ -19,6 +19,9 @@
 #include "woz_diag.h"           /* DIAGK — verbose per-frame trace, gated off in pretty mode */
 #include "uwb_rxdiag.h"         /* uwb_rxdiag_stream_get — the `aliro log` runtime toggle */
 
+/* DIAGK runtime gate — default is per-platform; see woz_diag.h for the rationale. */
+volatile int woz_uwb_diag_on = WOZ_UWB_DIAG_DEFAULT;
+
 #if defined(CONFIG_WOZ_PRETTY_SHELL)
 #include "woz_log.h"
 /* Pretty mode: one curated line per ranging block replaces the per-frame trace. */

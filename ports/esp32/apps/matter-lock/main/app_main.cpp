@@ -14,6 +14,7 @@
 
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <nvs_flash.h>
 #if CONFIG_PM_ENABLE
 #include <esp_pm.h>
@@ -32,14 +33,18 @@
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
 #include <setup_payload/OnboardingCodesUtil.h>
+#include <setup_payload/QRCodeSetupPayloadGenerator.h> // kMaxQRCodeBase38RepresentationLength
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
+#include <aliro_lat.h>
 #include <woz_uwb_facade.h>
 #include "door_lock_manager.h"
 #include <platform/PlatformManager.h>
 #include <vector>
 #include "host/ble_gatt.h"                 // struct ble_gatt_svc_def (NimBLE)
+#include "host/ble_gap.h"                  // ble_gap_adv_active()
+#include "host/ble_hs.h"                   // ble_hs_synced()
 #include <platform/ESP32/BLEManagerImpl.h> // BLEMgrImpl().ConfigureExtraServices()
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -108,8 +113,12 @@ static const uint16_t s_decryption_key_len = decryption_key_end - decryption_key
 // advertiser: after commissioning, or immediately when already paired). A trusted
 // UWB range then drives the Matter lock to Unlocked. This replaces the old handoff,
 // which crashed because NimBLE can't be re-inited after Matter reclaims BLE.
-#define ALIRO_UNLOCK_RANGE_CM 100 // approach threshold: unlock at/under this (bench-tunable)
-#define ALIRO_RELOCK_RANGE_CM 150 // depart threshold: relock past this (hysteresis > unlock)
+#define ALIRO_UNLOCK_RANGE_CM 100  // approach threshold: unlock at/under this (median cm)
+#define ALIRO_RELOCK_RANGE_CM 250  // depart threshold: relock past this — wide band vs UWB range noise
+#define ALIRO_RANGE_MEDIAN_N  5     // trusted-range samples in the spike-rejecting median filter
+#define ALIRO_NEAR_DWELL      2     // consecutive median <= UNLOCK before the bolt opens
+#define ALIRO_FAR_DWELL       3     // consecutive median >= RELOCK before the bolt closes
+#define ALIRO_PEER_GONE_MS    1500  // no ranging activity this long -> peer left -> relock + secured
 
 // Resolve the Matter user that owns the credential the reader authenticated, so the LockOperation
 // event names who operated the lock. Without it the event is anonymous and Apple Home, unable to
@@ -136,64 +145,194 @@ static app::DataModel::Nullable<uint16_t> aliro_operating_user(void)
 	return app::DataModel::MakeNullable(user_index);
 }
 
+// Drive the bolt from the approach controller. Both hop to the Matter task (the only thread allowed
+// to touch the DoorLock cluster). Unlock also stamps the walk-up latency mark on its first execution.
+static void schedule_bolt_unlock(void)
+{
+	chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+		BoltLockMgr().Unlock(door_lock_endpoint_id,
+				     chip::app::Clusters::DoorLock::OperationSourceEnum::kAliro,
+				     aliro_operating_user());
+		// Stamped after Unlock() runs on the Matter task, so the trace measures
+		// execution; report only when newly stamped so a re-unlock does not reprint.
+		if (aliro_lat_mark(ALIRO_LAT_BOLT_DRIVEN)) {
+			aliro_lat_report();
+		}
+	});
+}
+
+static void schedule_bolt_lock(void)
+{
+	chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
+		BoltLockMgr().Lock(door_lock_endpoint_id,
+				   chip::app::Clusters::DoorLock::OperationSourceEnum::kAliro,
+				   aliro_operating_user());
+	});
+}
+
+// Median of the first n samples of win (n in [1, ALIRO_RANGE_MEDIAN_N]). Rejects the metre-scale
+// spikes in the per-block UWB distance without the lag of a running average.
+static int32_t aliro_range_median(const int32_t *win, int n)
+{
+	int32_t t[ALIRO_RANGE_MEDIAN_N];
+
+	for (int i = 0; i < n; i++) {
+		t[i] = win[i];
+	}
+	for (int i = 1; i < n; i++) { /* insertion sort; n <= 5 */
+		int32_t v = t[i];
+		int j = i - 1;
+
+		while (j >= 0 && t[j] > v) {
+			t[j + 1] = t[j];
+			j--;
+		}
+		t[j + 1] = v;
+	}
+	return t[n / 2];
+}
+
+// Range-latch listener: runs on the UWB RX path, so it only stamps the latency
+// trace and wakes the reader task; the unlock decision itself stays on the task.
+static void on_uwb_range(void)
+{
+	aliro_lat_mark(ALIRO_LAT_FIRST_RANGE);
+
+	int32_t cm;
+	if (woz_uwb_trusted_range_cm(&cm)) {
+		aliro_lat_mark(ALIRO_LAT_TRUSTED_RANGE);
+	}
+	if (aliro_reader_task_handle == nullptr) {
+		return;
+	}
+	if (xPortInIsrContext()) {
+		BaseType_t woken = pdFALSE;
+		vTaskNotifyGiveFromISR(aliro_reader_task_handle, &woken);
+		portYIELD_FROM_ISR(woken);
+	} else {
+		xTaskNotifyGive(aliro_reader_task_handle);
+	}
+}
+
 // Background task that starts the Aliro reader and drives approach-based lock/unlock from UWB range.
-// Delays 1 s at startup to let Matter's BLE host finish syncing before the reader takes over the
-// shared legacy advertiser, then calls aliro_reader_start_attached().
-// Runs forever as the sole auto-lock driver (the fixed Matter auto-relock is disabled): unlocks when
-// a trusted peer's range is within ALIRO_UNLOCK_RANGE_CM, holds while present, and relocks when the
-// peer moves past ALIRO_RELOCK_RANGE_CM or disconnects. Uses hysteresis (relock band wider than
-// unlock band) to avoid chatter on range jitter. Sends the phone a "Reader Status Changed" BLE
-// notification on each transition so the Wallet unlock animation fires; the notification is a no-op
-// if the ranging session has already dropped. Polls every 200 ms.
+// Waits for the shared NimBLE host to be usable (host synced, Matter's advertiser released) before
+// calling aliro_reader_start_attached(), instead of sleeping a flat second. Then runs forever as the
+// sole auto-lock driver (the fixed Matter auto-relock is disabled). See the controller comment inside
+// for how the noisy per-block UWB distance is conditioned into stable grant / unlock / relock events.
 static void aliro_reader_task(void *arg)
 {
-	// Give Matter's host time to finish syncing and stop advertising before we
-	// take over the (single, shared) legacy advertiser.
-	vTaskDelay(pdMS_TO_TICKS(1000));
+	// The reader can only take the (single, shared) legacy advertiser once the
+	// host is synced and Matter has released it — Matter stops advertising on
+	// commissioning-complete and never starts when already commissioned. Wait on
+	// that condition, capped so a stuck advertiser still lets the start attempt
+	// run (and log its failure) rather than hanging the reader forever.
+	for (int waited_ms = 0; waited_ms < 5000; waited_ms += 50) {
+		if (ble_hs_synced() && ble_gap_adv_active() == 0) {
+			break;
+		}
+		vTaskDelay(pdMS_TO_TICKS(50));
+	}
+
+	woz_uwb_set_range_listener(on_uwb_range);
 
 	int rc = aliro_reader_start_attached();
 	ESP_LOGI(TAG, "aliro_reader_start_attached() = %d (%s)", rc,
 		 rc == 0 ? "reader advertising on shared host" : "reader start FAILED");
 
-	// Approach-unlock: `locked` mirrors the bolt. The fixed Matter auto-relock is
-	// disabled (see create_auto_relock_time(..., 0)), so this loop is the only
-	// auto-driver: unlock when the peer is within range, hold while it is present,
-	// and relock when it leaves (moved past the relock band, or disconnected).
+	// Approach controller. The per-block UWB distance is very noisy — single blocks
+	// swing by metres (bench: 70 mm -> 1604 mm -> 112 mm between consecutive blocks) —
+	// and the security trust gate stabilises *when* a range is surfaced, not its
+	// value, so thresholding a raw sample oscillates the bolt. Condition the signal:
+	//   - grant the Wallet animation once, on the first trusted range this approach;
+	//   - push trusted ranges through a median filter (rejects the metre-scale
+	//     spikes) and require ALIRO_NEAR_DWELL / ALIRO_FAR_DWELL consecutive filtered
+	//     samples across a wide hysteresis band before moving the bolt;
+	//   - treat the peer as gone (relock + Secured) only after ALIRO_PEER_GONE_MS
+	//     with no ranging activity at all — decoupled from the flickering trust bit,
+	//     which can briefly re-agree at range and otherwise wedge the door open.
+	// Only fresh notifies act; a bare 200 ms timeout never re-decides on a stale
+	// latched value. `locked` mirrors the bolt, `present` mirrors the Wallet state.
 	bool locked = true;
-	while (true) {
-		int32_t cm = 0;
-		bool have = woz_uwb_trusted_range_cm(&cm);
+	bool present = false;
+	int32_t win[ALIRO_RANGE_MEDIAN_N];
+	int wlen = 0, wpos = 0;
+	int near_dwell = 0, far_dwell = 0;
+	int64_t last_activity_ms = 0;
 
-		if (have && locked && cm >= 0 && cm <= ALIRO_UNLOCK_RANGE_CM) {
-			ESP_LOGI(TAG, "Aliro trusted range %d cm (<= %d): unlocking", (int)cm,
-				 ALIRO_UNLOCK_RANGE_CM);
-			chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
-				BoltLockMgr().Unlock(door_lock_endpoint_id,
-						     chip::app::Clusters::DoorLock::
-							     OperationSourceEnum::kAliro,
-						     aliro_operating_user());
-			});
-			// Tell the phone's Wallet the reader granted access: the reader->phone
-			// "Reader Status Changed" (Unsecured, Aliro step 23) is what fires the
-			// iPhone unlock animation. Marshaled to the BLE-host task; a no-op if the
-			// ranging session already dropped.
-			aliro_reader_notify_unlock(true);
-			locked = false;
-		} else if (!locked && (!have || cm > ALIRO_RELOCK_RANGE_CM)) {
-			// Hysteresis (RELOCK > UNLOCK) keeps the door open across range jitter
-			// while the peer stays near; no trusted range means it disconnected.
-			ESP_LOGI(TAG, "Aliro peer %s: relocking",
-				 have ? "out of range" : "gone");
-			chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
-				BoltLockMgr().Lock(door_lock_endpoint_id,
-						   chip::app::Clusters::DoorLock::
-							   OperationSourceEnum::kAliro,
-						   aliro_operating_user());
-			});
-			aliro_reader_notify_unlock(false); // Reader Status Changed -> Secured
-			locked = true;
+	while (true) {
+		// >0 = at least one range block latched since the last wake (peer is
+		// ranging); 0 = a bare 200 ms timeout (no block this window).
+		uint32_t woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
+		int64_t now = esp_timer_get_time() / 1000; // ms
+
+		int32_t cm = 0;
+		bool active = (woke > 0);
+		bool trusted = active && woz_uwb_trusted_range_cm(&cm);
+
+		if (active) {
+			last_activity_ms = now;
 		}
-		vTaskDelay(pdMS_TO_TICKS(200));
+
+		if (trusted) {
+			if (!present) {
+				// First trusted range this approach: grant + fire the Wallet
+				// unlock animation ("Reader Status Changed", Unsecured, Aliro
+				// step 23). Trust already means the credential authenticated and
+				// ranging passed the integrity gate.
+				ESP_LOGI(TAG, "Aliro trusted range %d cm: granting (Wallet notify)",
+					 (int)cm);
+				aliro_reader_notify_unlock(true);
+				present = true;
+			}
+
+			win[wpos] = cm;
+			wpos = (wpos + 1) % ALIRO_RANGE_MEDIAN_N;
+			if (wlen < ALIRO_RANGE_MEDIAN_N) {
+				wlen++;
+			}
+			int32_t f = aliro_range_median(win, wlen);
+
+			if (f <= ALIRO_UNLOCK_RANGE_CM) {
+				far_dwell = 0;
+				if (locked && ++near_dwell >= ALIRO_NEAR_DWELL) {
+					ESP_LOGI(TAG, "Aliro approach %d cm (median): unlocking",
+						 (int)f);
+					schedule_bolt_unlock();
+					locked = false;
+				}
+			} else if (f >= ALIRO_RELOCK_RANGE_CM) {
+				near_dwell = 0;
+				if (!locked && ++far_dwell >= ALIRO_FAR_DWELL) {
+					ESP_LOGI(TAG, "Aliro departed %d cm (median): relocking",
+						 (int)f);
+					schedule_bolt_lock();
+					locked = true;
+				}
+			} else {
+				// Dead band between the two thresholds: hold, reset both dwells.
+				near_dwell = 0;
+				far_dwell = 0;
+			}
+		}
+
+		// Departure: no ranging activity at all for ALIRO_PEER_GONE_MS. This is the
+		// reliable relock trigger (walking away stops the ranging), independent of
+		// the noisy distance. Relock if still open, tell Wallet Secured, reset for
+		// the next approach.
+		if (present && (now - last_activity_ms) >= ALIRO_PEER_GONE_MS) {
+			ESP_LOGI(TAG, "Aliro peer gone (%d ms silent): relock + secured",
+				 (int)(now - last_activity_ms));
+			if (!locked) {
+				schedule_bolt_lock();
+				locked = true;
+			}
+			aliro_reader_notify_unlock(false); // Reader Status Changed -> Secured
+			present = false;
+			wlen = 0;
+			wpos = 0;
+			near_dwell = 0;
+			far_dwell = 0;
+		}
 	}
 }
 
@@ -258,6 +397,15 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 	case chip::DeviceLayer::DeviceEventType::kFabricRemoved: {
 		ESP_LOGI(TAG, "Fabric removed successfully");
 		if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0) {
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+			/* The last home just removed this lock: drop its Aliro reader
+			 * config (delegate RAM) and revert the reader identity + trust
+			 * store to the dev defaults (RAM + NVS). Otherwise the old
+			 * home's phones could still authenticate, and the stale
+			 * verification key makes the next home's SetAliroReaderConfig
+			 * fail InvalidInState. Runs on the Matter task, as required. */
+			AliroReaderDelegate::Instance().ClearAliroReaderConfig();
+#endif
 			chip::CommissioningWindowManager &commissionMgr =
 				chip::Server::GetInstance().GetCommissioningWindowManager();
 			constexpr auto kTimeoutSeconds =
@@ -455,10 +603,33 @@ extern "C" void app_main()
 	err = esp_matter::start(app_event_cb);
 	ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to start Matter, err:%d", err));
 
-	/* Print the commissioning QR-code URL + manual pairing code at boot so it is
-	 * always in the log (Apple Home / chip-tool). BLE is the initial transport. */
-	PrintOnboardingCodes(
-		chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
+	/* CONFIG_LOG_DEFAULT_LEVEL WARN compiles CHIP Progress logging out of the
+	 * whole CHIP library (CHIP_LOG_DEFAULT_LEVEL is Kconfig-range-capped to
+	 * LOG_DEFAULT_LEVEL and gates chip_progress_logging in the GN build), so
+	 * PrintOnboardingCodes emits nothing and no runtime log level can bring
+	 * it back. Print the commissioning codes directly so they are always in
+	 * the boot log (Apple Home / chip-tool). BLE is the initial transport. */
+	{
+		char code[chip::QRCodeBasicSetupPayloadGenerator::kMaxQRCodeBase38RepresentationLength + 1];
+		const chip::RendezvousInformationFlags rendezvous(
+			chip::RendezvousInformationFlag::kBLE);
+		chip::MutableCharSpan qr(code);
+		if (GetQRCode(qr, rendezvous) == CHIP_NO_ERROR) {
+			char url[512];
+			printf("SetupQRCode: [%s]\n", qr.data());
+			if (GetQRCodeUrl(url, sizeof(url), qr) == CHIP_NO_ERROR) {
+				printf("QR code URL: %s\n", url);
+			}
+		} else {
+			printf("SetupQRCode: unavailable\n");
+		}
+		chip::MutableCharSpan manual(code);
+		if (GetManualPairingCode(manual, rendezvous) == CHIP_NO_ERROR) {
+			printf("Manual pairing code: [%s]\n", manual.data());
+		} else {
+			printf("Manual pairing code: unavailable\n");
+		}
+	}
 
 	/* do nothing now */
 	door_lock_init();
