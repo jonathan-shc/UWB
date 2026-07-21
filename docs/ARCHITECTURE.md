@@ -829,6 +829,119 @@ deleting the worktree deletes it (see `make ws-clean`).
 
 ## `tools/`
 
+### [`tools/docs_api.py`](architecture/tools/docs_api.md)
+
+Fill the reference pages the page generator leaves bare.
+
+The generator documents code where it is defined: functions with bodies,
+structs, inline helpers. A header that only *declares* things — prototypes,
+macros, enums — renders as a hero line and a "used by" row, which reads as
+an empty page even when every declaration in the file carries a doc comment.
+
+This pass parses those headers straight from the working tree and appends
+the missing declarations in the generator's own api-entry markup, so the
+"On this page" rail and the search palette treat them like any other entry:
+
+  * function prototypes (with their /** brief */ if present),
+  * documented #defines, plus undocumented value-carrying ones — a pin map
+    is worth listing even uncommented; include guards are not,
+  * enum/struct/union declarations the page does not already show.
+
+Anything the page already renders is skipped by anchor id, so running after
+the generator adds only what it left out. New entries are also appended to
+the search index in nav.js. Run from the repo root, after docs_graph.py and
+before the link pass.
+
+### [`tools/docs_cmds.py`](architecture/tools/docs_cmds.md)
+
+Render runnable command blocks as one copy chip per command.
+
+A guide's bash block renders as a plain <pre>: the trailing `# comment` sits
+in the same monospace run as the command, and the block-level copy button
+copies comments and all. For a block of commands the reader wants the
+opposite: each command on its own row, the comment visibly muted, and a Copy
+button that yields exactly the command — the chip treatment the landing
+page's quick start already uses. The chip CSS and the .js-copycmd handler
+ship on every page, so the rewrite is markup only.
+
+Only blocks that are unambiguously command sequences are touched: every
+non-blank line must start with an allowlisted command (optionally prefixed
+with VAR=value assignments). Device logs, pseudocode and C fragments never
+match and render as before.
+
+Run from the repo root, after docs_nav.py and before the link pass.
+
+### [`tools/docs_github.py`](architecture/tools/docs_github.md)
+
+Point the rendered site back at its GitHub repository.
+
+The page generator renders prose, navigation and reference pages; it does not
+know where the source lives. This pass adds that context, with the repository
+URL derived from the origin remote at build time, never hardcoded:
+
+  * every top-level page gets a repository chip in the top bar: the GitHub
+    mark, the owner/repo name, and live star/fork counts fetched client-side
+    from the GitHub API (cached in localStorage for an hour; the counts stay
+    hidden if the API is unreachable, the link still works).
+  * the landing page's hero gets a GitHub button next to the existing calls
+    to action, and a "Get running" section under the demo figure: clone to
+    flashed board in five copyable steps, mirroring the README quickstart.
+
+Idempotent for the same reason docs_media.py is: when the page generator is
+not configured, the earlier passes run over a site/ kept from a previous
+build, so a page may already carry the injections. Run from the repo root,
+after docs_media.py and before the link pass.
+
+### [`tools/docs_graph.py`](architecture/tools/docs_graph.md)
+
+Make the architecture page's dependency graph legible.
+
+The page generator emits the module import graph as one flat flowchart and a
+zoomable shell around it. At this repo's size that renders as an unreadable
+crop: dozens of modules, self-loop artifacts (a module importing its own
+header), and a natural width several times the shell's, so the default 1:1
+view shows two boxes and a tangle of splines.
+
+This pass restructures the presentation, deriving everything from the page
+itself so nothing is hand-curated to drift:
+
+  * self-loop edges are dropped — at module level they are import artifacts,
+    not information.
+  * each module is assigned to its source directory, read from the page's own
+    per-module headings, and the flat graph becomes clustered subgraphs.
+  * a subsystem-level overview graph — one node per directory cluster, one
+    arrow per aggregated dependency — goes above it. Small enough to be
+    crisp at natural size, it answers the layering question at a glance.
+  * every page with diagrams gets two script shims around the generator's
+    nav.js: one tightens mermaid's layout spacing and bumps its font before
+    the first render, the other clicks each diagram's own Fit control when
+    the rendered graph overflows its shell, so big graphs open showing their
+    whole shape instead of a random crop — and makes the shells direct:
+    drag pans, cmd/ctrl+scroll (and trackpad pinch) zooms around the
+    cursor, and plain or shift+scroll stays native, so the shell scrolls
+    vertically or horizontally like any scrollable pane.
+  * the per-module sections lose their visual noise: headings show the file
+    name with the directory as a small eyebrow above it instead of one long
+    path, the "depends on" rows become compact base-name chips (full path
+    on hover) instead of comma-separated full paths, and the blurbs drop
+    the "@file <name> — " prefix that would repeat the heading above them.
+    The chip and prefix tidy also runs on every module reference page,
+    whose "used by" rows and hero blurbs carry the same noise.
+  * then the whole flat run of sections folds into one collapsed drill-down
+    per directory cluster — color-dotted to match the graphs, a compact
+    link row per module — so the page ends at a screenful instead of a
+    hundred sections.
+  * every graph gets a full-screen control: the wrap pins over the viewport
+    with the same drag/zoom behavior, and Esc or the button collapses it.
+  * a sitewide sidebar shim regroups the flat guide list under the same
+    topic captions the landing page derives, and marks each reference
+    directory group with its cluster's color dot from the graphs.
+
+Idempotent for the same reason docs_media.py is: when the page generator is
+not configured, the earlier passes run over a site/ kept from a previous
+build, so a page may already carry the injections. Run from the repo root,
+after docs_github.py and before the link pass.
+
 ### [`tools/docs_links.py`](architecture/tools/docs_links.md)
 
 Repair cross-document links in the rendered site, then assert none are left broken.
@@ -864,6 +977,56 @@ Idempotent on purpose: when the page generator is not configured, the earlier
 passes run over a site/ kept from a previous build, so a page may already carry
 the injections. Run from the repo root, after the generators and before the
 link pass.
+
+### [`tools/docs_nav.py`](architecture/tools/docs_nav.md)
+
+Give the rendered site one curated reading order.
+
+The generator ranks the guide list by keyword buckets, which is a reasonable
+default and a poor journey: install and configure material was scattered, and
+a reader finishing one page got no pointer to the next. This pass owns the
+order in one place:
+
+  * the landing page's Guides section is rebuilt into curated buckets
+    (Set up first, deep dives after) — and because the sidebar shim mirrors
+    the landing page's buckets, the sidebar follows automatically,
+  * every page on the journey gets a prev/next pager, so there is always a
+    next page and it is always the right one,
+  * each guide's hero eyebrow names its bucket instead of the generic
+    "Guide".
+
+The buckets and the journey are the same list, so they cannot drift apart.
+A guide added without a place in it fails the build here, on purpose: the
+author decides where it belongs, or this pass would silently undo the point
+of having a curated order.
+
+Run from the repo root, after docs_start.py (start.html must exist to lead
+the journey) and before docs_graph.py (whose sidebar shim reads the landing
+page's buckets as rebuilt here).
+
+### [`tools/docs_start.py`](architecture/tools/docs_start.md)
+
+Give the rendered site a real "Get started" landing.
+
+The hero's Get-started button used to deep-link straight into the ESP32
+bring-up checklist — an fine first page for exactly one kind of reader.
+This pass builds start.html instead: one landing that holds every track
+(hardware, toolchain, build and test, firmware internals, protocol
+research, project and CI), each a card that drills down in place to the
+commands, installs and guides that track needs. The page is assembled from
+an existing rendered guide page, so it always carries the current shell —
+sidebar, palette, theme toggle and the other passes' injections.
+
+Also part of wayfinding, on every page:
+
+  * the sidebar gains a Get-started entry next to Overview,
+  * the search button gets the visual weight a primary control deserves
+    (accent tint, a couple of attention pings on load) and the palette a
+    springier open — search is how readers actually move around, so it
+    should not look like chrome.
+
+Run from the repo root, after docs_github.py and before docs_graph.py, so
+the page exists before the sitewide shims and the link pass run.
 
 ### [`tools/docs_title.py`](architecture/tools/docs_title.md)
 

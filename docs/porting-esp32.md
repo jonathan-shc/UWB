@@ -1,4 +1,4 @@
-# openaliro on ESP32-S3: porting roadmap and retrospective
+# Porting to ESP32-S3
 
 **Status: shipped and hardware-validated.** Phases 1 through 4 are done; approach unlock
 runs end to end on an ESP32-S3 against a live iPhone. Phase 5 (the NFC tap path) was not

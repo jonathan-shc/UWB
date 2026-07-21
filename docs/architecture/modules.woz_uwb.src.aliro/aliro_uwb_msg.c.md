@@ -172,7 +172,7 @@ read.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_sync_code_bitmask(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:512`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:515`
 
 @brief Parses the sync code bitmask attribute from M2 and logs the peer's offered bitmask; the
 reader retains its own capability bitmask for M3 and does not update the session config.
@@ -184,7 +184,7 @@ read.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_sync_code_index(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:533`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:536`
 
 @brief Parses the sync code index attribute from M3 and stores it in the session config.
 @param session Session whose config receives the parsed sync code index.
@@ -195,7 +195,7 @@ read.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_hopping_bitmask(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:554`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:557`
 
 @brief Parses the hopping configuration bitmask attribute from M2, intersects peer capabilities
 with local CCC capabilities, and selects the first mutually supported preferred hopping config.
@@ -208,7 +208,7 @@ no common hopping config is found.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_sts_index0(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:604`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:607`
 
 @brief Parses the STS index 0 attribute from M2 and stores it in the session config.
 @param session Session whose config receives the parsed STS index.
@@ -219,7 +219,7 @@ read.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_uwb_time0(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:623`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:626`
 
 @brief Parses the UWB time 0 attribute from M2 and stores it as the session's initial UWB time.
 @param session Session whose config receives the parsed UWB time.
@@ -230,7 +230,7 @@ read.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_hop_mode_key(struct aliro_uwb_session *session, struct aliro_uwb_msg_attribute *attr)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:643`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:646`
 
 @brief Parses the hop mode key attribute from M2 and stores the raw key bytes in the session
 config; unused downstream on this lock.
@@ -242,7 +242,7 @@ read.
 **called by** `parse_session_attribute`
 
 ### `static enum aliro_uwb_err parse_status(struct aliro_uwb_msg_attribute *attr, uint8_t *status)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:663`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:666`
 
 @brief Parses a status attribute from a ranging message into the given output parameter.
 @param attr Attribute to parse.
@@ -253,7 +253,7 @@ read.
 **called by** `parse_ranging`
 
 ### `static enum aliro_uwb_err parse_session_attribute(struct aliro_uwb_msg_attribute *attr, struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:679`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:682`
 
 @brief Dispatches a ranging-service session attribute to its type-specific parser and applies it
 to the session; unknown attributes are logged and ignored.
@@ -265,7 +265,7 @@ the specific parser.
 **called by** `parse_ranging`  ·  **calls** `parse_channel`, `parse_config_id`, `parse_hop_mode_key`, `parse_hopping_bitmask`, `parse_pulse_shape`, `parse_ran_multiplier`, `parse_session_id`, `parse_slot_bitmask`
 
 ### `static enum aliro_uwb_err parse_ranging(struct aliro_uwb_session *session, struct aliro_uwb_message *message, uint32_t *attr_mask, uint8_t *status)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:726`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:729`
 
 @brief Parses all ranging-service attributes in a message, applying each to the session and
 recording which attributes were present.
@@ -279,7 +279,7 @@ ALIRO_UWB_RANGING_SERVICE_STATUS_UNKNOWN if no status attribute is present.
 **called by** `handle_m2`, `handle_m4`, `handle_resume_response`, `handle_suspend_request`, `handle_suspend_response`  ·  **calls** `parse_session_attribute`, `parse_status`
 
 ### `static void compute_initiation_time(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:759`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:762`
 
 @brief Sets the session's ranging initiation time from its time offset, using zero if
 unsynchronized or adding the offset to the existing UWB time otherwise.
@@ -288,7 +288,7 @@ unsynchronized or adding the offset to the existing UWB time otherwise.
 **called by** `handle_m4`, `handle_resume_response`
 
 ### `static enum aliro_uwb_err set_resume_params(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:777`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:780`
 
 @brief Sets the STS index and initiation time on the CCC session in preparation for re-arming
 ranging after a suspend.
@@ -298,7 +298,7 @@ ranging after a suspend.
 **called by** `handle_resume_response`
 
 ### `static enum aliro_uwb_err handle_m2(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:802`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:805`
 
 @brief Handles an inbound M2 message by validating its attributes and session state, then
 building and transmitting M3 and advancing to the M3_SENT state.
@@ -310,7 +310,7 @@ construction fail.
 **called by** `aliro_uwb_msg_process_ranging`  ·  **calls** `aliro_uwb_msg_build_m3`, `parse_ranging`
 
 ### `static enum aliro_uwb_err handle_m4(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:844`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:847`
 
 @brief Handles an inbound M4 message by validating its attributes and session state, computing
 the ranging initiation time, initializing the session, and advancing to the RANGING state.
@@ -322,7 +322,7 @@ initialization fail.
 **called by** `aliro_uwb_msg_process_ranging`  ·  **calls** `compute_initiation_time`, `parse_ranging`
 
 ### `static enum aliro_uwb_err handle_suspend_request(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:885`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:888`
 
 @brief Handles an inbound suspend request by validating session state, stopping the session, then
 building and transmitting a suspend response with acceptance or rejection status.
@@ -334,7 +334,7 @@ construction fail.
 **called by** `aliro_uwb_msg_process_ranging`  ·  **calls** `aliro_uwb_msg_build_suspend_response`, `parse_ranging`
 
 ### `static enum aliro_uwb_err handle_suspend_response(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:927`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:930`
 
 @brief Handles an inbound suspend response by validating its attributes and session state,
 stopping the session if accepted or returning to the RANGING state if rejected.
@@ -346,7 +346,7 @@ fail.
 **called by** `aliro_uwb_msg_process_ranging`  ·  **calls** `parse_ranging`
 
 ### `static enum aliro_uwb_err handle_resume_response(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:960`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:963`
 
 @brief Handle an inbound resume response, arm timing and CCC state, and start ranging.
 @param session Aliro UWB session expected to be in RESUME_REQ_SENT state.
@@ -357,7 +357,7 @@ resume setup/session start fails.
 **called by** `aliro_uwb_msg_process_ranging`  ·  **calls** `compute_initiation_time`, `parse_ranging`, `set_resume_params`
 
 ### `enum aliro_uwb_err aliro_uwb_msg_process_ranging(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1000`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1003`
 
 @brief Dispatch an inbound ranging-phase message to its handler based on message type.
 @param session Aliro UWB session to update.
@@ -368,7 +368,7 @@ NULL; ALIRO_UWB_ERR_MESSAGE_UNSUPPORTED for unknown message types.
 **calls** `aliro_uwb_msg_message_id`, `handle_m2`, `handle_m4`, `handle_resume_response`, `handle_suspend_request`, `handle_suspend_response`
 
 ### `static enum aliro_uwb_err handle_init_ranging_later(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1033`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1036`
 
 @brief Handle an "init ranging later" notification, returning the session to CREATED state.
 @param session Aliro UWB session expected to be in M1_SENT state.
@@ -378,7 +378,7 @@ M1_SENT.
 **called by** `parse_ranging_notification`
 
 ### `static enum aliro_uwb_err handle_resume_later(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1050`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1053`
 
 @brief Handle a "resume later" notification, moving the session to SUSPENDED without re-arming
 ranging.
@@ -389,7 +389,7 @@ RESUME_REQ_SENT.
 **called by** `parse_ranging_notification`
 
 ### `static enum aliro_uwb_err handle_ranging_suspended(struct aliro_uwb_session *session)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1067`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1070`
 
 @brief Handle a "ranging suspended" notification by stopping the session and moving it to
 SUSPENDED.
@@ -400,7 +400,7 @@ RANGING; otherwise the result of stopping the session.
 **called by** `parse_ranging_notification`
 
 ### `static enum aliro_uwb_err parse_event_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1084`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1087`
 
 @brief Parse an Aliro event notification message, logging busy, general-error, and
 reader-descriptor events.
@@ -412,7 +412,7 @@ has the wrong length.
 **called by** `aliro_uwb_msg_process_notification`
 
 ### `static enum aliro_uwb_err parse_ranging_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1131`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1136`
 
 @brief Parse a ranging-setup notification message and dispatch each attribute to its session
 state handler.
@@ -423,7 +423,7 @@ state handler.
 **called by** `aliro_uwb_msg_process_notification`  ·  **calls** `handle_init_ranging_later`, `handle_ranging_suspended`, `handle_resume_later`
 
 ### `enum aliro_uwb_err aliro_uwb_msg_process_notification(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1178`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1183`
 
 @brief Dispatch a received notification message to its parser by message ID. Reader-status
 notifications are informational and ignored; unknown IDs are logged and ignored.
@@ -435,7 +435,7 @@ the error from the event or ranging parser.
 **calls** `aliro_uwb_msg_message_id`, `parse_event_notification`, `parse_ranging_notification`
 
 ### `enum aliro_uwb_err aliro_uwb_msg_process_supplementary(struct aliro_uwb_session *session, struct aliro_uwb_message *message)`
-`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1208`
+`modules/woz_uwb/src/aliro/aliro_uwb_msg.c:1213`
 
 @brief Log every attribute of a Supplementary Service message (protocol 0x03).
 The phone sends one of these at session establishment. Nothing is modelled yet

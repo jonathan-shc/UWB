@@ -1,4 +1,4 @@
-# DWM3000EVB → ESP32-S3 bring-up checklist
+# ESP32-S3 bring-up
 
 One page, match-the-table. The pin map's source of truth is
 `components/woz_uwb/port/board_pins.h`; if you change it there, change it here.
@@ -41,13 +41,14 @@ of debugging once. Check the jumper first.
 
 ```bash
 cd ports/esp32/apps/reader
-idf.py set-target esp32s3   # once, if not already set
+idf.py set-target esp32s3
 make build
 make flash
 make monitor
 ```
 
-ESP-IDF is expected at `~/esp/esp-idf`; override with `IDF_EXPORT=`. The port is
+`idf.py set-target` runs once per checkout. ESP-IDF is expected at
+`~/esp/esp-idf`; override with `IDF_EXPORT=`. The port is
 auto-detected and SEGGER/J-Link ports are refused; `make ports` lists what is attached
 and how each is classified.
 

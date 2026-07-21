@@ -1,4 +1,4 @@
-# Troubleshooting and FAQ
+# Troubleshooting
 
 Common issues, grouped by where they show up. Deeper protocol background is in
 [`protocol-research.md`](protocol-research.md) (on-air behavior) and

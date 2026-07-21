@@ -1,4 +1,4 @@
-# ESP32-S3 Aliro port — gotchas and observations
+# ESP32-S3 gotchas
 
 Hard-won, non-obvious findings from porting the Aliro UWB door-lock reader to ESP32-S3
 (ESP-IDF + esp-matter + NimBLE + DWM3000EVB). Each entry is a trap actually hit on the
