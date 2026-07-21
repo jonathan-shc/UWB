@@ -253,7 +253,8 @@ static int cmd_log(int argc, char **argv)
 		}
 	}
 	printf("usage: log <tag|*> <none|error|warn|info|debug|verbose>\n"
-	       "boot default warn; compile-time ceiling debug\n");
+	       "boot default warn; compile-time ceiling debug\n"
+	       "note: chip[..] tags only respond to *, not per-tag\n");
 	return 0;
 }
 

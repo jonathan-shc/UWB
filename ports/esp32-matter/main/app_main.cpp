@@ -498,15 +498,21 @@ extern "C" void app_main()
 
 	/* The default log level is WARN (blocking UART writes in the protocol
 	 * callbacks cost walk-up latency; see sdkconfig.defaults), but the
-	 * onboarding codes print at INFO under chip[SVR] and are useless
-	 * suppressed. Keep just that tag audible; the shell's `log` command
-	 * raises anything else on demand. */
-	esp_log_level_set("chip[SVR]", ESP_LOG_INFO);
+	 * onboarding codes print at INFO and are useless suppressed. A per-tag
+	 * pin on "chip[SVR]" does NOT work: IDF's tag-level cache compares tag
+	 * pointers (assumes string literals) and CHIP composes its tag in a
+	 * reused stack buffer, so a stale cache hit ignores the pin. Only the
+	 * "*" wildcard is reliable for chip[..] tags (resets default + cache),
+	 * so raise it around the print and restore afterwards. */
+	const esp_log_level_t dflt_log_level = esp_log_level_get("*");
+	esp_log_level_set("*", ESP_LOG_INFO);
 
 	/* Print the commissioning QR-code URL + manual pairing code at boot so it is
 	 * always in the log (Apple Home / chip-tool). BLE is the initial transport. */
 	PrintOnboardingCodes(
 		chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
+
+	esp_log_level_set("*", dflt_log_level);
 
 	/* do nothing now */
 	door_lock_init();
