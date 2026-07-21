@@ -874,7 +874,14 @@ itself so nothing is hand-curated to drift:
     nav.js: one tightens mermaid's layout spacing and bumps its font before
     the first render, the other clicks each diagram's own Fit control when
     the rendered graph overflows its shell, so big graphs open showing their
-    whole shape instead of a random crop.
+    whole shape instead of a random crop — and makes the shells direct:
+    drag pans, cmd/ctrl+scroll (and trackpad pinch) zooms around the
+    cursor, a plain scroll keeps scrolling the page.
+  * the per-module sections lose their visual noise: headings show the file
+    name with the directory as a small eyebrow above it instead of one long
+    path, the "depends on" rows become compact base-name chips (full path
+    on hover) instead of comma-separated full paths, and the blurbs drop
+    the "@file <name> — " prefix that would repeat the heading above them.
 
 Idempotent for the same reason docs_media.py is: when the page generator is
 not configured, the earlier passes run over a site/ kept from a previous

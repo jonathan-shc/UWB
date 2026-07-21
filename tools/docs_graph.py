@@ -21,7 +21,14 @@ itself so nothing is hand-curated to drift:
     nav.js: one tightens mermaid's layout spacing and bumps its font before
     the first render, the other clicks each diagram's own Fit control when
     the rendered graph overflows its shell, so big graphs open showing their
-    whole shape instead of a random crop.
+    whole shape instead of a random crop — and makes the shells direct:
+    drag pans, cmd/ctrl+scroll (and trackpad pinch) zooms around the
+    cursor, a plain scroll keeps scrolling the page.
+  * the per-module sections lose their visual noise: headings show the file
+    name with the directory as a small eyebrow above it instead of one long
+    path, the "depends on" rows become compact base-name chips (full path
+    on hover) instead of comma-separated full paths, and the blurbs drop
+    the "@file <name> — " prefix that would repeat the heading above them.
 
 Idempotent for the same reason docs_media.py is: when the page generator is
 not configured, the earlier passes run over a site/ kept from a previous
@@ -51,7 +58,10 @@ NAV_ANCHOR = '<script defer src="nav.js"></script>'
 # order), so nav.js's own initialize call flows through the shim and the first
 # render already uses the tightened layout.
 PRE_SHIM = """<style>.graph-wrap figcaption{margin:.7rem 0 0;font-size:.82rem;color:var(--muted);text-align:center}
-.gv-over .graph-tools{display:none}</style>
+.gv-over .graph-tools{display:none}
+.graph-wrap:not(.gv-over) .graph-shell{cursor:grab}
+.graph-wrap:not(.gv-over) .graph-shell.dragging{cursor:grabbing;user-select:none}
+.arch-sec h2 .arch-dir{display:block;font-size:.7rem;font-weight:500;color:var(--faint);font-family:var(--mono);letter-spacing:.04em;margin:0 0 .25rem}</style>
 <script defer id="gv-pre">
 (function(){if(!window.mermaid)return;var orig=mermaid.initialize.bind(mermaid);
 mermaid.initialize=function(c){c=c||{};c.flowchart=Object.assign({},c.flowchart,{nodeSpacing:26,rankSpacing:40,padding:8});
@@ -59,8 +69,12 @@ if(c.themeVariables)c.themeVariables.fontSize="15px";orig(c)};})();
 </script>"""
 
 # Waits for nav.js to render the diagrams and attach the zoom tools, then
-# presses Fit once on any graph wider than its shell. Fail-soft: no diagrams,
-# no tools, or no CDN and the interval just expires.
+# presses Fit once on any graph wider than its shell, and wires the shells
+# for direct manipulation: drag pans, cmd/ctrl+scroll (which is also what a
+# trackpad pinch sends) zooms around the cursor keeping the zoom buttons'
+# state in sync, and a plain scroll is forwarded to the page so the shell
+# never traps it. Fail-soft: no diagrams, no tools, or no CDN and the
+# interval just expires.
 FIT_SHIM = """<script defer id="gv-fit">
 (function(){var n=0,t=setInterval(function(){n++;
 var wraps=document.querySelectorAll(".graph-wrap");var done=0;
@@ -68,7 +82,29 @@ wraps.forEach(function(w){var svg=w.querySelector("svg"),shell=w.querySelector("
 b=w.querySelector(".graph-tools button[title='Fit to width']");
 if(svg&&b){done++;if(!w.dataset.fitted){w.dataset.fitted=1;
 if(svg.getBoundingClientRect().width>shell.clientWidth)b.click()}}});
-if(wraps.length&&done===wraps.length)clearInterval(t);else if(n>60)clearInterval(t)},120);})();
+if(wraps.length&&done===wraps.length)clearInterval(t);else if(n>60)clearInterval(t)},120);
+document.querySelectorAll(".graph-wrap:not(.gv-over)").forEach(function(w){
+var shell=w.querySelector(".graph-shell");if(!shell)return;
+function setK(nk,cx,cy){var svg=shell.querySelector("svg");if(!svg)return;
+var k=parseFloat(w.dataset.zoom||"1");nk=Math.max(.2,Math.min(2.5,nk));if(nk===k)return;
+var r=shell.getBoundingClientRect();
+var px=cx-r.left+shell.scrollLeft,py=cy-r.top+shell.scrollTop;
+svg.style.width=svg.getBoundingClientRect().width/k*nk+"px";w.dataset.zoom=nk;
+shell.scrollLeft=px*nk/k-(cx-r.left);shell.scrollTop=py*nk/k-(cy-r.top)}
+shell.addEventListener("wheel",function(e){
+var m=e.deltaMode===1?16:1;
+if(e.metaKey||e.ctrlKey){e.preventDefault();
+setK(parseFloat(w.dataset.zoom||"1")*Math.pow(1.0015,-e.deltaY*m),e.clientX,e.clientY)}
+else{e.preventDefault();window.scrollBy(e.deltaX*m,e.deltaY*m)}},{passive:false});
+var drag=null;
+shell.addEventListener("mousedown",function(e){
+if(e.button!==0||e.target.closest(".graph-tools"))return;
+drag={x:e.clientX,y:e.clientY,l:shell.scrollLeft,t:shell.scrollTop};
+shell.classList.add("dragging");e.preventDefault()});
+addEventListener("mousemove",function(e){if(!drag)return;
+shell.scrollLeft=drag.l-(e.clientX-drag.x);shell.scrollTop=drag.t-(e.clientY-drag.y)});
+addEventListener("mouseup",function(){drag=null;shell.classList.remove("dragging")});
+});})();
 </script>"""
 
 OVER_CAPTION = (
@@ -76,8 +112,8 @@ OVER_CAPTION = (
     "directory, each arrow an import dependency between them."
 )
 DETAIL_CAPTION = (
-    "Every module and its imports, grouped by directory. Opens fitted to the "
-    "shell; zoom in to read the labels, or use the per-module sections below."
+    "Every module and its imports, grouped by directory. Drag to pan, "
+    "&#8984;&#8202;scroll or pinch to zoom, or use the per-module sections below."
 )
 
 
@@ -166,16 +202,50 @@ def figures(page: str, mermaid: str) -> bytes:
     ).encode()
 
 
+HEAD_RE = re.compile(
+    r'<h2><a href="([^"]+)"><code>([\w./-]+/)([\w.-]+)</code></a></h2>'
+)
+CHIP_RE = re.compile(r'<a href="([^"]+)"><code>([\w./-]+)</code></a>(?:,\s*)?')
+CHIPS_BLOCK_RE = re.compile(r'(<p class="chips">depends on )(.*?)(</p>)', re.S)
+ATFILE_RE = re.compile(r"<p>@file [\w.-]+ — ")
+ATFILE_BARE_RE = re.compile(r"<p>@file [\w.-]+</p>\n?")
+
+
+def tidy_sections(page: str) -> tuple[str, int, int]:
+    """Short file-name headings with a directory eyebrow; base-name chips."""
+
+    def head(m: re.Match) -> str:
+        return (
+            f'<h2><span class="arch-dir">{m.group(2).rstrip("/")}</span>'
+            f'<a href="{m.group(1)}"><code>{m.group(3)}</code></a></h2>'
+        )
+
+    def chip(m: re.Match) -> str:
+        path = m.group(2)
+        return f'<a href="{m.group(1)}" title="{path}"><code>{path.rsplit("/", 1)[-1]}</code></a> '
+
+    def chips(m: re.Match) -> str:
+        return m.group(1) + CHIP_RE.sub(chip, m.group(2)).rstrip() + m.group(3)
+
+    page, heads = HEAD_RE.subn(head, page)
+    page, blocks = CHIPS_BLOCK_RE.subn(chips, page)
+    # with short headings, a blurb's "@file <name> — " prefix just repeats
+    # the heading directly above it
+    page = ATFILE_RE.sub("<p>", page)
+    page = ATFILE_BARE_RE.sub("", page)
+    return page, heads, blocks
+
+
 def main() -> int:
     if not ARCH.is_file():
         print("    no rendered site — nothing to restructure")
         return 0
 
-    raw = ARCH.read_bytes()
-    if b'class="graph-wrap gv-over"' in raw:
+    page = ARCH.read_bytes().decode()
+    dirty = False
+    if 'class="graph-wrap gv-over"' in page:
         print("    architecture graphs already restructured")
     else:
-        page = raw.decode()
         m = FIGURE_RE.search(page)
         if not m:
             print(
@@ -185,9 +255,28 @@ def main() -> int:
             )
             return 1
         figs = figures(page, html.unescape(m.group(1)))
-        raw = page[: m.start()].encode() + figs + page[m.end() :].encode()
-        ARCH.write_bytes(raw)
+        page = page[: m.start()] + figs.decode() + page[m.end() :]
+        dirty = True
         print("    architecture graph split into overview + clustered detail")
+
+    if 'class="arch-dir"' in page:
+        print("    module sections already tidied")
+    else:
+        page, heads, blocks = tidy_sections(page)
+        if not heads and not blocks:
+            print(
+                "docs_graph: architecture page has no module sections to "
+                "tidy — generator layout changed?",
+                file=sys.stderr,
+            )
+            return 1
+        dirty = True
+        print(
+            f"    {heads} section heading(s) shortened, "
+            f"{blocks} depends-on row(s) compacted"
+        )
+    if dirty:
+        ARCH.write_bytes(page.encode())
 
     shimmed = kept = 0
     anchor = NAV_ANCHOR.encode()

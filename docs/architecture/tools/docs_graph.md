@@ -23,22 +23,24 @@ itself so nothing is hand-curated to drift:
     nav.js: one tightens mermaid's layout spacing and bumps its font before
     the first render, the other clicks each diagram's own Fit control when
     the rendered graph overflows its shell, so big graphs open showing their
-    whole shape instead of a random crop.
+    whole shape instead of a random crop — and makes the shells direct:
+    drag pans, cmd/ctrl+scroll (and trackpad pinch) zooms around the
+    cursor, a plain scroll keeps scrolling the page.
+  * the per-module sections lose their visual noise: headings show the file
+    name with the directory as a small eyebrow above it instead of one long
+    path, the "depends on" rows become compact base-name chips (full path
+    on hover) instead of comma-separated full paths, and the blurbs drop
+    the "@file <name> — " prefix that would repeat the heading above them.
 
 Idempotent for the same reason docs_media.py is: when the page generator is
 not configured, the earlier passes run over a site/ kept from a previous
 build, so a page may already carry the injections. Run from the repo root,
 after docs_github.py and before the link pass.
 
-```mermaid
-flowchart TD
-  cluster_key --> cluster_of
-```
-
 ## API
 
 ### `stem_dirs(page: str) -> dict[str, str]`
-`tools/docs_graph.py:94`
+`tools/docs_graph.py:130`
 
 module name -> its source directory, from the page's file headings.
 
@@ -47,12 +49,22 @@ is the one the import graph describes, so modules/ wins.
 
 **called by** `figures`
 
-<details><summary>Undocumented (5)</summary>
+### `tidy_sections(page: str) -> tuple[str, int, int]`
+`tools/docs_graph.py:214`
+
+Short file-name headings with a directory eyebrow; base-name chips.
+
+**called by** `main`
+
+<details><summary>Undocumented (8)</summary>
 
 - `parse_edges`
 - `cluster_of`
 - `figures`
 - `cluster_key`
+- `head`
+- `chip`
+- `chips`
 - `main`
 
 </details>
