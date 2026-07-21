@@ -1,7 +1,7 @@
 <!-- generated documentation — edit the source, not this file -->
 # openaliro
 
-**102 subsystems in 21 directories · 605/619 symbols documented (97%)**
+**103 subsystems in 21 directories · 606/625 symbols documented (96%)**
 
 **Start here:** [`modules/woz_uwb/src/aliro/aliro_uwb_msg.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_msg.c.md), [`modules/woz_uwb/src/aliro/aliro_uwb_session.c`](architecture/modules.woz_uwb.src.aliro/aliro_uwb_session.c.md), [`modules/woz_aliro/src/aliro_ranging.c`](architecture/modules.woz_aliro.src/aliro_ranging.c.md) — the doors into the codebase (nothing else imports them).
 
@@ -57,11 +57,11 @@ flowchart LR
 | [`ports/esp32-matter/main/`](architecture/ports.esp32-matter.main/README.md) | 7 | 24/24 (100%) |
 | [`ports/esp32-matter/main/lock/`](architecture/ports.esp32-matter.main.lock/README.md) | 5 | 60/60 (100%) |
 | [`ports/esp32s3/sample/src/`](architecture/ports.esp32s3.sample.src/README.md) | 1 | 1/1 (100%) |
-| [`tools/`](architecture/tools/README.md) | 3 | 6/12 (50%) |
+| [`tools/`](architecture/tools/README.md) | 4 | 7/18 (38%) |
 
 ## Hotspots
 
-*Mined from git history as of `e363d60`.*
+*Mined from git history as of `90ec219`.*
 
 **Most-changed:** [`modules/woz_uwb/src/ccc/ccc_shim_rx.c`](architecture/modules.woz_uwb.src.ccc/ccc_shim_rx.c.md) (13 commits), [`ports/esp32-matter/main/app_main.cpp`](architecture/ports.esp32-matter.main/app_main.cpp.md) (11 commits), [`bootstrap.sh`](architecture/root/bootstrap.sh.md) (8 commits), [`build.sh`](architecture/root/build.sh.md) (8 commits), [`ports/esp32-idf/components/aliro_ble/aliro_ble.c`](architecture/ports.esp32-idf.components.aliro_ble/aliro_ble.c.md) (7 commits).
 
