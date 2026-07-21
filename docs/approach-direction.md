@@ -166,14 +166,56 @@ behind it is not implemented, and on this hardware cannot be.
 | Port | Status |
 |---|---|
 | `ports/esp32-matter` | **implemented** — runtime `cluster::create()` in `app_main.cpp` |
-| nRF5340 door lock app | **not implemented** |
+| nRF5340 door lock app | **implemented** — static tables, `integration/patches/approach-direction-cluster.patch` |
 
 The two ports build their data models differently. The ESP32 port constructs endpoints at
-runtime, so the cluster is a few lines of C++. The nRF app's data model is ZAP-generated
-from a `.zap` file, so adding a manufacturer cluster there means supplying a custom
-cluster definition XML, registering it with ZAP, adding the cluster to the door lock
-endpoint, and regenerating.
+runtime, so the cluster is a few lines of C++. The nRF app's is a set of static tables
+compiled into the image.
 
-One consolation for that work: ZAP emits `FeatureMap` and `ClusterRevision` for every
-cluster automatically, so §3 — the trap that cost the most time here — cannot occur on
-that path.
+### 9.1 The nRF data model is not regenerated at build time
+
+**VERIFIED.** It is tempting to assume the `.zap` file is the source of truth and edit it.
+It is not, on this build. `ncs_configure_data_model` passes `BYPASS_IDL` to
+`chip_configure_data_model`, which takes the branch that *skips* the `chip_zapgen` target
+entirely and instead adds the checked-in `zap-generated/` directory as an include path.
+`endpoint_config.h` appears nowhere in `build.ninja` as a build rule. Editing `lock.zap`
+alone changes nothing in the image.
+
+The variant in use is selected by `src/matter/CMakeLists.txt`: with
+`CONFIG_NCS_SAMPLE_MATTER_ZAP_FILE_PATH` unset and `CONFIG_DOOR_LOCK_BLE_UWB=y`, that is
+`zap_uwb/`. Read it from a configured build's `.config`, not from Kconfig defaults.
+
+So the cluster is added by patching the generated `endpoint_config.h`: three attribute
+records, one cluster record, and the counters that describe them.
+
+### 9.2 The counters must stay consistent with the tables
+
+The static tables are index-addressed, and four `#define`s must agree with them:
+`GENERATED_ATTRIBUTE_COUNT`, `GENERATED_CLUSTER_COUNT`,
+`ZAP_FIXED_ENDPOINT_DATA_VERSION_COUNT` and `ATTRIBUTE_MAX_SIZE`, plus the per-endpoint
+`GENERATED_ENDPOINT_TYPES` row `{ cluster index, cluster count, endpoint size }`.
+
+Two structural rules make the edit an append rather than a renumbering:
+
+- A cluster's attributes must be **contiguous** in the attribute table, and an endpoint's
+  clusters contiguous in the cluster table. The door lock endpoint's clusters are already
+  last, so a new cluster appends at the end of both tables without moving anything.
+- `clusterSize` is the sum of the sizes of that cluster's attributes that are **not**
+  `EXTERNAL_STORAGE`, and an endpoint's size is the sum of its clusters' sizes. All three
+  new attributes are RAM-backed, so the cluster adds 1 + 4 + 2 = 7 bytes, and both the
+  endpoint row and `ATTRIBUTE_MAX_SIZE` grow by 7.
+
+These are checkable rather than guessable: every counter can be re-derived from the tables
+in the same file, which is the cheapest way to catch an arithmetic slip before a build.
+
+One thing this path does get for free: `FeatureMap` and `ClusterRevision` are written out
+per cluster like any other attribute, so §3 — the trap that cost the most time on the
+other port — cannot occur here as an omission by a helper.
+
+### 9.3 It collides with the opt-in Home Assistant patches
+
+`ha-occupancy-endpoint.patch` adds a third endpoint and so bumps the **same** counter
+lines. Two patches cannot both change `GENERATED_ATTRIBUTE_COUNT 205`, in either order.
+The stack is therefore cumulative: Approach Direction applies first, and the HA patches
+are cut against a tree that already has it. `tests/tooling/patch_drift_check.sh` applies
+all of them in that order, so a future edit that breaks the composition fails there.

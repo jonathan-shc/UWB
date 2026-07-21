@@ -66,9 +66,9 @@ if [ "${HA:-0}" = 1 ]; then
   ha_patches=("$P/ha-lockoperation-event.patch" "$P/ha-occupancy-endpoint.patch")
 fi
 
-apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" ${ha_patches[@]+"${ha_patches[@]}"}
+apply_to "$ADDON"                 "$P/custom_impl-uwb.patch" "$P/crypto-timesync-tap.patch" "$P/pretty-shell.patch" "$P/console-quiet-flood.patch" "$P/kpersistent-orphan-selfheal.patch" "$P/aliro-doc-time-ratchet.patch" "$P/aliro-time-persist.patch" "$P/extnvs-rollback-mirror-id.patch" "$P/approach-direction-cluster.patch" ${ha_patches[@]+"${ha_patches[@]}"}
 apply_to "$WS/nrf"                "$P/nrf-flashfit-dfu-guards.patch"
 apply_to "$WS/modules/lib/matter" "$P/matter-ble-multi-identity.patch"
-echo "    ✓ pristine upstream + $((10 + ${#ha_patches[@]})) patches (add-on ×$((8 + ${#ha_patches[@]})), nrf, matter)"
+echo "    ✓ pristine upstream + $((11 + ${#ha_patches[@]})) patches (add-on ×$((9 + ${#ha_patches[@]})), nrf, matter)"
 
 echo "==> ready. Build with:  $TREE/build.sh build"

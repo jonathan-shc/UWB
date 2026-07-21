@@ -485,14 +485,14 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  	}
  
  // This is an array of EmberAfAttributeMetadata structures.
--#define GENERATED_ATTRIBUTE_COUNT 205
-+#define GENERATED_ATTRIBUTE_COUNT 220
+-#define GENERATED_ATTRIBUTE_COUNT 208
++#define GENERATED_ATTRIBUTE_COUNT 223
  #define GENERATED_ATTRIBUTES                                                                                                                            \
  	{                                                                                                                                               \
  		/* Endpoint: 0, Cluster: Descriptor (server) */                                                                                         \
-@@ -607,6 +607,39 @@
+@@ -615,6 +615,39 @@
  			  ZAP_ATTRIBUTE_MASK(READABLE) }, /* FeatureMap */                                                                              \
- 			{ ZAP_SIMPLE_DEFAULT(8), 0x0000FFFD, 2, ZAP_TYPE(INT16U),                                                                       \
+ 			{ ZAP_SIMPLE_DEFAULT(1), 0x0000FFFD, 2, ZAP_TYPE(INT16U),                                                                       \
  			  ZAP_ATTRIBUTE_MASK(READABLE) }, /* ClusterRevision */                                                                         \
 +			/* Endpoint: 2, Cluster: Identify (server) */                                                                                   \
 +			{ ZAP_EMPTY_DEFAULT(), 0x00000000, 2, ZAP_TYPE(INT16U),                                                                         \
@@ -530,7 +530,7 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  	}
  
  // clang-format off
-@@ -638,6 +671,9 @@
+@@ -646,6 +679,9 @@
  		(EmberAfGenericClusterFunction)MatterDoorLockClusterServerAttributeChangedCallback,                    \
  		(EmberAfGenericClusterFunction)MatterDoorLockClusterServerShutdownCallback,                            \
  		(EmberAfGenericClusterFunction)MatterDoorLockClusterServerPreAttributeChangedCallback,                 \
@@ -540,7 +540,7 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  	};
  
  // clang-format off
-@@ -753,13 +789,17 @@
+@@ -761,13 +797,17 @@
    0x0000001C /* GetUserResponse */, \
    0x00000023 /* SetCredentialResponse */, \
    0x00000025 /* GetCredentialStatusResponse */, \
@@ -554,35 +554,15 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  // clang-format on
  
  // This is an array of EmberAfCluster structures.
--#define GENERATED_CLUSTER_COUNT 20
-+#define GENERATED_CLUSTER_COUNT 23
+-#define GENERATED_CLUSTER_COUNT 21
++#define GENERATED_CLUSTER_COUNT 24
  // clang-format off
  #define GENERATED_CLUSTERS { \
    { \
-@@ -1021,17 +1061,57 @@
-       .generatedCommandList = ZAP_GENERATED_COMMANDS_INDEX( 77 ), \
-       .eventList = ZAP_GENERATED_EVENTS_INDEX( 7 ), \
-       .eventCount = 1, \
-+    },\
-+  { \
-+      /* Endpoint: 2, Cluster: Identify (server) */ \
-+      .clusterId = 0x00000003, \
-+      .attributes = ZAP_ATTRIBUTE_INDEX(205), \
-+      .attributeCount = 4, \
-+      .clusterSize = 0, \
-+      .mask = ZAP_CLUSTER_MASK(SERVER), \
-+      .functions = NULL, \
-+      .acceptedCommandList = ZAP_GENERATED_COMMANDS_INDEX( 81 ), \
-+      .generatedCommandList = nullptr, \
-+      .eventList = nullptr, \
-+      .eventCount = 0, \
-     },\
-+  { \
-+      /* Endpoint: 2, Cluster: Descriptor (server) */ \
-+      .clusterId = 0x0000001D, \
-+      .attributes = ZAP_ATTRIBUTE_INDEX(209), \
-+      .attributeCount = 6, \
-+      .clusterSize = 0, \
+@@ -1036,23 +1076,63 @@
+       .attributes = ZAP_ATTRIBUTE_INDEX(205), \
+       .attributeCount = 3, \
+       .clusterSize = 7, \
 +      .mask = ZAP_CLUSTER_MASK(SERVER), \
 +      .functions = NULL, \
 +      .acceptedCommandList = nullptr, \
@@ -591,9 +571,35 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
 +      .eventCount = 0, \
 +    },\
 +  { \
++      /* Endpoint: 2, Cluster: Identify (server) */ \
++      .clusterId = 0x00000003, \
++      .attributes = ZAP_ATTRIBUTE_INDEX(208), \
++      .attributeCount = 4, \
++      .clusterSize = 0, \
+       .mask = ZAP_CLUSTER_MASK(SERVER), \
+       .functions = NULL, \
++      .acceptedCommandList = ZAP_GENERATED_COMMANDS_INDEX( 81 ), \
++      .generatedCommandList = nullptr, \
++      .eventList = nullptr, \
++      .eventCount = 0, \
++    },\
++  { \
++      /* Endpoint: 2, Cluster: Descriptor (server) */ \
++      .clusterId = 0x0000001D, \
++      .attributes = ZAP_ATTRIBUTE_INDEX(212), \
++      .attributeCount = 6, \
++      .clusterSize = 0, \
++      .mask = ZAP_CLUSTER_MASK(SERVER), \
++      .functions = NULL, \
+       .acceptedCommandList = nullptr, \
+       .generatedCommandList = nullptr, \
+       .eventList = nullptr, \
+       .eventCount = 0, \
+     },\
++  { \
 +      /* Endpoint: 2, Cluster: Occupancy Sensing (server) */ \
 +      .clusterId = 0x00000406, \
-+      .attributes = ZAP_ATTRIBUTE_INDEX(215), \
++      .attributes = ZAP_ATTRIBUTE_INDEX(218), \
 +      .attributeCount = 5, \
 +      .clusterSize = 3, \
 +      .mask = ZAP_CLUSTER_MASK(SERVER) | ZAP_CLUSTER_MASK(INIT_FUNCTION), \
@@ -607,23 +613,23 @@ diff --git a/applications/matter-aliro-door-lock-app/src/matter/zap_uwb/zap-gene
  
  // clang-format on
  
--#define ZAP_FIXED_ENDPOINT_DATA_VERSION_COUNT 18
-+#define ZAP_FIXED_ENDPOINT_DATA_VERSION_COUNT 21
+-#define ZAP_FIXED_ENDPOINT_DATA_VERSION_COUNT 19
++#define ZAP_FIXED_ENDPOINT_DATA_VERSION_COUNT 22
  
  // This is an array of EmberAfEndpointType structures.
  #define GENERATED_ENDPOINT_TYPES                                                                                       \
  	{                                                                                                              \
- 		{ ZAP_CLUSTER_INDEX(0), 17, 25 }, { ZAP_CLUSTER_INDEX(17), 3, 34 },                                    \
-+		{ ZAP_CLUSTER_INDEX(20), 3, 3 },                                                                       \
+ 		{ ZAP_CLUSTER_INDEX(0), 17, 25 }, { ZAP_CLUSTER_INDEX(17), 4, 41 },                                    \
++		{ ZAP_CLUSTER_INDEX(21), 3, 3 },                                                                       \
  	}
  
  // Largest attribute size is needed for various buffers
-@@ -1044,53 +1124,53 @@
+@@ -1065,53 +1145,53 @@
  #define ATTRIBUTE_SINGLETONS_SIZE (0)
  
  // Total size of attribute storage
--#define ATTRIBUTE_MAX_SIZE (59)
-+#define ATTRIBUTE_MAX_SIZE (62)
+-#define ATTRIBUTE_MAX_SIZE (66)
++#define ATTRIBUTE_MAX_SIZE (69)
  
  // Number of fixed endpoints
 -#define FIXED_ENDPOINT_COUNT (2)
