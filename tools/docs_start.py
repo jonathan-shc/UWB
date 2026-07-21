@@ -110,8 +110,7 @@ HERO = (
     '<header class="hero-band"><div class="hero-in">'
     '<div class="eyebrow">Start here</div><h1>Get started</h1>'
     '<p class="lede">From a clean checkout to a phone unlocking the door. '
-    "Pick a track below. Each one opens in place, with the commands and "
-    "guides it needs.</p>"
+    "Pick a track; it opens in place.</p>"
     "</div></header>"
 )
 
@@ -132,24 +131,21 @@ def main_html(gh: str) -> str:
         + "</ul>"
         '<details class="p-sub"><summary>Supported targets</summary>'
         '<div class="s-body">'
-        "<p>Primary: <b>nRF5340 DK</b> with a <b>DWM3000EVB</b> UWB shield "
-        "on the Arduino headers — the validated, measured target.</p>"
-        "<p>Ports: <b>ESP32-S3</b> with the same DWM3000EVB "
-        "(<code>ports/esp32</code>), and the port scaffolding under "
-        "<code>ports/nrf5340dk</code>.</p></div></details>"
+        "<p>Primary: <b>nRF5340 DK</b> + <b>DWM3000EVB</b> shield "
+        "(validated, measured).</p>"
+        "<p>Port: <b>ESP32-S3</b> with the same DWM3000EVB "
+        "(<code>ports/esp32</code>).</p></div></details>"
     )))
     tracks.append(("dl", "Software &amp; toolchain", "Everything to install, per target", (
         '<details class="p-sub" open><summary>nRF5340 — the primary target</summary>'
         '<div class="s-body">'
         + chip("nrfutil sdk-manager toolchain install --ncs-version v3.3.0")
         + chip("make bootstrap")
-        + "<p>The first command runs once per machine. "
-          "<code>make bootstrap</code> pulls ~6.5 GB into "
-          "<code>./workspace</code>.</p>"
+        + "<p>The first command runs once per machine; bootstrap pulls "
+          "~6.5 GB into <code>./workspace</code>.</p>"
         + "</div></details>"
         '<details class="p-sub"><summary>ESP32-S3 port</summary>'
-        '<div class="s-body"><p>ESP-IDF with esp-matter; the roadmap and the '
-        "retrospective of the port live in the porting guide.</p>"
+        '<div class="s-body">'
         '<ul class="rows">'
         + row("porting-esp32.html", "openaliro on ESP32-S3",
               "Porting roadmap and retrospective.")
@@ -172,9 +168,8 @@ def main_html(gh: str) -> str:
         + chip("make flash-erase")
         + chip("make test")
         + chip("make coverage")
-        + "<p>The image lands in <code>./build/merged.hex</code>; the first "
-          "flash needs the erase, plain <code>make flash</code> after. The "
-          "tests run on the host — no toolchain, no hardware.</p>"
+        + "<p>Images land in <code>./build/merged.hex</code>; first flash "
+          "needs the erase; tests run on the host, no hardware.</p>"
         + '<ul class="rows">'
         + row("configuring.html", "Configuring",
               "Build options, Kconfig overlays, and the runtime consoles.")

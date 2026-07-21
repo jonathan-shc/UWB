@@ -1,20 +1,19 @@
 # Installing
 
-Install per target. The nRF5340 DK is the primary target. The ESP32-S3 apps
-are ports of the same engine. Nothing needs hardware until you flash.
+The nRF5340 DK is the primary target; the ESP32-S3 apps port the same engine.
+No hardware needed until you flash.
 
 ## nRF5340 DK (primary target)
 
-Two commands. One per machine, one per checkout:
+Two commands: the first once per machine, the second once per checkout.
 
 ```bash
 nrfutil sdk-manager toolchain install --ncs-version v3.3.0
 make bootstrap
 ```
 
-The first command runs once per machine. `make bootstrap` fetches NCS v3.3.0
-plus the Nordic door-lock add-on, then applies this repo's patches: about
-6.5 GB, into `./workspace` (git-ignored). Knobs:
+`make bootstrap` pulls NCS v3.3.0 + the Nordic door-lock add-on (~6.5 GB)
+into `./workspace` and applies this repo's patches. Knobs:
 
 | Knob | Effect |
 |---|---|
@@ -31,15 +30,15 @@ make flash-erase
 make term
 ```
 
-The image lands in `./build/merged.hex`. The first flash needs the erase;
-plain `make flash` after. `make term` opens the serial console.
+The image lands in `./build/merged.hex`; the first flash needs the erase,
+plain `make flash` after.
 
-Build options live in [configuring.md](configuring.md). Board setup lives in
+Build options: [configuring.md](configuring.md). Board setup:
 [nrf5340-bringup.md](nrf5340-bringup.md).
 
 ## Host tests (no toolchain)
 
-A plain C compiler is enough. Runs in about a second:
+Needs only a plain C compiler; runs in a second.
 
 ```bash
 make test
@@ -48,12 +47,11 @@ make coverage
 
 ## ESP32-S3 ports
 
-Both apps expect ESP-IDF at `~/esp/esp-idf`. Override with
-`IDF_EXPORT=/path/to/esp-idf/export.sh`. CI uses ESP-IDF v5.5.4 and the
-esp-matter revision pinned in
+Both apps expect ESP-IDF at `~/esp/esp-idf` (override: `IDF_EXPORT=`); CI
+pins ESP-IDF v5.5.4 and esp-matter in
 [`firmware-builds.yml`](../.github/workflows/firmware-builds.yml).
 
-**Reader** (`../ports/esp32/apps/reader`). Plain ESP-IDF, no esp-matter:
+**Reader** (`../ports/esp32/apps/reader`): plain ESP-IDF, no esp-matter.
 
 ```bash
 cd ports/esp32/apps/reader
@@ -64,8 +62,8 @@ make flash
 
 `make set-target` runs once per checkout.
 
-**Matter door lock** (`../ports/esp32/apps/matter-lock`). Also needs
-esp-matter at `~/esp/esp-matter` (override: `ESP_MATTER_PATH=`):
+**Matter door lock** (`../ports/esp32/apps/matter-lock`): also needs
+esp-matter at `~/esp/esp-matter` (override: `ESP_MATTER_PATH=`).
 
 ```bash
 cd ports/esp32/apps/matter-lock
@@ -73,9 +71,8 @@ make set-target
 make go
 ```
 
-`make go` builds, flashes and opens the monitor. `flash` and `monitor`
-refuse SEGGER/J-Link ports. They can never write to an
-nRF5340 DK on the same bench.
+`make go` = build + flash + monitor; `flash` and `monitor` refuse
+SEGGER/J-Link ports, so they can never touch an nRF5340 DK on the bench.
 
 Wiring: [esp32-bringup.md](esp32-bringup.md). Traps:
 [esp32-gotchas.md](esp32-gotchas.md).

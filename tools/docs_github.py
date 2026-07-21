@@ -191,9 +191,8 @@ def quickstart(url: str) -> bytes:
 <ol class="qs-steps">
 {steps}
 </ol>
-<p class="qs-note">No toolchain or hardware? <code>make test</code> runs the host
-suite as-is. Targeting ESP32-S3 instead: start at the
-<a href="esp32-bringup.html">bring-up checklist</a>.</p>
+<p class="qs-note">No toolchain? <code>make test</code> runs as-is. On ESP32-S3,
+start at the <a href="esp32-bringup.html">bring-up checklist</a>.</p>
 </section>
 """.encode()
     )
