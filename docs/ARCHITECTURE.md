@@ -876,7 +876,8 @@ itself so nothing is hand-curated to drift:
     the rendered graph overflows its shell, so big graphs open showing their
     whole shape instead of a random crop — and makes the shells direct:
     drag pans, cmd/ctrl+scroll (and trackpad pinch) zooms around the
-    cursor, a plain scroll keeps scrolling the page.
+    cursor, and plain or shift+scroll stays native, so the shell scrolls
+    vertically or horizontally like any scrollable pane.
   * the per-module sections lose their visual noise: headings show the file
     name with the directory as a small eyebrow above it instead of one long
     path, the "depends on" rows become compact base-name chips (full path

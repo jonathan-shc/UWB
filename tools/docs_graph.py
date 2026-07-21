@@ -23,7 +23,8 @@ itself so nothing is hand-curated to drift:
     the rendered graph overflows its shell, so big graphs open showing their
     whole shape instead of a random crop — and makes the shells direct:
     drag pans, cmd/ctrl+scroll (and trackpad pinch) zooms around the
-    cursor, a plain scroll keeps scrolling the page.
+    cursor, and plain or shift+scroll stays native, so the shell scrolls
+    vertically or horizontally like any scrollable pane.
   * the per-module sections lose their visual noise: headings show the file
     name with the directory as a small eyebrow above it instead of one long
     path, the "depends on" rows become compact base-name chips (full path
@@ -72,8 +73,9 @@ if(c.themeVariables)c.themeVariables.fontSize="15px";orig(c)};})();
 # presses Fit once on any graph wider than its shell, and wires the shells
 # for direct manipulation: drag pans, cmd/ctrl+scroll (which is also what a
 # trackpad pinch sends) zooms around the cursor keeping the zoom buttons'
-# state in sync, and a plain scroll is forwarded to the page so the shell
-# never traps it. Fail-soft: no diagrams, no tools, or no CDN and the
+# state in sync; any other wheel event is left to the browser, which
+# scrolls the shell natively (shift+scroll horizontal) and chains to the
+# page at its edges. Fail-soft: no diagrams, no tools, or no CDN and the
 # interval just expires.
 FIT_SHIM = """<script defer id="gv-fit">
 (function(){var n=0,t=setInterval(function(){n++;
@@ -92,10 +94,9 @@ var px=cx-r.left+shell.scrollLeft,py=cy-r.top+shell.scrollTop;
 svg.style.width=svg.getBoundingClientRect().width/k*nk+"px";w.dataset.zoom=nk;
 shell.scrollLeft=px*nk/k-(cx-r.left);shell.scrollTop=py*nk/k-(cy-r.top)}
 shell.addEventListener("wheel",function(e){
-var m=e.deltaMode===1?16:1;
-if(e.metaKey||e.ctrlKey){e.preventDefault();
-setK(parseFloat(w.dataset.zoom||"1")*Math.pow(1.0015,-e.deltaY*m),e.clientX,e.clientY)}
-else{e.preventDefault();window.scrollBy(e.deltaX*m,e.deltaY*m)}},{passive:false});
+if(!e.metaKey&&!e.ctrlKey)return;
+e.preventDefault();var m=e.deltaMode===1?16:1;
+setK(parseFloat(w.dataset.zoom||"1")*Math.pow(1.0015,-e.deltaY*m),e.clientX,e.clientY)},{passive:false});
 var drag=null;
 shell.addEventListener("mousedown",function(e){
 if(e.button!==0||e.target.closest(".graph-tools"))return;
