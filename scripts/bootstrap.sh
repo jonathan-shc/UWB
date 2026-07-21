@@ -35,20 +35,41 @@ else
   launch() { nrfutil sdk-manager toolchain launch --ncs-version "$NCS_VER" -- "$@"; }
 fi
 
-# 1. Fetch pristine upstream into $WS.
+# 1. Fetch pristine upstream into $WS. A sentinel marks a completed fetch so an
+#    interrupted `west update` resumes on the next run — without it, a partial
+#    fetch would be skipped forever because the add-on clone already exists.
+FETCHED="$WS/.aliro-fetch-done"
 echo "==> workspace: $WS   (add-on pin ${PIN:0:10}…, NCS $NCS_VER)"
 if [ ! -d "$ADDON/.git" ]; then
   # Clone the manifest repo, checkout the pinned SHA, then `west init -l`.
   # (`west init -m … --mr <SHA>` is wrong: it runs `git clone --branch <SHA>`, and
   #  --branch only accepts a tag or branch name, never a commit SHA.)
   mkdir -p "$WS"
-  git clone -q "$ADDON_URL" "$ADDON"
-  git -C "$ADDON" checkout -q "$PIN"
+  if [ "${ALIRO_SHALLOW:-0}" = 1 ]; then
+    # Pinned-SHA shallow fetch (`git clone --depth` would need PIN at a tip).
+    git init -q "$ADDON"
+    git -C "$ADDON" remote add origin "$ADDON_URL"
+    git -C "$ADDON" fetch -q --depth 1 origin "$PIN"
+    git -C "$ADDON" checkout -q FETCH_HEAD
+  else
+    git clone -q "$ADDON_URL" "$ADDON"
+    git -C "$ADDON" checkout -q "$PIN"
+  fi
   launch west init -l "$ADDON"
-  echo "    west update — fetching NCS + modules from GitHub (multi-GB, first run)"
-  ( cd "$WS" && launch west update )
+fi
+if [ ! -f "$FETCHED" ]; then
+  echo "    west update — fetching NCS + modules from GitHub (multi-GB on a first run)"
+  # ALIRO_SHALLOW=1 fetches exactly the pinned revisions with no history —
+  # same tree state, a fraction of the size. For CI; the bench default keeps
+  # full clones (git archaeology in the workspace stays possible).
+  if [ "${ALIRO_SHALLOW:-0}" = 1 ]; then
+    ( cd "$WS" && launch west update --narrow -o=--depth=1 )
+  else
+    ( cd "$WS" && launch west update )
+  fi
+  touch "$FETCHED"
 else
-  echo "    already initialized — reusing (delete $WS for a clean re-fetch)"
+  echo "    already fetched — reusing (delete $WS for a clean re-fetch)"
 fi
 
 # 2. Apply our patches on top. Each target repo is reset to its pinned HEAD and
