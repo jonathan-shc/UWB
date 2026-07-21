@@ -1,4 +1,4 @@
-# Hardware validation checklist
+# Hardware validation
 
 Automated CI covers the host-side core of the nRF target (KAT suite, coverage floor,
 ASan/UBSan). It does not build either ESP32 port, and the end-to-end product runs against

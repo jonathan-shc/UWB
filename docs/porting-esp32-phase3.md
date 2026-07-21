@@ -1,4 +1,4 @@
-# ESP32-S3 port — Phase 3: the credential auth (deriving the ranging key)
+# Deriving the ranging key
 
 **Status: complete and hardware-validated.** Every step below has since run against a
 live iPhone: the transaction completes, the derived ranging key is correct, and the

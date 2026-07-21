@@ -1,4 +1,4 @@
-# Time synchronization and credential validity
+# Time synchronization
 
 Firmware-level notes on one subsystem: how the reader obtains wall-clock time, how
 that interacts with Aliro's time-based credential checks, and the fixes this repo
