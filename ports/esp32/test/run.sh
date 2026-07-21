@@ -52,6 +52,22 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$PBIN"
 
 echo
+echo "== host: aliro_lat walk-up trace (gate on + gate off) =="
+WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
+TBIN="$(mktemp -t aliro_lat.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
+   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
+"$TBIN"
+cc -std=c11 -O1 -Wall -Wextra \
+   -DWOZ_PORT_HOST \
+   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
+"$TBIN"
+rm -f "$TBIN"
+
+echo
 echo "== host: bolt-state LED policy =="
 MATTER_MAIN="$HERE/../apps/matter-lock/main"
 LBIN="$(mktemp -t lock_led.XXXXXX)"

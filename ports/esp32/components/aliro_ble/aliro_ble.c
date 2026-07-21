@@ -169,6 +169,7 @@ static int l2cap_event_cb(struct ble_l2cap_event *event, void *arg)
 			ESP_LOGW(TAG, "coc connect failed status=%d", event->connect.status);
 			return 0;
 		}
+		aliro_lat_mark(ALIRO_LAT_L2CAP_OPEN);
 		coc_track(event->connect.conn_handle, event->connect.chan);
 		ESP_LOGI(TAG, "coc connected (conn %u)", event->connect.conn_handle);
 		if (s_cb.on_connected) {
@@ -277,6 +278,7 @@ static int reader_spsm_access(uint16_t conn_handle, uint16_t attr_handle,
 	(void)conn_handle;
 	(void)attr_handle;
 	(void)arg;
+	aliro_lat_mark(ALIRO_LAT_GATT_SPSM_READ);
 	int rc = os_mbuf_append(ctxt->om, s_read_payload, s_read_payload_len);
 	return (rc == 0) ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
@@ -290,6 +292,7 @@ static int device_ver_access(uint16_t conn_handle, uint16_t attr_handle,
 	uint8_t buf[32];
 	uint16_t len = 0;
 
+	aliro_lat_mark(ALIRO_LAT_GATT_VER_WRITE);
 	int rc = ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &len);
 	if (rc != 0) {
 		return BLE_ATT_ERR_UNLIKELY;

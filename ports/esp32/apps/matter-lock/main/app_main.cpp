@@ -149,6 +149,9 @@ static app::DataModel::Nullable<uint16_t> aliro_operating_user(void)
 // to touch the DoorLock cluster). Unlock also stamps the walk-up latency mark on its first execution.
 static void schedule_bolt_unlock(void)
 {
+	// Threshold decision made on the reader task; bolt-near = the Matter-task
+	// hop + Unlock() itself.
+	aliro_lat_mark(ALIRO_LAT_NEAR_DWELL);
 	chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
 		BoltLockMgr().Unlock(door_lock_endpoint_id,
 				     chip::app::Clusters::DoorLock::OperationSourceEnum::kAliro,

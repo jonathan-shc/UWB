@@ -451,6 +451,8 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 	struct aliro_auth0_response r;
 	uint16_t sw;
 
+	aliro_lat_mark(ALIRO_LAT_AUTH0_RSP);
+
 	/* APDU response = <response TLV> SW1 SW2; drop the status word before parsing. */
 	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
 		LOG_ERR("[conn %u] AUTH0Response too short (%u B)", s->conn_handle, (unsigned)len);

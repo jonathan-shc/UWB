@@ -1,0 +1,14 @@
+menu "Aliro reader"
+
+config ALIRO_LAT_TRACE
+	bool "Walk-up latency trace (aliro-lat budget line)"
+	default y
+	help
+	  One-shot timestamps at every walk-up phase boundary (BLE connect ->
+	  discovery -> L2CAP -> AUTH0/EXCHANGE -> M1-M4 -> first range ->
+	  threshold -> bolt), printed as a single consolidated "aliro-lat"
+	  budget line after the bolt is driven. Diagnostics only: one uptime
+	  read + store per boundary, nothing on the UWB re-arm hot path.
+	  Disable to compile the trace out entirely.
+
+endmenu
