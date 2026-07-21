@@ -2,7 +2,7 @@
 
 The full Aliro reader stack — BLE transport, credential authentication, ranging setup,
 and the UWB engine — built as ESP-IDF components, with a small bench app on top. The
-Matter door lock in [`../esp32-matter`](../esp32-matter) reuses these components
+Matter door lock in [`../matter-lock`](../matter-lock) reuses these components
 verbatim; this tree is where they live and where you drive them without Matter in the
 way.
 
@@ -30,7 +30,7 @@ from `modules/woz_uwb/src/facade/woz_port.h` (eight functions: heap, monotonic
 clock, two sleeps, cycle counter) and its logging from `woz_log.h`, both of which
 select an ESP-IDF backend on `ESP_PLATFORM`. The earlier `compat/zephyr/*` shim,
 194 lines of fake `<zephyr/*>` headers, was deleted once those two headers
-existed. See [`docs/porting.md`](../../docs/porting.md).
+existed. See [`docs/porting.md`](../../../docs/porting.md).
 
 The CCC STS substitution links the same way it does on Nordic: `--wrap=dwt_rxenable`
 (the load-bearing one, where `ccc_shim_rx.c` programs the CCC key and IV on every RX-arm)
@@ -46,7 +46,7 @@ that calls `dwt_isr()`, because that call does SPI and cannot run in ISR context
 ## Wiring
 
 Source of truth is `components/woz_uwb/port/board_pins.h`; the physical
-DWM3000EVB-to-header mapping is in [`docs/esp32-bringup.md`](../../docs/esp32-bringup.md).
+DWM3000EVB-to-header mapping is in [`docs/esp32-bringup.md`](../../../docs/esp32-bringup.md).
 
     SPI2 / FSPI:  SCLK 12   MOSI 11   MISO 13   CS 10
     control:      RSTn  4   IRQ   5   WAKEUP 6
@@ -108,8 +108,8 @@ change — every bug in the gotchas log built cleanly first.
 
 ## Further reading
 
-- [`docs/esp32-bringup.md`](../../docs/esp32-bringup.md) — wire it up and confirm the radio answers.
-- [`docs/esp32-gotchas.md`](../../docs/esp32-gotchas.md) — every trap hit on the way to
+- [`docs/esp32-bringup.md`](../../../docs/esp32-bringup.md) — wire it up and confirm the radio answers.
+- [`docs/esp32-gotchas.md`](../../../docs/esp32-gotchas.md) — every trap hit on the way to
   a working unlock, with symptom and fix.
-- [`../esp32-matter/README.md`](../esp32-matter/README.md) — the same stack inside a
+- [`../matter-lock/README.md`](../matter-lock/README.md) — the same stack inside a
   Matter door lock.

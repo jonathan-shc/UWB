@@ -7,7 +7,7 @@
  * Replaces the CHIP shell (chip::Shell::Engine::RunMainLoop), which is a raw
  * streamer line-reader: no history, no completion, no arrow keys, and a log line
  * arriving mid-input clobbers what you typed. This is an esp_console REPL over
- * linenoise instead, matching the esp32-idf port's shell, and it is the sole
+ * linenoise instead, matching the bench reader app's shell, and it is the sole
  * reader of the console UART — running both would fight over the same fd.
  *
  * Commands that touch Matter state either schedule onto the Matter task or take

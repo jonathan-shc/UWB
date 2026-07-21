@@ -1,7 +1,7 @@
 # Host tests for the ESP32-S3 port
 
 ```bash
-ports/esp32-idf/test/run.sh
+ports/esp32/test/run.sh
 ```
 
 Plain `cc`, no ESP-IDF, no hardware. Every bug in the gotchas log built cleanly first, so

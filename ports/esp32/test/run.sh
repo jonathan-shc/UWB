@@ -52,7 +52,7 @@ rm -f "$PBIN"
 
 echo
 echo "== host: bolt-state LED policy =="
-MATTER_MAIN="$HERE/../../esp32-matter/main"
+MATTER_MAIN="$HERE/../apps/matter-lock/main"
 LBIN="$(mktemp -t lock_led.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$MATTER_MAIN" \

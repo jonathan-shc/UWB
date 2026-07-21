@@ -1,6 +1,6 @@
 # Makefile — command entry point for the ESP32-S3 Aliro Matter door lock.
 #
-# Same shape as ../esp32-idf/Makefile, plus the esp-matter environment this
+# Same shape as ../reader/Makefile, plus the esp-matter environment this
 # project's CMakeLists requires (ESP_MATTER_PATH). Keeps the serial-port safety
 # guard: flash/monitor auto-select the ESP's USB-UART port and REFUSE any
 # SEGGER/J-Link port (VID 0x1366) so this can never touch the nRF5340DK rig.

@@ -9,7 +9,7 @@ CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
 
 # Enable L2CAP Connection-Oriented Channels: the Aliro credential-auth transaction
 # rides an L2CAP CoC on the reader's SPSM. Default esp-matter NimBLE leaves this at
-# 0, so ble_l2cap_create_server() returns BLE_HS_ENOTSUP. Match the esp32-idf port.
+# 0, so ble_l2cap_create_server() returns BLE_HS_ENOTSUP. Match the bench reader app.
 CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
 
 # The Aliro reader runs its P-256 credential-auth (ECDH + ECDSA sign/verify + HKDF)

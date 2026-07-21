@@ -2,7 +2,7 @@
 
 A complete Aliro lock on a single ESP32-S3: it commissions into a Matter home, has a key
 provisioned into the phone's wallet, and then unlocks on approach over BLE + UWB. This is
-the port's front door — the standalone bench app in [`../esp32-idf`](../esp32-idf) is the
+the port's front door — the standalone bench app in [`../reader`](../reader) is the
 same reader without Matter around it.
 
 **Status: hardware-validated.** Approach unlock has been driven end to end on an
@@ -23,8 +23,8 @@ ESP32-S3
 └─ DW3000 backend ..................... ESP-IDF SPI + GPIO/IRQ
 ```
 
-Everything below the delegate is shared verbatim with `../esp32-idf`: this app's
-`CMakeLists.txt` adds `../esp32-idf/components` to `EXTRA_COMPONENT_DIRS` rather than
+Everything below the delegate is shared verbatim with `../reader`: this app's
+`CMakeLists.txt` adds `../../components` to `EXTRA_COMPONENT_DIRS` rather than
 duplicating any of it. The UWB engine (`modules/woz_uwb`) is in turn shared verbatim with
 the nRF5340 build at the repository root.
 
@@ -34,7 +34,7 @@ the nRF5340 build at the repository root.
   `~/esp/esp-idf` and `~/esp/esp-matter`; override with `IDF_EXPORT=` and
   `ESP_MATTER_PATH=` on any target.
 - ESP32-S3 dev board plus a DWM3000EVB wired per
-  [`docs/esp32-bringup.md`](../../docs/esp32-bringup.md).
+  [`docs/esp32-bringup.md`](../../../docs/esp32-bringup.md).
 - An Apple Home setup that can commission a Matter-over-Wi-Fi accessory and mint an Aliro
   key: a home hub, and an iPhone new enough to carry the key.
 
@@ -122,8 +122,8 @@ Matter starts.
 
 ## Further reading
 
-- [`docs/esp32-gotchas.md`](../../docs/esp32-gotchas.md) — every trap hit during this
+- [`docs/esp32-gotchas.md`](../../../docs/esp32-gotchas.md) — every trap hit during this
   bring-up, with symptom and fix. Read this before debugging anything.
-- [`../esp32-idf/README.md`](../esp32-idf/README.md) — the shared component stack.
-- [`../../docs/porting-esp32.md`](../../docs/porting-esp32.md) — how the port was planned
+- [`../reader/README.md`](../reader/README.md) — the shared component stack.
+- [`../../../docs/porting-esp32.md`](../../../docs/porting-esp32.md) — how the port was planned
   and how it actually went.

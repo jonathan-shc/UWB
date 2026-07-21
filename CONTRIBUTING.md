@@ -10,13 +10,13 @@ version for the nRF5340 DK target: `make bootstrap` once, then `make build`. Hos
 tests need no toolchain or hardware: `make test` runs the KAT suite, `make coverage` the
 coverage report.
 
-For the ESP32-S3 ports, build from the port directory (`ports/esp32-idf` or
-`ports/esp32-matter`) with ESP-IDF on your `PATH`; see [`ports/README.md`](ports/README.md).
-Their host tests run without ESP-IDF: `ports/esp32-idf/test/run.sh`.
+For the ESP32-S3 ports, build from the app directory (`ports/esp32/apps/reader` or
+`ports/esp32/apps/matter-lock`) with ESP-IDF on your `PATH`; see [`ports/README.md`](ports/README.md).
+Their host tests run without ESP-IDF: `ports/esp32/test/run.sh`.
 
 Every PR must pass the CI gates that run automatically: host tests, coverage floor,
 ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing, plus
-`ports/esp32-idf/test/run.sh` if you touched a port (CI does not yet gate on it).
+`ports/esp32/test/run.sh` if you touched a port (CI does not yet gate on it).
 
 ## Ground rules
 
@@ -28,8 +28,8 @@ ASan/UBSan, patch drift, and shellcheck. Run `make test` locally before pushing,
   code unrelated to your change.
 - **Tests come with the change.** New parsing, session, or crypto code in
   `modules/woz_uwb/` needs host KAT coverage in `tests/host/` (CI enforces a coverage
-  floor); the same rule applies to `ports/esp32-idf/components/` and
-  `ports/esp32-idf/test/`.
+  floor); the same rule applies to `ports/esp32/components/` and
+  `ports/esp32/test/`.
 - **Keep the shared engine target-neutral.** `modules/woz_uwb/` is compiled by both the
   nRF5340 and the ESP32-S3 builds. A tweak that only suits one target belongs behind
   `#if defined(ESP_PLATFORM)`, and `make test` must still pass (the host shim compiles
