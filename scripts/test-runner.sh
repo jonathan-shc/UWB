@@ -82,6 +82,12 @@ suite_counts() { # <outfile> -> "passed failed"
 		/^[[:space:]]+ok[[:space:]]/    { p++ }
 		/^[[:space:]]+FAIL[[:space:]]/  { f++ }
 		/^Ran [0-9]+ tests?/            { p += $2 }
+		# unittest skips are not passes: "OK (skipped=9)" et al.
+		/skipped=[0-9]+/ {
+			if (match($0, /skipped=[0-9]+/)) {
+				p -= substr($0, RSTART + 8, RLENGTH - 8)
+			}
+		}
 		/TOTAL[[:space:]]+[0-9]+[[:space:]]+✓/ { p += $2 }
 		/constants? verified/           { p += $1 }
 		END { printf "%d %d", p + 0, f + 0 }

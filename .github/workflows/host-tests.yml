@@ -32,6 +32,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # markdown==3.8 arms test_flash_html's regen-drift gate (it skips
+      # without the package); pinned to the version the committed
+      # release/*/FLASH.html files were rendered with.
+      - name: install python deps for the tooling suites
+        run: python3 -m pip install 'markdown==3.8'
       - name: run host KAT suite
         run: make test
 
@@ -73,6 +78,10 @@ jobs:
           persist-credentials: false
       - name: install llvm (llvm-profdata / llvm-cov)
         run: sudo apt-get update -q && sudo apt-get install -y -q llvm
+      # coverage.py puts real percentages on the python surface rows;
+      # markdown==3.8 lets the flash_html suite execute under measurement.
+      - name: install python deps (coverage.py + markdown)
+        run: python3 -m pip install coverage 'markdown==3.8'
       - name: build instrumented + run + report
         run: make coverage
       - name: enforce line-coverage floor

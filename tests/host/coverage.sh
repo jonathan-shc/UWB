@@ -182,11 +182,49 @@ SURFACES_TSV="$OUT/surfaces.tsv"
 surf() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$SURFACES_TSV"; }
 loc() { wc -l <"$ROOT/$1" | tr -d ' '; }
 
-surf "tools/aliro_lab.py" "$(loc tools/aliro_lab.py)" \
-	"tested by tests/host/test_aliro_lab.py — lines unmeasured"
-surf "integration/homeassistant/aliro_mqtt_bridge.py" \
-	"$(loc integration/homeassistant/aliro_mqtt_bridge.py)" "no tests"
-surf "scripts/flash_html.py" "$(loc scripts/flash_html.py)" "no tests"
+# Python line coverage via coverage.py when installed (pip install coverage);
+# without it the rows stay honest: "lines unmeasured". The suites re-run here
+# under measurement — cheap, and their pass/fail already gated in run.sh.
+PYCOV_JSON="$OUT/pycov.json"
+rm -f "$OUT/pycov" "$PYCOV_JSON"
+if python3 -m coverage --version >/dev/null 2>&1; then
+	PY_INCLUDE="$ROOT/tools/aliro_lab.py"
+	PY_INCLUDE+=",$ROOT/integration/homeassistant/aliro_mqtt_bridge.py"
+	PY_INCLUDE+=",$ROOT/scripts/flash_html.py"
+	for t in test_aliro_lab test_mqtt_bridge test_flash_html; do
+		COVERAGE_FILE="$OUT/pycov" python3 -m coverage run -a \
+			--include="$PY_INCLUDE" \
+			"$ROOT/tests/host/$t.py" >>"$OUT/run.log" 2>&1 || true
+	done
+	COVERAGE_FILE="$OUT/pycov" python3 -m coverage json -q -o "$PYCOV_JSON"
+fi
+
+pypct() { # <repo-relative .py> -> "NN.N" (empty when unmeasured)
+	[ -f "$PYCOV_JSON" ] || return 0
+	python3 - "$ROOT/$1" "$PYCOV_JSON" <<-'EOF'
+	import json, os, sys
+	target = os.path.realpath(sys.argv[1])
+	for name, info in json.load(open(sys.argv[2]))["files"].items():
+	    if os.path.realpath(name) == target:
+	        print("%.1f" % info["summary"]["percent_covered"])
+	EOF
+}
+
+pyrow() { # <repo-relative .py> <test file>: surf row with measured %
+	local pct status
+	pct="$(pypct "$1")"
+	status="tested by tests/host/$2"
+	if [ -n "$pct" ]; then
+		status+=" — ${pct}% lines"
+	else
+		status+=" — lines unmeasured (pip install coverage)"
+	fi
+	surf "$1" "$(loc "$1")" "$status"
+}
+
+pyrow "tools/aliro_lab.py" "test_aliro_lab.py"
+pyrow "integration/homeassistant/aliro_mqtt_bridge.py" "test_mqtt_bridge.py"
+pyrow "scripts/flash_html.py" "test_flash_html.py"
 surf "web-twin/index.html" "$(loc web-twin/index.html)" \
 	"constants drift-gated in CI; JS logic untested"
 surf "web-flasher/index.html" "$(loc web-flasher/index.html)" "no tests"
