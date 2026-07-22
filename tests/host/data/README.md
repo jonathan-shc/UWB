@@ -11,20 +11,21 @@ Serial logs consumed by `tools/aliro_lab.py`.
 
 ## Capturing a real one
 
-Instrument and flash the **matter-lock** app (it stamps the full walk-up through
-the bolt), then tee a serial session to a file and do an iPhone walk-up:
+The **matter-lock** app stamps the full walk-up through the bolt. `make lab-flash`
+builds the trace variant into an isolated `build-lab/` and flashes it — the normal
+`make build`/`make flash` stays default-off, so there is no menuconfig toggle to
+set and nothing to remember to turn back off:
 
 ```
 cd ports/esp32/apps/matter-lock
-make menuconfig        # Aliro reader -> [*] Aliro Lab transaction trace
-make flash
+make lab-flash                # builds CONFIG_WOZ_ALIRO_LAB=y into build-lab/, flashes
 make term LOG=walkup.log
 # walk up to the reader with the provisioned iPhone, let it unlock, walk away
 # ctrl-t q to quit tio
 
-python3 ../../../tools/aliro_lab.py walkup.log       # eyeball the report
+python3 ../../../tools/aliro_lab.py walkup.log                  # eyeball the report
 cp walkup.log ../../../tests/host/data/aliro_lab_capture.log   # keep it
 ```
 
-Turn the trace back off (`make menuconfig`, clear the option) before a
-production build — it is default-off by design.
+Nothing to undo afterwards: the trace lives only in `build-lab/`, and a plain
+`make build` never enables it. `make lab-clean` drops the variant tree.
