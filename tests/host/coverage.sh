@@ -157,6 +157,12 @@ SIDE_UNIT_SRCS=(
 	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c"
 	"$EAPPS/reader/main/app_shell.c"
 	"$EAPPS/reader/main/main.c"
+	"$EAPPS/matter-lock/main/app_driver.cpp"
+	"$EAPPS/matter-lock/main/app_main.cpp"
+	"$EAPPS/matter-lock/main/app_shell.cpp"
+	"$EAPPS/matter-lock/main/lock/door_lock_manager.cpp"
+	"$EAPPS/matter-lock/main/lock/door_lock_callbacks.cpp"
+	"$EAPPS/matter-lock/main/lock/aliro_reader_delegate.cpp"
 )
 
 cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 \
@@ -233,6 +239,23 @@ cov_cc -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" \
 	"$ET/test_esp_wrap_stubs.c" \
 	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c" -o "$OUT/cov_esp_wrap"
 run_suite esp_wrap "$OUT/cov_esp_wrap"
+
+# C++ suite: the six matter-lock app sources on the matterfake CHIP/esp-matter
+# doubles (mirror of the run.sh matter-lock stage; lock_led.c is C, own object).
+MLOCK="$EAPPS/matter-lock/main"
+MFAKE="$ET/matterfake"
+cov_cc -c "$MLOCK/lock_led.c" -o "$OUT/lock_led_matter_cov.o"
+"${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
+	-DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
+	-DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
+	-I"$MFAKE" -I"$SDKFAKE" -I"$MLOCK" -I"$MLOCK/lock" \
+	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" -I"$SRC/facade" \
+	"$ET/test_esp_matter_lock.cpp" \
+	"$MLOCK/app_driver.cpp" "$MLOCK/app_main.cpp" "$MLOCK/app_shell.cpp" \
+	"$MLOCK/lock/door_lock_manager.cpp" "$MLOCK/lock/door_lock_callbacks.cpp" \
+	"$MLOCK/lock/aliro_reader_delegate.cpp" \
+	"$MFAKE/matterfake.cc" "$OUT/lock_led_matter_cov.o" -o "$OUT/cov_esp_matter"
+run_suite esp_matter "$OUT/cov_esp_matter"
 
 llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
 

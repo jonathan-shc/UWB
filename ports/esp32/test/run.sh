@@ -222,5 +222,31 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$SBIN2"
 
 echo
+echo "== host: matter-lock app glue vs CHIP/esp-matter fakes =="
+# The six esp-matter door-lock app sources compiled UNMODIFIED against the
+# matterfake/ CHIP + esp-matter recording doubles (C++17). Proves branch
+# logic + argument plumbing only — never CHIP-stack, NimBLE, hardware, or
+# crypto truth. lock_led.c is C, so it gets its own object first.
+MFAKE="$HERE/matterfake"
+LOCKD="$HERE/../apps/matter-lock/main"
+MBIN="$(mktemp -t esp_matter_lock.XXXXXX)"
+cc -std=c11 -O1 -w -c "$LOCKD/lock_led.c" -o "$MBIN.led.o"
+${CXX:-c++} -std=c++17 -O1 -w \
+   -DCONFIG_ENABLE_ALIRO_BLE_UWB=1 -DCONFIG_WOZ_ALIRO_LAB=1 \
+   -DCONFIG_ALIRO_LAT_TRACE=1 -DWOZ_PORT_HOST \
+   -I "$MFAKE" -I "$SDKFAKE" -I "$LOCKD" -I "$LOCKD/lock" \
+   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   "$HERE/test_esp_matter_lock.cpp" \
+   "$LOCKD/app_driver.cpp" "$LOCKD/app_main.cpp" "$LOCKD/app_shell.cpp" \
+   "$LOCKD/lock/door_lock_manager.cpp" "$LOCKD/lock/door_lock_callbacks.cpp" \
+   "$LOCKD/lock/aliro_reader_delegate.cpp" \
+   "$MFAKE/matterfake.cc" "$MBIN.led.o" -o "$MBIN"
+# pipefail keeps the binary's exit status; the grep hides app_main's own
+# onboarding-code printf noise without dropping any ok/FAIL/RESULT line.
+"$MBIN" | grep -E '^(--|  ok|  FAIL|RESULT)'
+rm -f "$MBIN" "$MBIN.led.o"
+
+echo
 echo "== target: port build + link-seam guard =="
 bash "$HERE/verify_port.sh"
