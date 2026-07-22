@@ -6,7 +6,7 @@ over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you wal
 
 | File | What it is |
 |---|---|
-| `openaliro-matter-lock.bin` | one merged image (bootloader + partitions + app), flashed at 0x0 |
+| `openaliro-matter-lock-esp32s3.bin` | one merged image (bootloader + partitions + app), flashed at 0x0 |
 | `flash.sh` | flashes the image with esptool |
 | `FLASH.md` / `FLASH.html` | this guide, plain text and styled |
 | `VERSION.txt` | release tag, commit, and build date |
@@ -71,7 +71,7 @@ plugging in, retry, then replug.
 Manual equivalent:
 
 ```bash
-esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock.bin
+esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
 ```
 
 Reflashing wipes any previous commissioning.

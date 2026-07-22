@@ -57,7 +57,7 @@ DWM3000EVB-to-header mapping is in
 
 ```bash
 cd ports/esp32/apps/reader
-idf.py set-target esp32s3   # once per checkout
+idf.py set-target esp32s3   # once per checkout (esp32c5 also supported)
 make build
 make flash
 make monitor

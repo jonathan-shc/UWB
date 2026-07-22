@@ -17,8 +17,8 @@ else
   echo "ERROR: esptool not found. Install it with:  pip install esptool"
   exit 1
 fi
-[ -f openaliro-matter-lock.bin ] || {
-  echo "ERROR: openaliro-matter-lock.bin not found next to this script."
+[ -f openaliro-matter-lock-esp32s3.bin ] || {
+  echo "ERROR: openaliro-matter-lock-esp32s3.bin not found next to this script."
   exit 1
 }
 
@@ -26,6 +26,6 @@ PORT=()
 [ $# -ge 1 ] && PORT=(--port "$1")
 
 "${ESPTOOL[@]}" --chip esp32s3 ${PORT[@]+"${PORT[@]}"} --baud 460800 \
-  write_flash 0x0 openaliro-matter-lock.bin
+  write_flash 0x0 openaliro-matter-lock-esp32s3.bin
 
 echo "==> done. Open the serial port at 115200 baud for the commissioning QR code."
