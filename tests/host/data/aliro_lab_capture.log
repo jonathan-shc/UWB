@@ -1,0 +1,77 @@
+help
+status 
+  lock state, fabric count, last/trusted range
+
+lock 
+  drive the bolt to Locked
+
+unlock 
+  drive the bolt to Unlocked
+
+codes 
+  reprint the commissioning QR URL + manual pairing code
+
+range 
+  print the latest distance
+
+aliro 
+  aliro <prov|trust|clear>: show identity / trust last credential / empty trust
+  store
+
+uwbdiag 
+  uwbdiag [on|off]: raw per-frame UWB trace (boot default off; costs slot
+  deadlines)
+
+log 
+  log <tag|*> <level>: runtime log level (boot default warn)
+
+factoryreset 
+  erase all Matter state and reboot
+
+clear 
+  clear the screen (also: ctrl-L)
+
+help  [<string>] [-v <0|1>]
+  Print the summary of all registered commands if no arguments are given,
+  otherwise print summary of given command.
+      <string>  Name of command
+  -v, --verbose=<0|1>  If specified, list console commands with given verbose level
+
+matter>  clear
+[H[2Jmatter>  el  c
+Unrecognized command
+matter>  clear
+[H[2Jmatter>  W (64430) aliro_ble: conn update failed: status=554
+[ALAB] t=65016270 ev=session.start
+[ALAB] t=65350028 ev=flow.fast cred=2
+[ALAB] t=65857367 ev=rrx id=0
+[ALAB] t=65861167 ev=rrx id=1
+[ALAB] t=65863269 ev=rtx id=0
+[ALAB] t=65947039 ev=rrx id=1
+[ALAB] t=65949259 ev=rtx id=2
+[ALAB] t=66037119 ev=rrx id=3
+DIAG ull_configure chan=9
+DIAG ull_setchannel ch=9 dw_state=0x03
+DIAG setcallbacks: SPIRdy=0x0 RxOk=0x4203bdf4 TxDone=0x4203bde0 RxTo=0x4203bdb8 RxErr=0x4203bdcc
+[ALAB] t=67854169 ev=grant.sent
+aliro-lat: connect+0 op05+1230 auth0+1230 auth1+1476 exch+1621 apc+1622 m4+2178 range+3592 trusted+3976 bolt+4170 ms
+[ALAB] t=63875861 ev=ph.connect
+[ALAB] t=65106030 ev=ph.op05
+[ALAB] t=65106566 ev=ph.auth0
+[ALAB] t=65352044 ev=ph.auth1
+[ALAB] t=65497715 ev=ph.exch
+[ALAB] t=65498724 ev=ph.apc
+[ALAB] t=66054617 ev=ph.m4
+[ALAB] t=67468209 ev=ph.range
+[ALAB] t=67852551 ev=ph.trusted
+[ALAB] t=68046480 ev=ph.bolt
+[ALAB] t=69646401 ev=relock.sent
+[ALAB] t=70926287 ev=grant.sent
+[ALAB] t=83855434 ev=relock.sent
+[ALAB] t=98766233 ev=grant.sent
+[ALAB] t=100368154 ev=relock.sent
+[ALAB] t=104718688 ev=grant.sent
+[ALAB] t=106510150 ev=relock.sent
+[ALAB] t=107598232 ev=grant.sent
+[ALAB] t=118991376 ev=relock.sent
+[ALAB] t=130831045 ev=grant.sent
