@@ -5,62 +5,157 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flash openaliro to an ESP32-S3 from the browser</title>
 <style>
-:root {
-  --bg: #faf8f4; --fg: #2b2a27; --muted: #6d6a63; --line: #e4e0d8;
-  --accent: #b0552e; --accent-fg: #fff; --callout: #f4ece2; --code: #efece6;
+/* Self-contained copy of the site theme (tools/docs_theme.py): this page is
+   staged into site/flash/ but must also render standalone from web-flasher/
+   on a bench, so it embeds the palette instead of linking ../style.css. */
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..600&display=swap');
+:root{
+  --ground:#faf9f5; --raise:#f0eee6; --card:#ffffff;
+  --ink:#3d3d3a; --strong:#141413; --muted:#73726c;
+  --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);
+  --accent:#c96442; --accent-hover:#a34f31; --accent-fg:#faf9f5;
+  --tint:rgba(20,20,19,.07); --tint-line:rgba(31,30,29,.24);
+  --herotint:rgba(201,100,66,.055);
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #191817; --fg: #e8e5df; --muted: #a09c93; --line: #34322e;
-    --accent: #c96a3e; --accent-fg: #fff; --callout: #262320; --code: #24221f;
-  }
+@media (prefers-color-scheme:dark){:root{
+  --ground:#1f1e1d; --raise:#302f2c; --card:#262624;
+  --ink:#c2c0b6; --strong:#faf9f5; --muted:#9e9c93;
+  --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
+  --accent:#d97757; --accent-hover:#d4a27f; --accent-fg:#141413;
+  --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.38);
+  --herotint:rgba(212,162,127,.05);
+}}
+:root[data-theme="light"]{
+  --ground:#faf9f5; --raise:#f0eee6; --card:#ffffff;
+  --ink:#3d3d3a; --strong:#141413; --muted:#73726c;
+  --line:rgba(31,30,29,.15); --hairline:rgba(31,30,29,.08);
+  --accent:#c96442; --accent-hover:#a34f31; --accent-fg:#faf9f5;
+  --tint:rgba(20,20,19,.07); --tint-line:rgba(31,30,29,.24);
+  --herotint:rgba(201,100,66,.055);
 }
-* { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--fg);
-  font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+:root[data-theme="dark"]{
+  --ground:#1f1e1d; --raise:#302f2c; --card:#262624;
+  --ink:#c2c0b6; --strong:#faf9f5; --muted:#9e9c93;
+  --line:rgba(250,249,245,.13); --hairline:rgba(250,249,245,.07);
+  --accent:#d97757; --accent-hover:#d4a27f; --accent-fg:#141413;
+  --tint:rgba(212,162,127,.13); --tint-line:rgba(212,162,127,.38);
+  --herotint:rgba(212,162,127,.05);
 }
-main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 .4rem; }
-h2 { font-size: 1.15rem; margin: 2.4rem 0 .6rem; }
-p, li { color: var(--fg); }
-.tagline { color: var(--muted); margin-top: 0; }
-a { color: var(--accent); }
-code { background: var(--code); padding: .1em .35em; border-radius: 5px; font-size: .88em; }
-table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .92rem; }
-th, td { border: 1px solid var(--line); padding: .35rem .6rem; text-align: left; }
-th { background: var(--callout); }
-.tablewrap { overflow-x: auto; }
-.callout {
-  background: var(--callout); border-left: 4px solid var(--accent);
-  border-radius: 6px; padding: .7rem 1rem; margin: 1rem 0;
+*{box-sizing:border-box}
+html{font-size:17px}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font:1rem/1.78 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }
-.flashrow { text-align: center; margin: 1.6rem 0; }
-esp-web-install-button button.btn {
-  background: var(--accent); color: var(--accent-fg); border: 0; cursor: pointer;
-  font: inherit; font-weight: 600; padding: .7rem 1.6rem; border-radius: 8px;
+
+/* Topbar: the site shell's solid bar — wordmark crumb left, GitHub chip right. */
+.topbar{
+  position:sticky; top:0; z-index:10; display:flex; align-items:center;
+  gap:.55rem; height:3.4rem; padding:0 1.1rem;
+  background:var(--ground); border-bottom:1px solid var(--hairline);
 }
-esp-web-install-button button.btn:hover { filter: brightness(1.08); }
-.unsupported { color: var(--muted); font-size: .92rem; }
-.fine { color: var(--muted); font-size: .88rem; border-top: 1px solid var(--line); margin-top: 2.6rem; padding-top: 1rem; }
-ol li, ul li { margin: .3rem 0; }
+.wordmark{color:var(--strong); font-weight:650; font-size:.9rem; text-decoration:none}
+.wordmark:hover{color:var(--accent)}
+.crumb-sep{color:var(--muted); font-size:.85rem}
+.crumb{color:var(--muted); font-size:.85rem}
+.spacer{flex:1}
+.gh-chip{
+  display:inline-flex; align-items:center; gap:.45rem;
+  border:1px solid var(--line); border-radius:999px; padding:.32rem .8rem;
+  color:var(--ink); font-size:.82rem; font-weight:550; text-decoration:none;
+}
+.gh-chip:hover{border-color:var(--tint-line); color:var(--strong)}
+
+/* Hero band: tinted gradient, uppercase eyebrow, serif display heading. */
+.hero-band{background:linear-gradient(180deg,var(--herotint),transparent 82%)}
+.hero-in{max-width:48rem; margin:0 auto; padding:3rem 1.25rem 0}
+.eyebrow{
+  color:var(--accent); font-size:.74rem; font-weight:650;
+  letter-spacing:.13em; text-transform:uppercase; margin-bottom:.6rem;
+}
+h1{
+  font-family:var(--serif); font-size:2.35rem; font-weight:430;
+  line-height:1.22; letter-spacing:0; color:var(--strong); margin:0 0 .8rem;
+}
+.lede{font-size:1.16rem; line-height:1.65; color:var(--muted); margin:0 0 1rem}
+
+main{max-width:48rem; margin:0 auto; padding:1.2rem 1.25rem 4rem}
+h2{
+  font-family:var(--serif); font-size:1.6rem; font-weight:500;
+  letter-spacing:0; color:var(--strong); margin:3rem 0 1rem;
+}
+p{margin:1.05rem 0}
+strong{color:var(--strong)}
+a{color:var(--accent)}
+a:hover{color:var(--accent-hover)}
+code{
+  background:var(--raise); border-radius:6px; padding:.12em .38em;
+  font-size:.85em; color:var(--strong);
+}
+ol li,ul li{margin:.35rem 0}
+
+/* Tables read like the rest of the site: horizontal hairlines only. */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; margin:.9rem 0; font-size:.92rem}
+th,td{border:0; border-bottom:1px solid var(--hairline); padding:.6rem .8rem; text-align:left}
+th{border-bottom:1px solid var(--line); font-weight:600; color:var(--strong)}
+
+.callout{
+  background:var(--tint); border:1px solid var(--tint-line);
+  border-radius:12px; padding:.85rem 1.1rem; margin:1.2rem 0;
+}
+
+/* The install row: terracotta button; the component swaps in the alert when
+   the browser has no WebSerial or the page is not a secure context. */
+.flashrow{text-align:center; margin:1.8rem 0}
+esp-web-install-button button.btn{
+  background:var(--accent); color:var(--accent-fg); border:0; cursor:pointer;
+  font:inherit; font-weight:600; font-size:1rem;
+  padding:.75rem 1.7rem; border-radius:10px;
+}
+esp-web-install-button button.btn:hover{background:var(--accent-hover)}
+.alert{
+  display:inline-flex; gap:.65rem; align-items:baseline; text-align:left;
+  background:var(--tint); border:1px solid var(--tint-line); border-radius:12px;
+  padding:.85rem 1.1rem; max-width:34rem; color:var(--strong); font-size:.95rem;
+}
+.alert .sign{color:var(--accent); font-weight:650}
+
+.fine{
+  color:var(--muted); font-size:.88rem; border-top:1px solid var(--hairline);
+  margin-top:3rem; padding-top:1.2rem;
+}
 </style>
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </head>
 <body>
-<main>
-<h1>Flash openaliro from your browser</h1>
-<p class="tagline">The complete Aliro Matter lock on a single ESP32-S3: it
-commissions into Apple Home over Wi-Fi, your iPhone carries the key in Wallet,
-and the lock opens as you walk up (BLE + UWB approach unlock). This page
-flashes the firmware over WebSerial. Nothing to install, no ESP-IDF.</p>
+<header class="topbar">
+  <a class="wordmark" href="../">openaliro</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb">Flash from the browser</span>
+  <div class="spacer"></div>
+  <a class="gh-chip" href="https://github.com/asxeem/openaliro" target="_blank" rel="noopener" aria-label="asxeem/openaliro on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>asxeem/openaliro</a>
+</header>
 
+<header class="hero-band"><div class="hero-in">
+  <div class="eyebrow">Get started</div>
+  <h1>Flash openaliro from your browser</h1>
+  <p class="lede">The complete Aliro Matter lock on a single ESP32-S3: it
+  commissions into Apple Home over Wi-Fi, your iPhone carries the key in
+  Wallet, and the lock opens as you walk up (BLE + UWB approach unlock).
+  This page flashes the firmware over WebSerial. Nothing to install, no
+  ESP-IDF.</p>
+</div></header>
+
+<main>
 <h2>What you need</h2>
 <ul>
   <li>ESP32-S3 dev board (validated on ESP32-S3-WROOM N16R8; smaller variants untested)</li>
   <li>Qorvo DWM3000EVB (DW3110), the UWB radio, hand-wired over SPI</li>
   <li>11 jumper wires and a USB <strong>data</strong> cable</li>
-  <li>Chrome or Edge on a computer (WebSerial is not available in Safari or Firefox)</li>
+  <li>Chrome, Edge, or Firefox on a computer (WebSerial; Safari and mobile
+  browsers cannot flash)</li>
 </ul>
 <p>Apple side: an iPhone with a UWB chip (iOS 26 is the validated floor), a
 Home hub (HomePod or Apple TV), and a 2.4&nbsp;GHz Wi-Fi network.</p>
@@ -99,10 +194,13 @@ clears everything beyond the image, which is the safe pick on a used board.</p>
 <div class="flashrow">
   <esp-web-install-button manifest="manifest.json">
     <button slot="activate" class="btn">Connect &amp; Install</button>
-    <span slot="unsupported" class="unsupported">This browser cannot flash
-    over WebSerial. Use Chrome or Edge on a computer.</span>
-    <span slot="not-allowed" class="unsupported">WebSerial needs a secure
-    (https) page.</span>
+    <span slot="unsupported" class="alert"><span class="sign">&#9888;</span>
+    <span>This browser can't flash over WebSerial. Use <strong>Chrome</strong>,
+    <strong>Edge</strong>, or <strong>Firefox</strong> on a computer &mdash;
+    Safari and mobile browsers don't support it.</span></span>
+    <span slot="not-allowed" class="alert"><span class="sign">&#9888;</span>
+    <span>WebSerial needs a secure page: open this page over
+    <strong>https</strong> (or localhost) and retry.</span></span>
   </esp-web-install-button>
 </div>
 <p>No port in the list? Use a data cable, or hold the board's BOOT button
