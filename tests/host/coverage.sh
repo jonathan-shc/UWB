@@ -63,6 +63,7 @@ CORE_UNIT_SRCS=(
 	"$ALIRO/src/aliro_stepup_parse.c"
 	"$ALIRO/src/aliro_prov.c"
 	"$ALIRO/src/aliro_lat.c"
+	"$ALIRO/src/aliro_reader.c"
 	"$LOCK_MAIN/lock_led.c"
 )
 
@@ -103,6 +104,15 @@ run_suite lat "$OUT/cov_lat"
 cov_cc -I"$LOCK_MAIN" \
 	"$ET/test_lock_led.c" "$LOCK_MAIN/lock_led.c" -o "$OUT/cov_led"
 run_suite led "$OUT/cov_led"
+
+cov_cc -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
+	-I"$ALIRO/include" -I"$ALIRO/src" -I"$ROOT/modules/woz_port/include" \
+	"$ET/test_aliro_reader.c" \
+	"$ALIRO/src/aliro_reader.c" "$ALIRO/src/aliro_apdu.c" \
+	"$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
+	"$ALIRO/src/aliro_prov.c" \
+	"$ET/aliro_prim_host.c" -o "$OUT/cov_reader"
+run_suite reader "$OUT/cov_reader"
 
 # Header-inline logic (woz_port.h et al.) is exercised by the port-headers
 # unit test; instrumenting it attributes those lines to the headers below.

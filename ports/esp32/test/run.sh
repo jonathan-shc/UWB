@@ -85,6 +85,27 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$TBIN"
 
 echo
+echo "== host: aliro_reader engine walk-up (scripted phone) =="
+# The reader engine end-to-end: a scripted phone drives AUTH0/AUTH1/EXCHANGE/
+# AP-Completed against the real state machine + codec + key schedule, with the
+# BLE transport, ranging adapter and NVS backend as recording doubles and the
+# fake-EC prim double standing in for the curve (see aliro_prim_host.c).
+# -Wno-unused-variable/-function: the host LOG no-ops orphan the unit's rc/
+# diagnostic locals; the test file itself stays warning-clean.
+RBIN="$(mktemp -t aliro_reader.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -Wno-unused-variable -Wno-unused-function \
+   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
+   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   "$HERE/test_aliro_reader.c" \
+   "$ALIRO/src/aliro_reader.c" "$ALIRO/src/aliro_apdu.c" \
+   "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_hash.c" \
+   "$ALIRO/src/aliro_prov.c" \
+   "$HERE/aliro_prim_host.c" -o "$RBIN"
+"$RBIN"
+rm -f "$RBIN"
+
+echo
 echo "== host: bolt-state LED policy =="
 MATTER_MAIN="$HERE/../apps/matter-lock/main"
 LBIN="$(mktemp -t lock_led.XXXXXX)"
