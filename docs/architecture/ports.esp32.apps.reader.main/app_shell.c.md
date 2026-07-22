@@ -104,8 +104,15 @@ Shell command handler: clears the terminal screen via linenoiseClearScreen. Alwa
 
 Shell command handler: trusts the last-presented Aliro credential and persists it to NVS via aliro_reader_trust_last. Prints success, "nothing to add" (no credential presented or already trusted, rc == 1), or failure (trust store full or NVS error, other nonzero rc). Always returns 0 to the shell.
 
+### `static int cmd_aliro_stepup(int argc, char **argv)`
+`ports/esp32/apps/reader/main/app_shell.c:240`
+
+Shell command handler: `aliro-stepup [arm|status]`. With `arm` (or no argument)
+it arms a one-shot Access-Document request for the next transaction; `status`
+prints the armed state and the most recent verification verdict. Always 0.
+
 ### `void app_shell_start(void)`
-`ports/esp32/apps/reader/main/app_shell.c:236`
+`ports/esp32/apps/reader/main/app_shell.c:253`
 
 Register commands and start the UART console REPL (own task).
 

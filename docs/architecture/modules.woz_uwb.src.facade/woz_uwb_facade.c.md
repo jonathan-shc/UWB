@@ -17,7 +17,7 @@ nRF5340-specific platform seam: the app core boots with HFCLK divided to
 64 MHz. Other SoCs (e.g. ESP32-S3) clock their SPI controller independently,
 so this compiles to a no-op there. See docs/porting.md.
 
-**called by** `woz_uwb_bind_ursk`, `woz_uwb_start_aliro`
+**called by** `woz_uwb_bind_ursk`, `woz_uwb_prewarm`, `woz_uwb_start_aliro`
 
 ### `int woz_uwb_bind_ursk(const uint8_t *ursk, size_t ursk_len)`
 `modules/woz_uwb/src/facade/woz_uwb_facade.c:44`
@@ -40,27 +40,37 @@ fails.
 
 **calls** `woz_hfclk_ensure_128mhz`
 
+### `int woz_uwb_prewarm(uint8_t channel, uint8_t sync_code_index)`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:91`
+
+@brief Pre-apply the expected session PHY so the M4-time start skips dwt_configure.
+@param channel UWB channel the upcoming session is expected to negotiate.
+@param sync_code_index Expected SYNC code index.
+@return 0 on success; the M4 start recovers with a full configure on any failure.
+
+**calls** `woz_hfclk_ensure_128mhz`
+
 ### `void woz_uwb_stop(void)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:88`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:100`
 
 @brief Quiesce the radio and unbind the CCC STS shim.
 
 ### `bool woz_uwb_last_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:102`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:114`
 
 @brief Retrieve the last valid DS-TWR distance measurement in centimeters.
 @param cm_out Pointer to store the distance in cm.
 @return True if a valid range has been seen since initialization; false otherwise.
 
 ### `void woz_uwb_set_range_listener(void (*cb)(void))`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:120`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:132`
 
 @brief Register a callback fired after each accepted DS-TWR range latch.
 @param cb Callback invoked on the UWB RX path (keep it to a task wake), or NULL to clear.
 Without CONFIG_WOZ_ALIRO there is no range latch to observe and this is a no-op.
 
 ### `bool woz_uwb_trusted_range_cm(int32_t *cm_out)`
-`modules/woz_uwb/src/facade/woz_uwb_facade.c:129`
+`modules/woz_uwb/src/facade/woz_uwb_facade.c:141`
 
 Latest distance in cm, gated by the range-integrity consensus (layer 4):
 true only when a valid range has been seen AND it is trusted
