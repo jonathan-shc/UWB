@@ -63,7 +63,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CC: clang # coverage.sh's instrumentation flags are clang-only
-      COV_MIN: "85" # line-% floor; total was 89.2% when set
+      COV_MIN: "80" # line-% floor; re-based from 85 when the shared-core
+      # suites + header-inline attribution joined the denominator (84.7% at
+      # the re-base; the old woz_uwb-only set measured 89.2%).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

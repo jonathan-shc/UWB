@@ -7,7 +7,7 @@
 #   make                 # this grouped, colourised help
 #   make build           # incremental build   -> build/merged.hex
 #   make test            # host KAT test for the pure CCC core
-#   make coverage        # line coverage of that core (+ HTML report)
+#   make coverage        # line coverage of all our code (+ HTML report)
 #   make build PRETTY=1 CHIP=dw3720   # build options (build targets only)
 
 .DEFAULT_GOAL := help
@@ -82,7 +82,7 @@ pretty:
 test:
 	@$(REPO_ROOT)/tests/host/run.sh
 
-## coverage: line coverage of the pure CCC core  ->  terminal table + HTML
+## coverage: line coverage of every host suite, 0% rows for the rest  ->  table + HTML
 ##   Instrumented (clang source-based coverage); slower than `make test` and
 ##   rebuilt at -O0. Artifacts under build/coverage/ (html/index.html).
 coverage:
