@@ -65,14 +65,19 @@ rm -f "$PBIN"
 
 echo
 echo "== host: aliro_lat walk-up trace (gate on + gate off) =="
+# _POSIX_C_SOURCE: woz_port.h's host woz_uptime_us needs clock_gettime /
+# CLOCK_MONOTONIC, which strict -std=c11 hides on glibc (macOS exposes them
+# regardless). A -D lands before every include, so ordering is safe.
 WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
 TBIN="$(mktemp -t aliro_lat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
+   -D_POSIX_C_SOURCE=200809L \
    -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
    "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
 "$TBIN"
 cc -std=c11 -O1 -Wall -Wextra \
+   -D_POSIX_C_SOURCE=200809L \
    -DWOZ_PORT_HOST \
    -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
    "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
