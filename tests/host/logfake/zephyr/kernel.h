@@ -53,6 +53,8 @@ void k_timer_start(struct k_timer *timer, k_timeout_t duration, k_timeout_t peri
 #ifndef IS_ENABLED
 /* Zephyr's config-macro probe: 1 iff the macro is defined to 1, else 0. */
 #define LOGFAKE_IE3(ignore_this, val, ...) val
+/* The token-paste probe cannot parenthesize its argument. */
+/* NOLINTNEXTLINE(bugprone-macro-parentheses) */
 #define LOGFAKE_IE2(one_or_two_args)       LOGFAKE_IE3(one_or_two_args 1, 0)
 #define _XXXX1                             LOGFAKE_YYYY,
 #define LOGFAKE_IE1(config_macro)          LOGFAKE_IE2(_XXXX##config_macro)

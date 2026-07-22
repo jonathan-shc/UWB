@@ -756,6 +756,8 @@ void test_aliro_msg(void)
 		aliro_uwb_msg_free(g_tx.msg);
 		g_tx.msg = NULL;
 	}
+	/* No session destroy here: the ranging flow above already tore it down
+	 * via the CCC DEINIT event (which frees the session and its URSK). */
 	aliro_uwb_adapter_destroy(adapter);
 	cherry_destroy_sync(cx);
 }

@@ -68,6 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CC: clang # coverage.sh's instrumentation flags are clang-only
+      CXX: clang++ # ditto for the instrumented C++ suites (ubuntu c++ is g++)
       COV_MIN: "90" # line-% floor; raised from 80 after the coverage push
       # landed the full denominator (shared core + reader engine + headers)
       # at 96.1%. History: 85 against the woz_uwb-only set (89.2%), 80 at
