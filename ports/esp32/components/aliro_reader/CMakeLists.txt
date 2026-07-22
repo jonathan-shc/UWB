@@ -13,6 +13,13 @@ idf_component_register(
 		"${ALIRO}/src/aliro_prov.c"
 		"${ALIRO}/src/aliro_ranging.c"
 		"${ALIRO}/src/aliro_lat.c"
+		# Step-up (Access Document) phase. The platform-neutral codec + verifier
+		# always compile (pure functions, no side effects) but are only invoked
+		# from aliro_reader.c under CONFIG_WOZ_ALIRO_STEPUP (default n); the ESP
+		# worker's whole body is gated, so it is empty with the option off.
+		"${ALIRO}/src/aliro_stepup.c"
+		"${ALIRO}/src/aliro_stepup_parse.c"
+		"aliro_stepup_worker.c"
 		"aliro_prov_nvs.c"
 	INCLUDE_DIRS "${ALIRO}/include"
 	PRIV_INCLUDE_DIRS "${ALIRO}/src"
