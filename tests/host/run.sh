@@ -25,4 +25,7 @@ fi
 WOZ_TEST_QUIET=1 "$ROOT/build/host_test"
 
 # Host-side tooling tests (pure-stdlib Python; no toolchain involved).
+# test_flash_html needs the python-markdown package and skips cleanly without.
 python3 "$ROOT/tests/host/test_aliro_lab.py"
+python3 "$ROOT/tests/host/test_mqtt_bridge.py"
+python3 "$ROOT/tests/host/test_flash_html.py"
