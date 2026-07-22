@@ -29,6 +29,8 @@ Idempotent like the other passes: a marker comment guards both files, so
 re-running over a kept site/ changes nothing. Run from the repo root, any time
 after the generators; it edits only the two stylesheets, no page markup.
 
+**discussed in** [`web-twin/README.md`](../../../web-twin/README.md)
+
 ```mermaid
 flowchart TD
   main --> theme
