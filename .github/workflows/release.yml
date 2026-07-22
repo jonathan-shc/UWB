@@ -1,6 +1,7 @@
 # Release flash bundles — on a version tag, build the two end-user targets and
-# attach self-contained bundles (firmware + flash script + FLASH.md) to a
-# GitHub release. Bundle sources live in release/<target>/.
+# attach self-contained bundles (firmware + flash script + FLASH.md, plus the
+# ESP32's browser-flash manifest) to a GitHub release. Bundle sources live in
+# release/<target>/.
 #
 # Deliberately cache-free, unlike firmware-builds.yml: a release binary must
 # not depend on restored CI state (a poisoned workspace or compiler cache would
@@ -106,13 +107,22 @@ jobs:
             git submodule update --init --depth 1 &&
             ./connectedhomeip/connectedhomeip/scripts/checkout_submodules.py \
               --platform esp32 linux --shallow &&
-            # CHIP pins cffi==1.15.0 (python<3.13), which ships no wheel for
-            # the environment's CIPD python 3.11, and its from-source build
-            # breaks in this container. 1.15.1 is the same release line with
-            # cp311 wheels, so pip never has to compile it.
-            sed -i 's/cffi==1.15.0/cffi==1.15.1/' \
+            # CHIP pins cffi==1.15.0 for python<3.13, but on Linux the CHIP
+            # venv runs the container's python (3.12 on this ubuntu:24.04
+            # image) — pigweed's python311.json override only covers darwin
+            # and windows — and no cffi 1.15.x ships a cp312 wheel, so pip
+            # compiles it from source and dies in this container. 1.17.1 is
+            # CHIP's own pin for python>=3.13 and ships cp312 wheels.
+            sed -i 's/cffi==1.15.0/cffi==1.17.1/' \
               connectedhomeip/connectedhomeip/scripts/setup/constraints.txt \
               connectedhomeip/connectedhomeip/scripts/setup/requirements.all.txt &&
+            # Same story one step later: requirements.esp32.txt pins
+            # bitarray==2.6.0, which has no wheel for the container's build
+            # python 3.12, so pip compiles it from source and fails on a
+            # missing Python.h. 2.8.2 is the first release with a cp312
+            # manylinux x86_64 wheel, so pip installs it prebuilt.
+            sed -i 's/bitarray==2.6.0/bitarray==2.8.2/' \
+              connectedhomeip/connectedhomeip/scripts/setup/requirements.esp32.txt &&
             ./install.sh --no-host-tool
           )
           setup || {
@@ -137,6 +147,11 @@ jobs:
           cp ports/esp32/apps/matter-lock/build/openaliro-matter-lock.bin "$out"/
           cp release/esp32-matter-lock/FLASH.md release/esp32-matter-lock/FLASH.html \
             release/esp32-matter-lock/flash.sh "$out"/
+          # ESP Web Tools manifest for the browser flasher (web-flasher/):
+          # same merged image at offset 0, version stamped from the ref. sed
+          # with | so a dispatch run's branch-name ref cannot end the pattern.
+          sed "s|\"version\": \"dev\"|\"version\": \"${REF_NAME}\"|" \
+            web-flasher/manifest.json > "$out/manifest.json"
           printf 'openaliro %s (%s)\nbuilt %s\nhttps://github.com/asxeem/openaliro\n' \
             "$REF_NAME" "$COMMIT" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$out/VERSION.txt"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -168,7 +183,14 @@ jobs:
             b="$(basename "$d")"
             (cd dist && zip -qr "../out/$b.zip" "$b")
           done
-          (cd out && sha256sum ./*.zip > SHA256SUMS.txt)
+          # Loose copies of the browser-flash pieces: the docs site's flash
+          # page (tools/docs_flash.py) pulls these by fixed name from the
+          # latest release, and a bare `esptool write_flash 0x0` needs only
+          # the .bin.
+          cp dist/openaliro-esp32-matter-lock/openaliro-matter-lock.bin out/
+          cp dist/openaliro-esp32-matter-lock/manifest.json \
+            out/openaliro-matter-lock.manifest.json
+          (cd out && sha256sum ./*.zip ./*.bin ./*.json > SHA256SUMS.txt)
           ls -l out
       - name: create the release
         env:
@@ -183,6 +205,10 @@ jobs:
             echo "(open it in a browser) covering tools, wiring, flashing, and Apple"
             echo "Home setup. Evaluation firmware with Matter test certificates."
             echo
+            echo "The ESP32-S3 image also flashes straight from the browser, no tools"
+            echo "at all: https://${REPO%%/*}.github.io/${REPO#*/}/flash/ (Chrome or"
+            echo "Edge). The loose .bin/.manifest.json assets below feed that page."
+            echo
             echo "| Bundle | Hardware | What you get |"
             echo "|---|---|---|"
             echo "| openaliro-nrf5340dk | nRF5340 DK + DWM3000EVB + X-NUCLEO-NFC12A1 | NFC tap + UWB approach unlock, Matter over Thread |"
@@ -194,4 +220,4 @@ jobs:
           } > "$notes"
           gh release create "$TAG" --repo "$REPO" --verify-tag \
             --title "openaliro $TAG" --notes-file "$notes" \
-            out/*.zip out/SHA256SUMS.txt
+            out/*.zip out/*.bin out/*.json out/SHA256SUMS.txt
