@@ -105,6 +105,12 @@ python3 tools/docs_theme.py
 echo "==> link pass"
 python3 tools/docs_links.py
 
+# After the link pass on purpose: the flash page is standalone with absolute
+# links only, so it needs no rewriting, and when no firmware is available the
+# page does not exist for the pass to scan.
+echo "==> web flasher"
+python3 tools/docs_flash.py
+
 if [ "$SKIPPED_GEN" -eq 1 ]; then
 	echo "==> freshness gate (skipped: no page generator configured)"
 else
