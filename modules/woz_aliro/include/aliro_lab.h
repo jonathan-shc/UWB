@@ -1,8 +1,9 @@
 // Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
-// parsed by tools/aliro_lab.py into a scored walk-up report. Compiled out unless
-// CONFIG_WOZ_ALIRO_LAB is set; when compiled in it is still OFF at boot and
-// toggled at runtime (the `lab on`/`lab off` console command), so one lab-flashed
-// firmware profiles on demand without a reflash.
+// parsed by tools/aliro_lab.py into a scored walk-up report. Ships in every Aliro
+// build (CONFIG_WOZ_ALIRO_LAB defaults y, like the sibling uwbdiag trace) but is
+// OFF at boot and toggled at runtime by the `lab on`/`lab off` console command, so
+// any firmware profiles on demand with no reflash. Set CONFIG_WOZ_ALIRO_LAB=n to
+// strip it from a hardened production image.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC

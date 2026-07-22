@@ -34,14 +34,6 @@ LOG ?=
 # make flash FORCE=1 stops whatever holds the UART (a monitor/tio) before flashing.
 FORCE ?=
 
-# Aliro Lab profiling variant: an isolated build tree with the transaction trace
-# on, layered via sdkconfig.lab. Kept separate from the normal build/ so a plain
-# `make build`/`make flash` is always default-off. build-* is gitignored.
-LAB_BUILD     := build-lab
-LAB_SDKCONFIG := $(LAB_BUILD)/sdkconfig
-LAB_ARGS      := -B $(LAB_BUILD) -DSDKCONFIG=$(LAB_SDKCONFIG) \
-                 -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.$(TARGET);sdkconfig.lab"
-
 # USB vendor ids (decimal, as ioreg reports them) used to classify ports.
 # Keep values trailing-whitespace-free: an inline comment would leak spaces into
 # the value and break the awk string compares below.
@@ -89,7 +81,7 @@ if [ -n "$$holder" ]; then \
 fi
 endef
 
-.PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab lab-build lab-flash lab-clean ports clean
+.PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab ports clean
 
 check-env:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -182,9 +174,10 @@ term:
 	printf '  tio %s @ %s 8N1  ·  ctrl-t q quits  ·  release before make flash\n' "$$port" '$(BAUD)'; \
 	exec tio -b $(BAUD) $$logargs "$$port"
 
-##@ Aliro Lab  (transaction profiling · flash once, then `make lab` per walk-up)
-## lab: capture a walk-up to a timestamped log, then auto-score it  (needs a lab-flash'd board)
-##   At the matter> console: `lab on`, walk up + unlock, `lab off`, then ctrl-t q.
+##@ Aliro Lab  (transaction profiling · no special build — the trace is in every image)
+## lab: capture a walk-up to a timestamped log, then auto-score it
+##   The trace ships in every build, OFF at boot. At the matter> console:
+##   `lab on`, walk up + unlock, `lab off`, then ctrl-t q.
 lab:
 	@command -v tio >/dev/null 2>&1 || { printf '  tio not found · install: brew install tio\n' >&2; exit 1; }
 	@command -v python3 >/dev/null 2>&1 || { printf '  python3 not found\n' >&2; exit 1; }
@@ -195,23 +188,6 @@ lab:
 	printf '\n  scoring %s\n' "$$log"; \
 	python3 ../../../../tools/aliro_lab.py "$$log" "$$log.html" || true; \
 	{ command -v open >/dev/null 2>&1 && [ -f "$$log.html" ] && open "$$log.html"; } || true
-
-## lab-build: build the trace variant into build-lab/  (normal build/ untouched)
-lab-build: check-env
-	@[ -f $(LAB_SDKCONFIG) ] || $(IDFPY) $(LAB_ARGS) set-target $(TARGET)
-	@$(IDFPY) $(LAB_ARGS) build
-	@echo "  Aliro Lab build ready — flash it: make lab-flash · then: make term LOG=walkup.log"
-
-## lab-flash: build the trace variant + flash it  (then: make term LOG=walkup.log)
-lab-flash: lab-build
-	@$(RESOLVE_PORT); \
-	$(ENSURE_PORT_FREE); \
-	echo "  flashing Aliro Lab build on $$port"; \
-	$(IDFPY) -B $(LAB_BUILD) -DSDKCONFIG=$(LAB_SDKCONFIG) -p "$$port" flash
-
-## lab-clean: remove the build-lab/ tree
-lab-clean:
-	@rm -rf $(LAB_BUILD); echo "  removed $(LAB_BUILD)/"
 
 ##@ Housekeeping
 ## ports: list attached usbmodem ports, labelled by board

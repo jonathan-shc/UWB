@@ -1,7 +1,6 @@
 # ESP-IDF / esp-matter build output + generated / fetched artifacts.
-# sdkconfig.defaults* and sdkconfig.lab are the tracked source of truth.
+# sdkconfig.defaults* are the tracked source of truth.
 /build/
-/build-lab/
 /sdkconfig
 /sdkconfig.old
 # `make lab` capture logs + their rendered reports.

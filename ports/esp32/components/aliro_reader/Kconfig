@@ -2,12 +2,14 @@ menu "Aliro reader"
 
     config WOZ_ALIRO_LAB
         bool "Aliro Lab transaction trace"
-        default n
+        default y
         help
-            Emit structured "[ALAB] t=<us> ev=..." lines at transaction phase
-            boundaries (connect, auth, ranging setup, first range, bolt) so
+            Compile in the structured "[ALAB] t=<us> ev=..." trace at transaction
+            phase boundaries (connect, auth, ranging setup, first range, bolt) so
             tools/aliro_lab.py can turn a captured serial log into a scored
-            walk-up report. Diagnostics only: default off, and every trace
-            call compiles out of the firmware when disabled.
+            walk-up report. Like the sibling `uwbdiag` trace, it ships in every
+            Aliro build but stays OFF at boot — the `lab on`/`lab off` console
+            command toggles it at runtime, off the UWB hot path. Set n to strip
+            it entirely from a hardened production image.
 
 endmenu

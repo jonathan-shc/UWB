@@ -11,13 +11,14 @@ Serial logs consumed by `tools/aliro_lab.py`.
 
 ## Capturing a real one
 
-The **matter-lock** app stamps the full walk-up through the bolt. Flash a
-trace-capable image once, then capture as many walk-ups as you like without
-reflashing — the trace is OFF at boot and toggled at the `matter>` console:
+The **matter-lock** app stamps the full walk-up through the bolt. The trace ships
+in every build (like the sibling `uwbdiag` trace) but is OFF at boot, so there is
+no special build — flash normally, then capture as many walk-ups as you like,
+toggling the trace at the `matter>` console:
 
 ```
 cd ports/esp32/apps/matter-lock
-make lab-flash        # ONE TIME: build CONFIG_WOZ_ALIRO_LAB=y into build-lab/ and flash
+make flash            # a normal build/flash — the trace is compiled in, off at boot
 
 make lab              # per walk-up: opens the console, captures, auto-scores + opens the report
 #   at the console:  lab on
@@ -32,7 +33,5 @@ To keep a capture as the committed reference artifact:
 cp walkup-<timestamp>.log ../../../tests/host/data/aliro_lab_capture.log
 ```
 
-`make build` / `make flash` never enable the trace (it lives only in `build-lab/`,
-and even there it is off until `lab on`), so nothing leaks into a production image
-and there is nothing to remember to turn off. `make lab-clean` drops the variant
-tree; `make lab-build` builds it without flashing.
+To strip the trace entirely from a hardened production image, set
+`CONFIG_WOZ_ALIRO_LAB=n` (menuconfig or a defaults fragment).

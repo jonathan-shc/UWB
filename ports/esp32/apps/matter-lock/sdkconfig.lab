@@ -1,5 +1,0 @@
-# Aliro Lab profiling overlay: turns the transaction trace on
-# (CONFIG_WOZ_ALIRO_LAB). Layered ONLY by `make lab-build` / `make lab-flash`,
-# into an isolated build-lab/ tree — a normal `make build` never sees this file,
-# so production images stay default-off. See tests/host/data/README.md.
-CONFIG_WOZ_ALIRO_LAB=y
