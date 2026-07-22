@@ -23,6 +23,9 @@
 #include <aliro_reader.h>
 #include <woz_uwb_facade.h>
 #include <woz_diag.h> // woz_uwb_diag_on — the raw per-frame UWB trace gate
+#ifdef CONFIG_WOZ_ALIRO_LAB
+#include <aliro_lab.h> // aliro_lab_set_enabled — the transaction-trace runtime gate
+#endif
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -286,6 +289,25 @@ static int cmd_log(int argc, char **argv)
 	return 0;
 }
 
+#ifdef CONFIG_WOZ_ALIRO_LAB
+/* Aliro Lab transaction trace: OFF at boot (the [ALAB] lines are blocking UART
+ * writes on the protocol path, so they cost walk-up latency while on). `lab on`
+ * before a walk-up, `lab off` after; tools/aliro_lab.py scores the captured log. */
+static int cmd_lab(int argc, char **argv)
+{
+	if (argc == 2 && strcmp(argv[1], "on") == 0) {
+		aliro_lab_set_enabled(true);
+	} else if (argc == 2 && strcmp(argv[1], "off") == 0) {
+		aliro_lab_set_enabled(false);
+	} else if (argc != 1) {
+		printf("usage: lab [on|off]\n");
+		return 0;
+	}
+	printf("aliro lab trace: %s\n", aliro_lab_enabled() ? "on" : "off");
+	return 0;
+}
+#endif
+
 // Shell handler for the "clear" command; clears the terminal screen. Always returns 0.
 static int cmd_clear(int argc, char **argv)
 {
@@ -347,6 +369,12 @@ void app_shell_start(void)
 			 "costs slot deadlines)",
 		 .hint = NULL,
 		 .func = cmd_uwbdiag},
+#ifdef CONFIG_WOZ_ALIRO_LAB
+		{.command = "lab",
+		 .help = "lab [on|off]: Aliro Lab transaction trace (boot default off)",
+		 .hint = NULL,
+		 .func = cmd_lab},
+#endif
 #endif
 		{.command = "log",
 		 .help = "log <tag|*> <level>: runtime log level (boot default warn)",

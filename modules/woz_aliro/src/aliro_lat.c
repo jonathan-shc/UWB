@@ -26,7 +26,9 @@ static const char *const k_phase_name[ALIRO_LAT_PHASE_COUNT] = {
 };
 
 #if defined(CONFIG_WOZ_ALIRO_LAB)
-/* aliro_lab (see aliro_lab.h): the walk-up's ph.* lines print at most once. */
+/* aliro_lab (see aliro_lab.h): runtime gate (OFF at boot; `lab on` flips it) and
+ * the once-per-walk-up guard for the ph.* dump. */
+static bool s_lab_on;
 static bool s_lab_dumped;
 #endif
 
@@ -72,19 +74,35 @@ void aliro_lat_report(void)
 
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 
+void aliro_lab_set_enabled(bool on)
+{
+	s_lab_on = on;
+}
+
+bool aliro_lab_enabled(void)
+{
+	return s_lab_on;
+}
+
 void aliro_lab_ev(const char *ev)
 {
+	if (!s_lab_on) {
+		return;
+	}
 	woz_printf("[ALAB] t=%lld ev=%s\n", (long long)woz_uptime_us(), ev);
 }
 
 void aliro_lab_evi(const char *ev, const char *key, long val)
 {
+	if (!s_lab_on) {
+		return;
+	}
 	woz_printf("[ALAB] t=%lld ev=%s %s=%ld\n", (long long)woz_uptime_us(), ev, key, val);
 }
 
 void aliro_lab_dump(void)
 {
-	if (s_lab_dumped) {
+	if (!s_lab_on || s_lab_dumped) {
 		return;
 	}
 	s_lab_dumped = true;

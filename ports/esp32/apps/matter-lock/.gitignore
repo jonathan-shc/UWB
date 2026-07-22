@@ -4,5 +4,8 @@
 /build-lab/
 /sdkconfig
 /sdkconfig.old
+# `make lab` capture logs + their rendered reports.
+/walkup-*.log
+/walkup-*.log.html
 /dependencies.lock
 /managed_components/

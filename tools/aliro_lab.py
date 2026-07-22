@@ -299,7 +299,8 @@ def render_terminal(name, txns, checks_by_txn, use_color):
     out = []
     out.append("Aliro Lab — %s" % name)
     if not txns:
-        out.append("no [ALAB] transactions found (is CONFIG_WOZ_ALIRO_LAB on?)")
+        out.append("no [ALAB] transactions found "
+                   "(flash a lab build, then `lab on` at the console before the walk-up)")
         return "\n".join(out) + "\n"
 
     for txn, checks in zip(txns, checks_by_txn):
@@ -424,8 +425,9 @@ def render_html(name, txns, checks_by_txn):
 
     if not txns:
         parts.append("<section><h2>No transactions</h2>"
-                     '<p class="meta">no [ALAB] lines found — capture a walk-up '
-                     "with CONFIG_WOZ_ALIRO_LAB enabled.</p></section>")
+                     '<p class="meta">no [ALAB] lines found — flash a lab build, '
+                     "then <code>lab on</code> at the console before the walk-up."
+                     "</p></section>")
 
     for txn, checks in zip(txns, checks_by_txn):
         parts.append("<section>")

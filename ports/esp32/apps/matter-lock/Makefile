@@ -89,7 +89,7 @@ if [ -n "$$holder" ]; then \
 fi
 endef
 
-.PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab-build lab-flash lab-clean ports clean
+.PHONY: help check-env env set-target build rebuild reconfigure menuconfig size flash app-flash flash-erase monitor go run term lab lab-build lab-flash lab-clean ports clean
 
 check-env:
 	@[ -f "$(IDF_EXPORT)" ] || { echo "  ESP-IDF export.sh not found at $(IDF_EXPORT)" >&2; \
@@ -182,7 +182,20 @@ term:
 	printf '  tio %s @ %s 8N1  ·  ctrl-t q quits  ·  release before make flash\n' "$$port" '$(BAUD)'; \
 	exec tio -b $(BAUD) $$logargs "$$port"
 
-##@ Aliro Lab  (profiling build · CONFIG_WOZ_ALIRO_LAB=y · isolated in build-lab/)
+##@ Aliro Lab  (transaction profiling · flash once, then `make lab` per walk-up)
+## lab: capture a walk-up to a timestamped log, then auto-score it  (needs a lab-flash'd board)
+##   At the matter> console: `lab on`, walk up + unlock, `lab off`, then ctrl-t q.
+lab:
+	@command -v tio >/dev/null 2>&1 || { printf '  tio not found · install: brew install tio\n' >&2; exit 1; }
+	@command -v python3 >/dev/null 2>&1 || { printf '  python3 not found\n' >&2; exit 1; }
+	@$(RESOLVE_PORT); \
+	log="walkup-$$(date +%Y%m%d-%H%M%S).log"; \
+	printf '  %s @ %s · at the console: `lab on`, walk up, `lab off`, then ctrl-t q\n' "$$port" '$(BAUD)'; \
+	tio -b $(BAUD) -L --log-file "$$log" "$$port" || true; \
+	printf '\n  scoring %s\n' "$$log"; \
+	python3 ../../../../tools/aliro_lab.py "$$log" "$$log.html" || true; \
+	{ command -v open >/dev/null 2>&1 && [ -f "$$log.html" ] && open "$$log.html"; } || true
+
 ## lab-build: build the trace variant into build-lab/  (normal build/ untouched)
 lab-build: check-env
 	@[ -f $(LAB_SDKCONFIG) ] || $(IDFPY) $(LAB_ARGS) set-target $(TARGET)

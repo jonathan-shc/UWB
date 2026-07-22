@@ -1,6 +1,8 @@
 // Aliro Lab trace: structured "[ALAB]" lines at transaction phase boundaries,
 // parsed by tools/aliro_lab.py into a scored walk-up report. Compiled out unless
-// CONFIG_WOZ_ALIRO_LAB is set.
+// CONFIG_WOZ_ALIRO_LAB is set; when compiled in it is still OFF at boot and
+// toggled at runtime (the `lab on`/`lab off` console command), so one lab-flashed
+// firmware profiles on demand without a reflash.
 /*
  * Copyright (c) 2026 asxeem
  * SPDX-License-Identifier: ISC
@@ -15,24 +17,43 @@
 #ifndef ALIRO_LAB_H
 #define ALIRO_LAB_H
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 
-/* One trace line, stamped now. */
+/* Runtime gate: emitters are silent until enabled. OFF at boot; the console
+ * `lab on`/`lab off` command drives this so a lab-flashed image traces on
+ * demand. Set from the console task; a plain store is enough for a diagnostic. */
+void aliro_lab_set_enabled(bool on);
+bool aliro_lab_enabled(void);
+
+/* One trace line, stamped now (no-op while disabled). */
 void aliro_lab_ev(const char *ev);
 
-/* One trace line with a single integer attribute, stamped now. */
+/* One trace line with a single integer attribute, stamped now (no-op while
+ * disabled). */
 void aliro_lab_evi(const char *ev, const char *key, long val);
 
 /* Print a `ph.<name>` line for every latency phase stamped this walk-up, at the
- * phase's own timestamp. One-shot until aliro_lat_begin() opens the next
- * walk-up; call off the UWB path. */
+ * phase's own timestamp (no-op while disabled). One-shot until aliro_lat_begin()
+ * opens the next walk-up; call off the UWB path. */
 void aliro_lab_dump(void);
 
 #else
+
+static inline void aliro_lab_set_enabled(bool on)
+{
+	(void)on;
+}
+
+static inline bool aliro_lab_enabled(void)
+{
+	return false;
+}
 
 static inline void aliro_lab_ev(const char *ev)
 {
