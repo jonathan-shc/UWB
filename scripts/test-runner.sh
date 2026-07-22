@@ -89,6 +89,12 @@ suite_counts() { # <outfile> -> "passed failed"
 			}
 		}
 		/TOTAL[[:space:]]+[0-9]+[[:space:]]+✓/ { p += $2 }
+		# side test binaries: "  uwb-driver: PASS (194 checks — ...)"
+		/: PASS \([0-9]+ checks/ {
+			if (match($0, /\([0-9]+ checks/)) {
+				p += substr($0, RSTART + 1, RLENGTH - 8)
+			}
+		}
 		/constants? verified/           { p += $1 }
 		END { printf "%d %d", p + 0, f + 0 }
 	' "$1"

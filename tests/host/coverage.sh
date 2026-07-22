@@ -130,9 +130,113 @@ cov_cc -I"$ROOT/modules/woz_port/include" -I"$ROOT/modules/woz_uwb/src/facade" \
 	"$ET/test_port_headers.c" -o "$OUT/cov_hdrs"
 run_suite hdrs "$OUT/cov_hdrs"
 
+# --- target-only sources on recording doubles (mirrors of the run.sh side
+# binaries and the ports/esp32/test sdkfake stages). These measure branch
+# logic against fakes — never hardware, radio, or crypto truth.
+SRC="$ROOT/modules/woz_uwb/src"
+HOSTD="$ROOT/tests/host"
+ECOMP="$ROOT/ports/esp32/components"
+EAPPS="$ROOT/ports/esp32/apps"
+SDKFAKE="$ET/sdkfake"
+
+SIDE_UNIT_SRCS=(
+	"$SRC/driver/uwb_min.c"
+	"$SRC/driver/uwb_isr.c"
+	"$SRC/driver/uwb_rxdiag.c"
+	"$SRC/driver/uwb_selftest.c"
+	"$SRC/shell/aliro_shell.c"
+	"$SRC/ccc/ccc_crypto_psa.c"
+	"$SRC/ccc/ccc_crypto_mbedtls.c"
+	"$ALIRO/src/aliro_prim_psa.c"
+	"$ROOT/modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp"
+	"$ECOMP/aliro_ble/aliro_ble.c"
+	"$ECOMP/aliro_reader/aliro_prov_nvs.c"
+	"$ECOMP/aliro_reader/aliro_stepup_worker.c"
+	"$ECOMP/woz_uwb/port/dw3000_hw.c"
+	"$ECOMP/woz_uwb/port/dw3000_spi.c"
+	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c"
+	"$EAPPS/reader/main/app_shell.c"
+	"$EAPPS/reader/main/main.c"
+)
+
+cov_cc -DWOZ_PORT_HOST -D_DEFAULT_SOURCE -DCONFIG_WOZ_ALIRO=1 \
+	-DCONFIG_WOZ_UWB_SELFTEST_DELAY_MS=250 \
+	-I"$HOSTD/shim" -I"$HOSTD" -I"$HOSTD/logfake" \
+	-I"$SRC/driver" -I"$SRC/ccc" -I"$SRC/fira" -I"$SRC/facade" \
+	-I"$ROOT/modules/woz_port/include" -I"$ROOT/deps/dw3000/platform" \
+	"$HOSTD/test.c" "$HOSTD/drv_main.c" \
+	"$HOSTD/test_uwb_min.c" "$HOSTD/test_uwb_isr.c" "$HOSTD/test_uwb_rxdiag.c" \
+	"$HOSTD/test_uwb_selftest.c" "$HOSTD/test_aliro_shell.c" \
+	"$HOSTD/shim/drvfake.c" \
+	"$SRC/driver/uwb_min.c" "$SRC/driver/uwb_isr.c" "$SRC/driver/uwb_rxdiag.c" \
+	"$SRC/driver/uwb_selftest.c" "$SRC/shell/aliro_shell.c" -o "$OUT/cov_drv"
+WOZ_TEST_QUIET=1 LLVM_PROFILE_FILE="$OUT/drv.profraw" "$OUT/cov_drv" \
+	>>"$OUT/run.log" 2>&1 || true
+OBJS+=(-object "$OUT/cov_drv")
+
+psa_flags=(-I"$HOSTD/psafake" -I"$SRC/ccc")
+cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_psa_ecb \
+	"$SRC/ccc/ccc_crypto_psa.c" -o "$OUT/ccc_crypto_psa_cov.o"
+cov_cc "${psa_flags[@]}" -c -Dcrypto_aes_ecb_encrypt=woz_test_mbedtls_ecb \
+	"$SRC/ccc/ccc_crypto_mbedtls.c" -o "$OUT/ccc_crypto_mbedtls_cov.o"
+cov_cc "${psa_flags[@]}" -I"$HOSTD" -I"$ALIRO/include" \
+	"$HOSTD/test.c" "$HOSTD/test_psa_backends.c" "$HOSTD/psafake/psafake.c" \
+	"$ALIRO/src/aliro_prim_psa.c" \
+	"$OUT/ccc_crypto_psa_cov.o" "$OUT/ccc_crypto_mbedtls_cov.o" -o "$OUT/cov_psa"
+run_suite psa "$OUT/cov_psa"
+
+# C++ suite: same instrumentation flags through the C++ driver.
+cov_cc -c "$HOSTD/test.c" -o "$OUT/test_harness_c_cov.o"
+"${CXX:-c++}" -std=c++17 -O0 -g -w -fprofile-instr-generate -fcoverage-mapping \
+	-DCONFIG_DOOR_LOCK_RFAL_LOG_LEVEL=3 \
+	-I"$HOSTD" -I"$HOSTD/ecpfake" \
+	"$HOSTD/test_nfc_ecp.cpp" "$ROOT/modules/woz_aliro_ecp/src/nfc_prop_ecp.cpp" \
+	"$OUT/test_harness_c_cov.o" -o "$OUT/cov_ecp"
+run_suite ecp "$OUT/cov_ecp"
+
+cov_cc -I"$SDKFAKE" -I"$ALIRO/include" -I"$ALIRO/src" \
+	"$ET/test_esp_aliro_ble.c" "$ECOMP/aliro_ble/aliro_ble.c" \
+	"$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
+	"$ET/aliro_prim_host.c" \
+	"$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_ble"
+run_suite esp_ble "$OUT/cov_esp_ble"
+
+cov_cc -I"$SDKFAKE" -I"$ALIRO/include" \
+	"$ET/test_esp_prov_nvs.c" "$ECOMP/aliro_reader/aliro_prov_nvs.c" \
+	"$ALIRO/src/aliro_prov.c" "$SDKFAKE/fake_nvs.c" -o "$OUT/cov_esp_nvs"
+run_suite esp_nvs "$OUT/cov_esp_nvs"
+
+cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 \
+	-I"$SDKFAKE" -I"$ET" -I"$ALIRO/include" -I"$ALIRO/src" \
+	"$ET/test_esp_stepup_worker.c" "$ECOMP/aliro_reader/aliro_stepup_worker.c" \
+	"$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+	"$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
+	"$ET/aliro_prim_host.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_worker"
+run_suite esp_worker "$OUT/cov_esp_worker"
+
+cov_cc -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
+	-I"$SDKFAKE" -I"$EAPPS/reader/main" -I"$SRC/facade" \
+	-I"$ALIRO/include" -I"$ROOT/modules/woz_port/include" \
+	"$ET/test_esp_app_shell.c" "$EAPPS/reader/main/app_shell.c" \
+	"$EAPPS/reader/main/main.c" \
+	"$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$OUT/cov_esp_shell"
+run_suite esp_shell "$OUT/cov_esp_shell"
+
+cov_cc -I"$SDKFAKE" -I"$ECOMP/woz_uwb/port" \
+	-I"$ROOT/deps/dw3000/platform" -I"$ROOT/deps/dw3000/dwt_uwb_driver" \
+	"$ET/test_esp_dw3000_port.c" \
+	"$ECOMP/woz_uwb/port/dw3000_hw.c" "$ECOMP/woz_uwb/port/dw3000_spi.c" \
+	"$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$OUT/cov_esp_dw"
+run_suite esp_dw "$OUT/cov_esp_dw"
+
+cov_cc -I"$ROOT/deps/dw3000/dwt_uwb_driver" -I"$SRC/ccc" \
+	"$ET/test_esp_wrap_stubs.c" \
+	"$ECOMP/woz_uwb/port/woz_wrap_stubs.c" -o "$OUT/cov_esp_wrap"
+run_suite esp_wrap "$OUT/cov_esp_wrap"
+
 llvm_tool llvm-profdata merge -sparse "$OUT"/*.profraw -o "$OUT/host.profdata"
 
-ALL_UNIT_SRCS=("${UNIT_SRCS[@]}" "${CORE_UNIT_SRCS[@]}")
+ALL_UNIT_SRCS=("${UNIT_SRCS[@]}" "${CORE_UNIT_SRCS[@]}" "${SIDE_UNIT_SRCS[@]}")
 
 # Our headers, all of them: llvm-cov attributes inline-function coverage to
 # the header wherever an instrumented TU instantiated it, and silently skips
