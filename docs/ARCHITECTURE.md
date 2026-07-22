@@ -970,8 +970,14 @@ pass stages it at site-build time, preferring in order:
      firmware 404s is worse than no page, and before the first release this
      is the normal state of a fresh checkout.
 
+When the page is staged, the site links to it: a row in the get-started hub's
+Hardware bucket and a one-line lead under the landing page's "Get running"
+heading. Injected here and not in the sources on purpose — the flash page
+only exists when firmware was found, and a committed link would 404 on every
+checkout without a release. No firmware, no links, nothing dangles.
+
 Run from the repo root, after the link pass: the page is standalone and its
-links are absolute, so it needs no rewriting. docs.sh drives it.
+links are absolute or flash-local, so it needs no rewriting. docs.sh drives it.
 
 ### [`tools/docs_github.py`](architecture/tools/docs_github.md)
 

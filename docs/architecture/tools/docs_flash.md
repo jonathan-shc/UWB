@@ -21,23 +21,37 @@ pass stages it at site-build time, preferring in order:
      firmware 404s is worse than no page, and before the first release this
      is the normal state of a fresh checkout.
 
+When the page is staged, the site links to it: a row in the get-started hub's
+Hardware bucket and a one-line lead under the landing page's "Get running"
+heading. Injected here and not in the sources on purpose — the flash page
+only exists when firmware was found, and a committed link would 404 on every
+checkout without a release. No firmware, no links, nothing dangles.
+
 Run from the repo root, after the link pass: the page is standalone and its
-links are absolute, so it needs no rewriting. docs.sh drives it.
+links are absolute or flash-local, so it needs no rewriting. docs.sh drives it.
 
 **discussed in** [`web-flasher/README.md`](../../../web-flasher/README.md)
 
 ## API
 
 ### `repo_slug() -> str`
-`tools/docs_flash.py:41`
+`tools/docs_flash.py:80`
 
 owner/repo for the origin remote, or '' if none.
 
 **called by** `main`
 
-<details><summary>Undocumented (2)</summary>
+### `inject(page: Path, anchor: str, addition: str, before: bool) -> str`
+`tools/docs_flash.py:102`
+
+Insert addition next to anchor in page, once; report what happened.
+
+**called by** `link_site`
+
+<details><summary>Undocumented (3)</summary>
 
 - `fetch`
+- `link_site`
 - `main`
 
 </details>
