@@ -105,6 +105,18 @@ int aliro_reader_provision_add_trust(const uint8_t cred_pub[65]);
  *  and persist. Returns 0 on success, negative on an NVS error. */
 int aliro_reader_provision_clear(void);
 
+/* ---- Step-up (Access Document) bench control (CONFIG_WOZ_ALIRO_STEPUP) ---- *
+ * Back the `aliro-stepup` console command. Both are no-ops unless the reader was
+ * built with the step-up phase enabled. */
+
+/** Arm a one-shot Access-Document request: the next transaction is forced into
+ *  the standard phase and requests + verifies a document. Never per-unlock; the
+ *  verdict is logged only and never gates access. */
+void aliro_reader_stepup_arm(void);
+
+/** Print the armed state and the most recent verification verdict. */
+void aliro_reader_stepup_status(void);
+
 #ifdef __cplusplus
 }
 #endif

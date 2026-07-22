@@ -233,6 +233,23 @@ static int cmd_aliro_trust(int argc, char **argv)
 	return 0;
 }
 
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+// Shell command handler: `aliro-stepup [arm|status]`. With `arm` (or no argument)
+// it arms a one-shot Access-Document request for the next transaction; `status`
+// prints the armed state and the most recent verification verdict. Always 0.
+static int cmd_aliro_stepup(int argc, char **argv)
+{
+	if (argc >= 2 && strcmp(argv[1], "status") == 0) {
+		aliro_reader_stepup_status();
+		return 0;
+	}
+	aliro_reader_stepup_arm();
+	printf("aliro-stepup: armed one-shot; approach with an Aliro device to request "
+	       "an Access Document (verdict logged, unlock unaffected)\n");
+	return 0;
+}
+#endif
+
 void app_shell_start(void)
 {
 	esp_console_repl_t *repl = NULL;
@@ -273,6 +290,12 @@ void app_shell_start(void)
 		{.command = "aliro-trust",
 		 .help = "trust the last-presented credential (persist to NVS)",
 		 .func = cmd_aliro_trust},
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+		{.command = "aliro-stepup",
+		 .help = "aliro-stepup [arm|status]: request + verify an Access Document (verdict "
+			 "logged only)",
+		 .func = cmd_aliro_stepup},
+#endif
 		{.command = "uwbdiag",
 		 .help = "uwbdiag [on|off]: raw per-frame UWB trace (boot default off)",
 		 .func = cmd_uwbdiag},

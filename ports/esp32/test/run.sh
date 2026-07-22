@@ -29,7 +29,7 @@ CBIN="$(mktemp -t aliro_crypto_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
    -I "$ALIRO/include" -I "$ALIRO/src" \
    "$HERE/test_aliro_crypto.c" \
-   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
+   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" "$ALIRO/src/aliro_advtag.c" \
    "$HERE/aliro_prim_host.c" -o "$CBIN"
 "$CBIN"
 
@@ -43,6 +43,18 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$ABIN"
 
 echo
+echo "== host: aliro_stepup Access-Document codec + §7.4 verifier KAT =="
+SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_aliro_stepup.c" \
+   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
+   "$HERE/aliro_prim_host.c" -o "$SBIN"
+"$SBIN"
+rm -f "$SBIN"
+
+echo
 echo "== host: aliro_prov identity/trust KAT =="
 PBIN="$(mktemp -t aliro_prov_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
@@ -50,6 +62,27 @@ cc -std=c11 -O1 -Wall -Wextra \
    "$HERE/test_aliro_prov.c" "$ALIRO/src/aliro_prov.c" -o "$PBIN"
 "$PBIN"
 rm -f "$PBIN"
+
+echo
+echo "== host: aliro_lat walk-up trace (gate on + gate off) =="
+# _POSIX_C_SOURCE: woz_port.h's host woz_uptime_us needs clock_gettime /
+# CLOCK_MONOTONIC, which strict -std=c11 hides on glibc (macOS exposes them
+# regardless). A -D lands before every include, so ordering is safe.
+WOZ_PORT_INC="$HERE/../../../modules/woz_port/include"
+TBIN="$(mktemp -t aliro_lat.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -D_POSIX_C_SOURCE=200809L \
+   -DWOZ_PORT_HOST -DCONFIG_ALIRO_LAT_TRACE=1 \
+   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
+"$TBIN"
+cc -std=c11 -O1 -Wall -Wextra \
+   -D_POSIX_C_SOURCE=200809L \
+   -DWOZ_PORT_HOST \
+   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   "$HERE/test_aliro_lat.c" "$ALIRO/src/aliro_lat.c" -o "$TBIN"
+"$TBIN"
+rm -f "$TBIN"
 
 echo
 echo "== host: bolt-state LED policy =="

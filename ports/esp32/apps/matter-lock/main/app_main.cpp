@@ -37,7 +37,9 @@
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
+#include <aliro_ble.h> // aliro_ble_time_updated()
 #include <aliro_lat.h>
+#include <esp_netif_sntp.h>
 #include <woz_uwb_facade.h>
 #include "door_lock_manager.h"
 #include <platform/PlatformManager.h>
@@ -149,6 +151,9 @@ static app::DataModel::Nullable<uint16_t> aliro_operating_user(void)
 // to touch the DoorLock cluster). Unlock also stamps the walk-up latency mark on its first execution.
 static void schedule_bolt_unlock(void)
 {
+	// Threshold decision made on the reader task; bolt-near = the Matter-task
+	// hop + Unlock() itself.
+	aliro_lat_mark(ALIRO_LAT_NEAR_DWELL);
 	chip::DeviceLayer::PlatformMgr().ScheduleWork([](intptr_t) {
 		BoltLockMgr().Unlock(door_lock_endpoint_id,
 				     chip::app::Clusters::DoorLock::OperationSourceEnum::kAliro,
@@ -352,6 +357,32 @@ static void start_aliro_reader_once(void)
 	xTaskCreate(aliro_reader_task, "aliro_reader", 12288, nullptr, 5, &aliro_reader_task_handle);
 	ESP_LOGI(TAG, "Aliro reader (attach mode) task started");
 }
+
+/* SNTP feeds ONLY the Aliro advertisement's dynamic-tag expiry (aliro_ble.c);
+ * nothing credential- or Matter-facing consumes it here, so a spoofed server
+ * can at worst break approach-unlock (docs/protocol-notes.md, "Deferred:
+ * network time"). Fail-open: until the first sync the advert carries the
+ * spec's "expiry unavailable" form, which phones still resolve. */
+static void sntp_synced_cb(struct timeval *tv)
+{
+	(void)tv;
+	aliro_ble_time_updated(); /* re-derive the advertised tag right away */
+}
+
+// Start SNTP once the interface has an address; every (re)sync steps the wall
+// clock and pokes the Aliro advertiser through sntp_synced_cb.
+static void start_sntp_once(void)
+{
+	static bool started = false;
+	if (started) {
+		return;
+	}
+	started = true;
+	esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+	cfg.sync_cb = sntp_synced_cb;
+	esp_err_t err = esp_netif_sntp_init(&cfg);
+	ESP_LOGI(TAG, "SNTP started for the Aliro dynamic tag (%s)", esp_err_to_name(err));
+}
 #endif // CONFIG_ENABLE_ALIRO_BLE_UWB
 
 // Matter device-event callback: logs commissioning/fabric/BLE lifecycle events and, when Aliro
@@ -363,6 +394,9 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg)
 	switch (event->Type) {
 	case chip::DeviceLayer::DeviceEventType::kInterfaceIpAddressChanged:
 		ESP_LOGI(TAG, "Interface IP Address changed");
+#ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
+		start_sntp_once(); /* wall time -> live dynamic-tag expiry */
+#endif
 		break;
 
 	case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:

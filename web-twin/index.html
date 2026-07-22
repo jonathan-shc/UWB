@@ -314,13 +314,13 @@ const FW = {
   FIRA_RANGE_MAX_CM: 3000,     // modules/woz_uwb/src/fira/fira_session.h:42
   FIRA_RANGE_TRUST_K: 3,       // modules/woz_uwb/src/fira/fira_session.h:64
   FIRA_RANGE_SPREAD_CM: 50,    // modules/woz_uwb/src/fira/fira_session.h:65
-  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:116
-  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:117
-  ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:118
-  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:119
-  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:120
-  ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:121
-  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:265
+  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:118
+  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:119
+  ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:120
+  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:121
+  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:122
+  ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:123
+  CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:270
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
   SPOOF_CM: -400,              // tests/host/test_twin.c:211
 };
@@ -570,7 +570,7 @@ function step(dtMs){
     sim.blockAcc += dtMs;
     while (sim.blockAcc >= FW.BLOCK_MS){ sim.blockAcc -= FW.BLOCK_MS; rangingBlock(); }
   }
-  /* controller + auth ladder at the 200 ms task tick (app_main.cpp:265) */
+  /* controller + auth ladder at the 200 ms task tick (app_main.cpp:270) */
   sim.tickAcc += dtMs;
   while (sim.tickAcc >= FW.CTRL_TICK_MS){
     sim.tickAcc -= FW.CTRL_TICK_MS;

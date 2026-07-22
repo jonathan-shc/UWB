@@ -69,6 +69,18 @@ static bool s_sess_active;
  * seal the engine's outbound SDUs. Borrowed for the session's lifetime. */
 static struct aliro_secchan *s_sc_ble;
 
+/* Stamp the first still-unmarked phase of an expected message sequence (the
+ * one-shot marks double as the sequence counter). Diagnostics only: a resent
+ * or extra setup message shifts later labels, never the protocol. */
+static void lat_mark_seq(const enum aliro_lat_phase *phases, unsigned int n)
+{
+	for (unsigned int i = 0; i < n; i++) {
+		if (aliro_lat_mark(phases[i])) {
+			return;
+		}
+	}
+}
+
 /* ---- engine callbacks (invoked synchronously on the BLE-host task) ---- */
 
 /* Send an adapter-built message verbatim over the peer's L2CAP channel. The
@@ -89,7 +101,11 @@ static void uwb_tx_cb(struct aliro_uwb_message *message, struct aliro_uwb_sessio
 		 * (§11.8.2, the 4-byte header as AAD) before it goes on the wire. */
 		if (s_sc_ble != NULL && aliro_msg_seal(s_sc_ble, message->data, message->len, wire,
 						       sizeof(wire), &wl) == 0) {
+			static const enum aliro_lat_phase k_tx_seq[] = {ALIRO_LAT_M1_TX,
+									ALIRO_LAT_M3_TX};
 			int rc = aliro_ble_send(conn, wire, wl);
+
+			lat_mark_seq(k_tx_seq, 2u);
 
 			LOG_DBG("[conn %u] ranging TX proto=0x%02x id=0x%02x (%u B, rc=%d)", conn,
 				message->data[0], message->data[1], (unsigned)wl, rc);
@@ -230,6 +246,14 @@ int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t
 	 * session (the engine re-starts it with M1-M4 params at M4). */
 	woz_uwb_stop();
 
+	/* Pre-apply the session PHY now, while the phone spends ~400 ms deciding to
+	 * send Initiate-Ranging-Session: our M1 offers exactly one UWB config
+	 * (channel 9, SYNC code 9 — same values as probe_cfg above), so the M4-time
+	 * start hits the shim's PHY cache and skips the dwt_configure long pole,
+	 * arming RX in time for the earliest phone ranging block. Best-effort: on
+	 * failure M4 falls back to the full configure. */
+	(void)woz_uwb_prewarm(9u, 9u);
+
 	struct aliro_uwb_session *sess = aliro_uwb_session_create(
 		s_adapter, session_id, uwb_ev_cb, uwb_tx_cb, (void *)(uintptr_t)conn_handle);
 
@@ -266,6 +290,11 @@ int aliro_ranging_feed(uint16_t conn_handle, const uint8_t *data, size_t len)
 		LOG_WRN("[conn %u] ranging SDU size %u out of range", conn_handle, (unsigned)len);
 		return -1;
 	}
+
+	/* Expected device->reader setup order: Initiate-Ranging-Session, M2, M4. */
+	static const enum aliro_lat_phase k_rx_seq[] = {ALIRO_LAT_IRS_RX, ALIRO_LAT_M2_RX,
+							ALIRO_LAT_M4_RX};
+	lat_mark_seq(k_rx_seq, 3u);
 
 	/* Stack-framed message (the engine copies/consumes it, does not retain). */
 	uint8_t storage[sizeof(struct aliro_uwb_message) + ALIRO_RANGING_MSG_MAX]
