@@ -43,6 +43,18 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$ABIN"
 
 echo
+echo "== host: aliro_stepup Access-Document codec + §7.4 verifier KAT =="
+SBIN="$(mktemp -t aliro_stepup_kat.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_aliro_stepup.c" \
+   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
+   "$HERE/aliro_prim_host.c" -o "$SBIN"
+"$SBIN"
+rm -f "$SBIN"
+
+echo
 echo "== host: aliro_prov identity/trust KAT =="
 PBIN="$(mktemp -t aliro_prov_kat.XXXXXX)"
 cc -std=c11 -O1 -Wall -Wextra \
