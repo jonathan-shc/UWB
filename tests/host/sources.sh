@@ -25,6 +25,7 @@ UNIT_SRCS=(
 	"$SRC/aliro/aliro_uwb_session.c"
 	"$SRC/ccc/cherry_ccc_shim.c"
 	"$SRC/ccc/ccc_shim_rx.c"
+	"$SRC/ccc/ccc_shim_wrap.c"
 	"$SRC/fira/fira_session.c"
 	"$SRC/facade/woz_uwb_facade.c"
 	"$SRC/facade/woz_logfmt.c"
@@ -52,6 +53,9 @@ TEST_SRCS=(
 	"$HOST/test_prepoll_round.c"
 	"$HOST/test_twin.c"
 	"$HOST/test_woz_logfmt.c"
+	"$HOST/test_trace.c"
+	"$HOST/trace_stub.c"
+	"$HOST/test_ccc_shim_wrap.c"
 )
 
 SHIM_SRCS=(

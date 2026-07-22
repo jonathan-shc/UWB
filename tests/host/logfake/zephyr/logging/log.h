@@ -19,4 +19,19 @@
 const char *log_source_name_get(uint32_t domain_id, int16_t source_id);
 int16_t log_source_id_get(const char *name);
 
+/* No-op module/log macros for driver sources that include this header directly
+ * (uwb_rxdiag.c, uwb_selftest.c). Guarded: woz_log.h may define them too. */
+#ifndef LOG_MODULE_REGISTER
+#define LOG_MODULE_REGISTER(...)
+#endif
+#ifndef LOG_MODULE_DECLARE
+#define LOG_MODULE_DECLARE(...)
+#endif
+#ifndef LOG_ERR
+#define LOG_ERR(...) ((void)0)
+#define LOG_WRN(...) ((void)0)
+#define LOG_INF(...) ((void)0)
+#define LOG_DBG(...) ((void)0)
+#endif
+
 #endif /* LOGFAKE_ZEPHYR_LOGGING_LOG_H */
