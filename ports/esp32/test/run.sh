@@ -106,6 +106,25 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$RBIN"
 
 echo
+echo "== host: aliro_ranging M1-M4 session glue =="
+# The ranging-setup glue against recording doubles of the engine (cherry/
+# adapter/session), the BLE transport and the woz_uwb facade; the BleSK
+# sealing in the transmit callback is real crypto, opened by the test with
+# the mirrored device-direction GCM.
+UWB_SRC="$HERE/../../../modules/woz_uwb/src"
+GBIN="$(mktemp -t aliro_ranging.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -D_POSIX_C_SOURCE=200809L -DWOZ_PORT_HOST \
+   -I "$ALIRO/include" -I "$ALIRO/src" -I "$WOZ_PORT_INC" \
+   -I "$UWB_SRC/facade" -I "$UWB_SRC/aliro/include" \
+   "$HERE/test_aliro_ranging.c" \
+   "$ALIRO/src/aliro_ranging.c" "$ALIRO/src/aliro_crypto.c" \
+   "$ALIRO/src/aliro_hash.c" \
+   "$HERE/aliro_prim_host.c" -o "$GBIN"
+"$GBIN"
+rm -f "$GBIN"
+
+echo
 echo "== host: bolt-state LED policy =="
 MATTER_MAIN="$HERE/../apps/matter-lock/main"
 LBIN="$(mktemp -t lock_led.XXXXXX)"

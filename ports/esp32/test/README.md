@@ -16,6 +16,7 @@ a green build is not evidence of anything on this target — these suites are.
 | `test_aliro_stepup.c` | The Access-Document codec and the §7.4 document verifier |
 | `test_aliro_lat.c` | The walk-up latency trace, compiled both with and without the trace gate |
 | `test_aliro_reader.c` | The reader transaction engine end-to-end: a scripted phone independently re-derives the key schedule from the wire and drives AUTH0/AUTH1/EXCHANGE/AP-Completed, the expedited-fast path, the trust gate, and every rejection branch |
+| `test_aliro_ranging.c` | The M1-M4 ranging-setup glue: session arm/feed/teardown against recording doubles of the engine adapter, with real BleSK sealing on the transmit path opened from the device direction, plus every init/start/feed failure branch |
 | `test_lock_led.c` | The bolt-state LED policy, including that the two unlock paths stay distinguishable |
 
 `aliro_prim_host.c` is a compact host double of the crypto backend interface, so the KATs
