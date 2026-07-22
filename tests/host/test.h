@@ -53,5 +53,6 @@ void test_facade(void);
 void test_prepoll_gate(void);
 void test_prepoll_round(void);
 void test_twin(void);
+void test_woz_logfmt(void);
 
 #endif /* WOZ_HOST_TEST_H */
