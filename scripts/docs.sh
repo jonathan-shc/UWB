@@ -78,6 +78,9 @@ python3 tools/docs_title.py
 echo "==> media"
 python3 tools/docs_media.py
 
+echo "==> digital twin"
+python3 tools/docs_twin.py
+
 echo "==> github"
 python3 tools/docs_github.py
 

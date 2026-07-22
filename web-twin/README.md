@@ -1,4 +1,4 @@
-# web-twin — the walk-up digital twin as an interactive page
+# web-twin: the walk-up digital twin as an interactive page
 
 `index.html` is self-contained (inline JS/CSS, no external requests): open it
 straight from the filesystem or serve it from any static host. Drag the phone
@@ -21,3 +21,17 @@ truth for every number the page uses. Environment knobs that are not firmware
 page. On every load the page replays the scenario `tests/host/test_twin.c`
 asserts (legit 234 cm round, Ghost-Peak spoof true-reject, trust earned at
 K=3) and shows the result in the footer.
+
+## Theming and the docs site
+
+The page is themed off the same design tokens as the docs site (the cool-grey
+grounds, blue accent, and system type), and is fully light/dark aware: it reads
+the site's own `dm-theme` preference from local storage, falls back to the OS
+setting, and carries a matching theme toggle in its top bar. So it looks like
+part of the site whether it is opened on its own or reached from it.
+
+It folds into the generated site through `tools/docs_twin.py`, a repo-side
+post-pass in the same style as `tools/docs_media.py`: it copies this page to
+`site/twin.html` and adds one call-to-action on the landing page linking to it.
+The pass runs from `make docs` (after the media pass, before the link pass), so
+the generator itself is never touched.
