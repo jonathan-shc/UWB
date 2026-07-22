@@ -18,12 +18,17 @@
 #include "aliro_lab.h"
 #include "aliro_lat.h"
 
+#ifdef CONFIG_ALIRO_LAT_TRACE
+
 /* 0 = unmarked this walk-up (woz_uptime_us() is nonzero by the time BLE is up). */
 static int64_t s_stamp_us[ALIRO_LAT_PHASE_COUNT];
 
-static const char *const k_phase_name[ALIRO_LAT_PHASE_COUNT] = {
-	"connect", "op05", "auth0", "auth1", "exch", "apc", "m4", "range", "trusted", "bolt",
+static const char *const k_phase_name[] = {
+	"connect", "spsm", "ver", "l2cap", "op05", "auth0", "a0rsp", "auth1",   "exch", "apc",
+	"irs",     "m1",   "m2",  "m3",    "m4rx", "m4",    "range", "trusted", "near", "bolt",
 };
+_Static_assert(sizeof(k_phase_name) / sizeof(k_phase_name[0]) == ALIRO_LAT_PHASE_COUNT,
+	       "k_phase_name must cover every aliro_lat_phase");
 
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 /* aliro_lab (see aliro_lab.h): runtime gate (OFF at boot; `lab on` flips it) and
@@ -72,6 +77,8 @@ void aliro_lat_report(void)
 	aliro_lab_dump();
 }
 
+/* aliro_lab emitters live inside the CONFIG_ALIRO_LAT_TRACE region (the dump
+ * reads the stamps above); Kconfig enforces the dependency. */
 #if defined(CONFIG_WOZ_ALIRO_LAB)
 
 void aliro_lab_set_enabled(bool on)
@@ -115,3 +122,5 @@ void aliro_lab_dump(void)
 }
 
 #endif /* CONFIG_WOZ_ALIRO_LAB */
+
+#endif /* CONFIG_ALIRO_LAT_TRACE */

@@ -30,18 +30,20 @@ SECONDS_BUDGET="${FUZZ_SECONDS:-20}"
 # target -> parser source under test (harness stays minimal: one parser each).
 # A case function rather than an associative array so this runs on the stock
 # macOS bash 3.2 as well as CI's bash.
-targets=(aliro_uwb_msg ccc_mac aliro_apdu)
+targets=(aliro_uwb_msg ccc_mac aliro_apdu stepup)
 target_src() {
 	case "$1" in
 	aliro_uwb_msg) echo "$SRC/aliro/aliro_uwb_msg_parser.c" ;;
 	ccc_mac) echo "$SRC/ccc/ccc_mac.c" ;;
 	aliro_apdu) echo "$APDU_SRC/aliro_apdu.c" ;;
+	stepup) echo "$APDU_SRC/aliro_stepup_parse.c" ;;
 	*) return 1 ;;
 	esac
 }
 
-# aliro_apdu.h lives in the woz_aliro module, off the shared INCS path.
-EXTRA_INCS=(-I"$APDU_SRC")
+# aliro_apdu.h / aliro_stepup.h live in the woz_aliro module, off the shared
+# INCS path (src for the codec headers, include for the public API).
+EXTRA_INCS=(-I"$APDU_SRC" -I"$ROOT/modules/woz_aliro/include")
 
 [ "$#" -gt 0 ] && targets=("$@")
 

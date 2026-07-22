@@ -25,17 +25,28 @@ ALAB_RE = re.compile(r"\[ALAB\] t=(\d+) ev=(\S+)((?: \S+=-?\d+)*)")
 ATTR_RE = re.compile(r"(\S+)=(-?\d+)")
 
 # Latency phases in pipeline order (mirrors enum aliro_lat_phase / the
-# k_phase_name strings the firmware dumps as ph.<name>).
+# k_phase_name strings the firmware dumps as ph.<name>). Older captures carry
+# a subset; absent phases simply do not render.
 PHASES = [
     ("connect", "BLE connect"),
+    ("spsm", "SPSM/versions read"),
+    ("ver", "version selected"),
+    ("l2cap", "L2CAP channel open"),
     ("op05", "session opened (op-0x05)"),
     ("auth0", "AUTH0 sent"),
+    ("a0rsp", "AUTH0 response (flow fork)"),
     ("auth1", "auth segment done"),
     ("exch", "EXCHANGE accepted"),
     ("apc", "AP-Completed sent"),
+    ("irs", "Initiate-Ranging-Session"),
+    ("m1", "ranging setup M1 sent"),
+    ("m2", "ranging setup M2 received"),
+    ("m3", "ranging setup M3 sent"),
+    ("m4rx", "ranging setup M4 received"),
     ("m4", "UWB session active (M4)"),
     ("range", "first range"),
     ("trusted", "trusted range"),
+    ("near", "approach threshold met"),
     ("bolt", "bolt driven"),
 ]
 PHASE_INDEX = {key: i for i, (key, _) in enumerate(PHASES)}

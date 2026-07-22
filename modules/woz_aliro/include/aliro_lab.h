@@ -20,6 +20,10 @@
 
 #include <stdbool.h>
 
+#if defined(ESP_PLATFORM)
+#include "sdkconfig.h" /* CONFIG_WOZ_ALIRO_LAB (Zephyr injects autoconf.h itself) */
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

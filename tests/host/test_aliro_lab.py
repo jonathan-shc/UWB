@@ -96,8 +96,14 @@ class SampleLogTest(unittest.TestCase):
         self.assertEqual(fast.offset_ms("bolt"), 2601.0)
 
     def test_all_phases_present(self):
+        # The sample predates the finer-grained firmware phases; it carries the
+        # ten core ones, all of which must be known to the tool.
+        expected = ["connect", "op05", "auth0", "auth1", "exch", "apc",
+                    "m4", "range", "trusted", "bolt"]
+        for key in expected:
+            self.assertIn(key, aliro_lab.PHASE_INDEX)
         for txn in self.txns:
-            self.assertEqual(sorted(txn.phases), sorted(k for k, _ in aliro_lab.PHASES))
+            self.assertEqual(sorted(txn.phases), sorted(expected))
 
     def test_no_warn_no_fail(self):
         for checks in self.checks:

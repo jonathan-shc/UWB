@@ -38,6 +38,9 @@
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
 #include "aliro_reader.h"
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+#include "aliro_stepup.h"
+#endif
 
 LOG_MODULE_REGISTER(aliro_reader, CONFIG_WOZ_ALIRO_LOG_LEVEL);
 
@@ -106,6 +109,14 @@ static bool s_prov_lock_ready;
  * stays off the walk-up critical path. */
 static bool s_kp_dirty;
 
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+/* One-shot step-up arm (bench `aliro-stepup arm`): forces the next transaction
+ * into the expedited-standard phase and requests an Access Document after
+ * EXCHANGE. Set by the REPL task, consumed by the BLE-host task in start_auth.
+ * Guarded by s_prov_lock. The verdict lives in the worker (aliro-stepup status). */
+static bool s_stepup_armed;
+#endif
+
 /* Where the credential-auth transaction has got to on this connection. Advances
  * strictly forward from PH_IDLE as each command's response arrives; PH_FAILED is
  * terminal until the peer reconnects. */
@@ -114,7 +125,10 @@ enum txn_phase {
 	PH_SENT_AUTH0,    /* AUTH0 sent; awaiting AUTH0Response */
 	PH_SENT_AUTH1,    /* AUTH1 sent; awaiting AUTH1Response */
 	PH_SENT_EXCHANGE, /* EXCHANGE sent; awaiting its response, then AP-Completed */
-	PH_ESTABLISHED,   /* AP-Completed sent; ranging setup (M1-M4) driven by aliro_ranging */
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	PH_SENT_STEPUP, /* ENVELOPE sent; collecting the DeviceResponse before AP-Completed */
+#endif
+	PH_ESTABLISHED, /* AP-Completed sent; ranging setup (M1-M4) driven by aliro_ranging */
 	PH_FAILED,
 };
 
@@ -131,6 +145,10 @@ static const char *phase_str(enum txn_phase p)
 		return "SENT_AUTH1";
 	case PH_SENT_EXCHANGE:
 		return "SENT_EXCHANGE";
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	case PH_SENT_STEPUP:
+		return "SENT_STEPUP";
+#endif
 	case PH_ESTABLISHED:
 		return "ESTABLISHED";
 	case PH_FAILED:
@@ -170,6 +188,18 @@ static struct aliro_session {
 	 * session-key salt. a5_len==0 means none seen (use the CSA v1.0 default). */
 	uint8_t a5_tlv[64];
 	size_t a5_len;
+
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	/* Step-up (Access Document) state for an armed transaction. The SessionData
+	 * channel is keyed by StepUpSK (block[64..95], §8.4.3); the DeviceResponse is
+	 * collected across ENVELOPE / GET RESPONSE before being handed to the worker. */
+	bool stepup_active;
+	struct aliro_secchan stepup_sc;
+	uint8_t stepup_skr[ALIRO_SESSION_KEY_LEN];
+	uint8_t stepup_skd[ALIRO_SESSION_KEY_LEN];
+	uint8_t stepup_sd[2048]; /* collected DeviceResponse SessionData (x5chain headroom) */
+	size_t stepup_sd_len;
+#endif
 } s_sessions[ALIRO_MAX_SESSIONS];
 
 // Finds the active session matching the given BLE connection handle.
@@ -258,6 +288,26 @@ static int send_ap_command(uint16_t conn, uint8_t ins, const uint8_t *tlv, size_
 	return rc;
 }
 
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+/* Frame + send a fully-formed ISO7816 APDU (ENVELOPE / GET RESPONSE already carry
+ * their own CLA/INS, so they must NOT go through aliro_apdu_wrap). Same BLE Access
+ * frame as send_ap_command: [type=ACCESS][op=COMMAND][len_be16][apdu]. */
+static int send_ap_raw(uint16_t conn, const uint8_t *apdu, size_t len)
+{
+	uint8_t frame[ALIRO_ENVELOPE_HDR + 320];
+
+	if (len > sizeof(frame) - ALIRO_ENVELOPE_HDR) {
+		return -1;
+	}
+	frame[0] = ALIRO_PROTO_ACCESS;
+	frame[1] = ALIRO_AP_OP_COMMAND;
+	frame[2] = (uint8_t)(len >> 8);
+	frame[3] = (uint8_t)(len & 0xffu);
+	memcpy(frame + ALIRO_ENVELOPE_HDR, apdu, len);
+	return aliro_ble_send(conn, frame, ALIRO_ENVELOPE_HDR + len);
+}
+#endif
+
 /* Spare ephemeral keypair + txid, generated off the walk-up's critical path.
  * They depend on nothing from the peer, yet the software P-256 keygen used to
  * run inside the first-message callback; consuming a precomputed pair there
@@ -306,6 +356,14 @@ static void start_auth(struct aliro_session *s)
 	 * UserAuthenticationPolicy stays 0x01 (reference AUTH0Command::Serialize). */
 	woz_mutex_lock(&s_prov_lock);
 	s->exp_phase_sent = (s_trust.kp_valid != 0u) ? 0x01u : 0x00u;
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	if (s_stepup_armed) {
+		s_stepup_armed = false; /* one-shot: consumed by this transaction */
+		s->stepup_active = true;
+		s->exp_phase_sent = 0x00u; /* step-up is standard-phase only (§8.1.2) */
+		LOG_INF("[conn %u] step-up armed: forcing the standard phase", s->conn_handle);
+	}
+#endif
 	woz_mutex_unlock(&s_prov_lock);
 	if (aliro_apdu_build_auth0(s->exp_phase_sent, 0x01u, ALIRO_VERSION, s->reader_eph_pub,
 				   s->txid, s_id.reader_id, apdu, sizeof(apdu), &n) != 0) {
@@ -453,6 +511,8 @@ static void on_auth0_response(struct aliro_session *s, const uint8_t *pl, size_t
 	struct aliro_auth0_response r;
 	uint16_t sw;
 
+	aliro_lat_mark(ALIRO_LAT_AUTH0_RSP);
+
 	/* APDU response = <response TLV> SW1 SW2; drop the status word before parsing. */
 	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
 		LOG_ERR("[conn %u] AUTH0Response too short (%u B)", s->conn_handle, (unsigned)len);
@@ -568,6 +628,16 @@ static void on_auth1_response(struct aliro_session *s, const uint8_t *pl, size_t
 	}
 	aliro_crypto_split(block, 1, enc, dec, s->ursk);
 	aliro_secchan_init(&s->sc, enc, dec);
+
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	/* Step-up SessionData keys off StepUpSK (block[64..95], §8.4.3), while the
+	 * standard block is still in scope. Only for an armed transaction, which
+	 * forced the standard phase, so the block layout is guaranteed. */
+	if (s->stepup_active &&
+	    aliro_stepup_derive_keys(block, s->stepup_skr, s->stepup_skd) == 0) {
+		aliro_stepup_channel_init(&s->stepup_sc, s->stepup_skr, s->stepup_skd);
+	}
+#endif
 
 	/* Ranging channel keys (§11.8.1) off the block's BleSK segment. */
 	if (init_ble_channel(s, block) != 0) {
@@ -706,6 +776,146 @@ static const uint8_t k_ap_completed_plain[] = {
 	0x02, 0x03, 0x00, 0x04, 0x00, 0x02, 0x20, 0x00,
 };
 
+/* Send Reader-Status-AP-Completed (BleSK-sealed) and arm the ranging engine; the
+ * transaction ends in PH_ESTABLISHED. Shared by the normal EXCHANGE path and the
+ * step-up path (which runs it only after the DeviceResponse is collected). */
+static void complete_ap_and_range(struct aliro_session *s)
+{
+	uint8_t wire[64];
+	size_t wl;
+
+	if (aliro_msg_seal(&s->sc_ble, k_ap_completed_plain, sizeof(k_ap_completed_plain), wire,
+			   sizeof(wire), &wl) != 0) {
+		LOG_ERR("[conn %u] AP-Completed seal failed", s->conn_handle);
+		s->phase = PH_FAILED;
+		return;
+	}
+	int rc = aliro_ble_send(s->conn_handle, wire, wl);
+
+	aliro_lat_mark(ALIRO_LAT_AP_COMPLETED);
+	LOG_INF("[conn %u] Reader-Status-AP-Completed sent (%u B, rc=%d)", s->conn_handle,
+		(unsigned)wl, rc);
+
+	/* Arm the ranging engine with the URSK + the BleSK channel; M1 is emitted by the
+	 * engine when the device sends its Initiate-Ranging-Session (proto-2 id-1). The
+	 * ranging session id is NOT reader's free choice: the device derives it as the
+	 * big-endian last 4 bytes of the 16-byte AUTH0 transaction id (libaliro
+	 * AccessProtocolCrypto::GetSessionId = rev(txid[12..15])) and indexes its URSK by
+	 * it. A mismatch makes M1 land on a device with no URSK for that session
+	 * (GeneralError URSK_Unavailable). */
+	uint32_t ranging_sid = ((uint32_t)s->txid[12] << 24) | ((uint32_t)s->txid[13] << 16) |
+			       ((uint32_t)s->txid[14] << 8) | (uint32_t)s->txid[15];
+
+	s->phase = PH_ESTABLISHED;
+	if (aliro_ranging_start(s->conn_handle, ranging_sid, s->ursk, &s->sc_ble) != 0) {
+		LOG_WRN("[conn %u] ranging setup did not arm", s->conn_handle);
+	}
+}
+
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+/* Build the Access-Document DeviceRequest, seal it into a SessionData message on
+ * the StepUpSK channel, and send it in an ENVELOPE APDU (§8.4). On any build/seal
+ * failure fall back to completing the AP so the unlock is never blocked. */
+static void stepup_send_request(struct aliro_session *s)
+{
+	uint8_t devreq[128], sd[256], apdu[300];
+	size_t drn, sdn, an;
+
+	if (aliro_stepup_build_device_request(NULL, 0, devreq, sizeof(devreq), &drn) != 0 ||
+	    aliro_stepup_seal_sessiondata(&s->stepup_sc, devreq, drn, sd, sizeof(sd), &sdn) != 0 ||
+	    aliro_stepup_build_envelope(sd, sdn, 0, apdu, sizeof(apdu), &an) != 0) {
+		LOG_WRN("[conn %u] step-up: request build failed; completing AP normally",
+			s->conn_handle);
+		s->stepup_active = false;
+		complete_ap_and_range(s);
+		return;
+	}
+	s->stepup_sd_len = 0;
+	send_ap_raw(s->conn_handle, apdu, an);
+	s->phase = PH_SENT_STEPUP;
+	LOG_INF("[conn %u] step-up: ENVELOPE(DeviceRequest) sent (%u APDU B)", s->conn_handle,
+		(unsigned)an);
+}
+
+/* Hand the collected SessionData response + StepUpSK keys to the background worker
+ * so the parse/verify runs off the BLE-host task (never in the ranging arm window).
+ * No issuer trust store is provisioned in this reference build, so the verifier
+ * selects by x5chain if present and otherwise records "issuer key not found"; the
+ * verdict is logged only. A trusted wall clock is not wired (time_valid = 0), so a
+ * TimeVerificationRequired document is recorded as time-unverified. */
+static void stepup_submit_job(struct aliro_session *s)
+{
+	struct aliro_stepup_job job;
+
+	memset(&job, 0, sizeof(job));
+	memcpy(job.sk_reader, s->stepup_skr, ALIRO_SESSION_KEY_LEN);
+	memcpy(job.sk_device, s->stepup_skd, ALIRO_SESSION_KEY_LEN);
+	job.have_issuer = 0;
+	job.time_valid = 0;
+	job.now_epoch = 0;
+	job.conn_handle = s->conn_handle;
+	if (s->stepup_sd_len <= sizeof(job.sd)) {
+		memcpy(job.sd, s->stepup_sd, s->stepup_sd_len);
+		job.sd_len = s->stepup_sd_len;
+	}
+	if (aliro_stepup_worker_submit(&job) != 0) {
+		LOG_WRN("[conn %u] step-up: worker submit failed (verdict skipped)",
+			s->conn_handle);
+	}
+	s->stepup_active = false;
+}
+
+/* Collect the DeviceResponse across ENVELOPE / GET RESPONSE (ISO7816 61XX
+ * chaining) before completing the AP. The worker verifies it afterwards. */
+static void on_stepup_response(struct aliro_session *s, const uint8_t *pl, size_t len)
+{
+	uint16_t sw;
+
+	if (aliro_apdu_strip_sw(pl, &len, &sw) != 0) {
+		LOG_WRN("[conn %u] step-up: short ENVELOPE response; completing AP",
+			s->conn_handle);
+		s->stepup_active = false;
+		complete_ap_and_range(s);
+		return;
+	}
+	if (len > 0 && s->stepup_sd_len + len <= sizeof(s->stepup_sd)) {
+		memcpy(s->stepup_sd + s->stepup_sd_len, pl, len);
+		s->stepup_sd_len += len;
+	} else if (len > 0) {
+		LOG_WRN("[conn %u] step-up: DeviceResponse over %u B; truncating", s->conn_handle,
+			(unsigned)sizeof(s->stepup_sd));
+	}
+
+	if ((sw & 0xff00u) == 0x6100u) {
+		/* more data available: GET RESPONSE for the remaining bytes */
+		uint8_t apdu[8];
+		size_t an;
+
+		if (aliro_stepup_build_get_response((uint8_t)(sw & 0xffu), apdu, sizeof(apdu),
+						    &an) == 0) {
+			send_ap_raw(s->conn_handle, apdu, an);
+		}
+		return; /* stay in PH_SENT_STEPUP */
+	}
+	if (sw != 0x9000u) {
+		LOG_WRN("[conn %u] step-up: ENVELOPE SW=0x%04x (device may have declined the "
+			"DeviceRequest)",
+			s->conn_handle, sw);
+	}
+	LOG_INF("[conn %u] step-up: DeviceResponse collected (%u B); completing AP + verifying",
+		s->conn_handle, (unsigned)s->stepup_sd_len);
+
+	/* Complete the AP + arm ranging FIRST so the verify never delays the unlock,
+	 * then hand the document to the worker. */
+	complete_ap_and_range(s);
+	if (s->stepup_sd_len > 0) {
+		stepup_submit_job(s);
+	} else {
+		s->stepup_active = false;
+	}
+}
+#endif /* CONFIG_WOZ_ALIRO_STEPUP */
+
 /* Handle the EXCHANGE response, then complete the AP and arm ranging. The body is
  * an AP (proto-0) response on the ExpeditedSK channel: <ct || 16B tag> SW1SW2. */
 static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, size_t len)
@@ -739,36 +949,16 @@ static void on_exchange_response(struct aliro_session *s, const uint8_t *pl, siz
 	}
 	aliro_lat_mark(ALIRO_LAT_EXCHANGE_DONE);
 
-	/* Reader-Status-AP-Completed, BleSK-sealed on the ranging channel (counter 1). */
-	uint8_t wire[64];
-	size_t wl;
-
-	if (aliro_msg_seal(&s->sc_ble, k_ap_completed_plain, sizeof(k_ap_completed_plain), wire,
-			   sizeof(wire), &wl) != 0) {
-		LOG_ERR("[conn %u] AP-Completed seal failed", s->conn_handle);
-		s->phase = PH_FAILED;
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	/* Armed step-up: request the Access Document (ENVELOPE) before completing the
+	 * AP, per the §8.2 flow (EXCHANGE response -> ENVELOPE -> ... -> AP-Completed).
+	 * complete_ap_and_range runs once the DeviceResponse is fully collected. */
+	if (s->stepup_active) {
+		stepup_send_request(s);
 		return;
 	}
-	int rc = aliro_ble_send(s->conn_handle, wire, wl);
-
-	aliro_lat_mark(ALIRO_LAT_AP_COMPLETED);
-	LOG_INF("[conn %u] Reader-Status-AP-Completed sent (%u B, rc=%d)", s->conn_handle,
-		(unsigned)wl, rc);
-
-	/* Arm the ranging engine with the URSK + the BleSK channel; M1 is emitted by the
-	 * engine when the device sends its Initiate-Ranging-Session (proto-2 id-1). The
-	 * ranging session id is NOT reader's free choice: the device derives it as the
-	 * big-endian last 4 bytes of the 16-byte AUTH0 transaction id (libaliro
-	 * AccessProtocolCrypto::GetSessionId = rev(txid[12..15])) and indexes its URSK by
-	 * it. A mismatch makes M1 land on a device with no URSK for that session
-	 * (GeneralError URSK_Unavailable). */
-	uint32_t ranging_sid = ((uint32_t)s->txid[12] << 24) | ((uint32_t)s->txid[13] << 16) |
-			       ((uint32_t)s->txid[14] << 8) | (uint32_t)s->txid[15];
-
-	s->phase = PH_ESTABLISHED;
-	if (aliro_ranging_start(s->conn_handle, ranging_sid, s->ursk, &s->sc_ble) != 0) {
-		LOG_WRN("[conn %u] ranging setup did not arm", s->conn_handle);
-	}
+#endif
+	complete_ap_and_range(s);
 }
 
 /* Reader Status Changed (Aliro transaction step 23): the reader->phone grant/relock
@@ -925,6 +1115,11 @@ static void transaction_feed(struct aliro_session *s, const uint8_t *data, uint1
 	case PH_SENT_EXCHANGE:
 		on_exchange_response(s, pl, pl_len);
 		break;
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	case PH_SENT_STEPUP:
+		on_stepup_response(s, pl, pl_len);
+		break;
+#endif
 	case PH_ESTABLISHED: {
 		/* Ranging SDUs (proto 1/2/3) ride the BleSK channel: open the whole SDU
 		 * (<hdr><ct||16B tag>), dump the plaintext, and hand it to the engine, which
@@ -1286,6 +1481,53 @@ int aliro_reader_trust_clear(void)
 	s_trust = cand;
 	woz_mutex_unlock(&s_prov_lock);
 	return 0;
+}
+
+/* ---- Step-up (Access Document) bench control --------------------------- */
+
+// Arm a one-shot Access-Document request (see aliro_reader.h). No-op with a note
+// when the reader was built without CONFIG_WOZ_ALIRO_STEPUP.
+void aliro_reader_stepup_arm(void)
+{
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	load_provisioning(); /* ensures s_prov_lock exists */
+	woz_mutex_lock(&s_prov_lock);
+	s_stepup_armed = true;
+	woz_mutex_unlock(&s_prov_lock);
+	LOG_INF("step-up armed: the next transaction will request an Access Document");
+#else
+	LOG_WRN("step-up not built (CONFIG_WOZ_ALIRO_STEPUP=n)");
+#endif
+}
+
+// Print the armed state and the most recent verification verdict (see aliro_reader.h).
+void aliro_reader_stepup_status(void)
+{
+#if defined(CONFIG_WOZ_ALIRO_STEPUP)
+	bool armed;
+
+	load_provisioning();
+	woz_mutex_lock(&s_prov_lock);
+	armed = s_stepup_armed;
+	woz_mutex_unlock(&s_prov_lock);
+	printf("step-up   : built, %s\n", armed ? "ARMED (one-shot)" : "idle");
+
+	struct aliro_stepup_verdict v;
+	uint16_t conn;
+
+	if (aliro_stepup_worker_last(&v, &conn) == 1) {
+		printf("last verdict (conn %u): %s (reject_step=%d)\n", conn,
+		       v.valid ? "VALID" : "invalid", v.reject_step);
+		printf("  issuer_key_found=%d chain_validated=%d sig_ok=%d digests_ok=%d\n",
+		       v.issuer_key_found, v.issuer_chain_validated, v.sig_ok, v.digests_ok);
+		printf("  doctype_ok=%d time_ok=%d iteration_ok=%d valid_elements=%u\n",
+		       v.doctype_ok, v.time_ok, v.iteration_ok, (unsigned)v.valid_elements);
+	} else {
+		printf("last verdict: (none yet)\n");
+	}
+#else
+	printf("step-up   : not built (CONFIG_WOZ_ALIRO_STEPUP=n)\n");
+#endif
 }
 
 /* ---- Matter provisioning bridge (Phase 4) ------------------------------ *
