@@ -39,35 +39,41 @@ Writes ct_len bytes of plaintext to pt. Returns 0 on success (tag verified), -1 
 exceeds ALIRO_GCM_TAG, ct_len exceeds ALIRO_AEAD_MAX, key import fails, or
 authentication/decryption fails.
 
+### `int aliro_aes128_ecb_encrypt(const uint8_t key[16], const uint8_t in[16], uint8_t out[16])`
+`modules/woz_aliro/src/aliro_prim_psa.c:112`
+
+Encrypt one AES-128-ECB block via PSA Crypto (the BLE advertisement Dynamic Tag).
+Returns 0 on success, -1 if key import or the cipher operation fails.
+
 ### `int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])`
-`modules/woz_aliro/src/aliro_prim_psa.c:113`
+`modules/woz_aliro/src/aliro_prim_psa.c:138`
 
 Generate a new NIST P-256 key pair via PSA Crypto.
 Writes the private scalar to priv and the uncompressed public point to pub. Returns 0 on success,
 -1 if key generation or export fails.
 
 ### `int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])`
-`modules/woz_aliro/src/aliro_prim_psa.c:140`
+`modules/woz_aliro/src/aliro_prim_psa.c:165`
 
 Derive the uncompressed P-256 public point from an existing private scalar via PSA Crypto.
 Writes the public point to pub. Returns 0 on success, -1 if the private key import or public-key
 export fails.
 
 ### `int aliro_ecdh_p256(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t peer_pub[ALIRO_P256_POINT], uint8_t shared_x[ALIRO_P256_SCALAR])`
-`modules/woz_aliro/src/aliro_prim_psa.c:166`
+`modules/woz_aliro/src/aliro_prim_psa.c:191`
 
 Compute the P-256 ECDH shared secret x-coordinate for priv and a peer's public point via PSA
 Crypto. Writes the shared x-coordinate to shared_x. Returns 0 on success, -1 if key import or key
 agreement fails.
 
 ### `int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *msg, size_t msg_len, uint8_t sig[ALIRO_P256_SIG])`
-`modules/woz_aliro/src/aliro_prim_psa.c:192`
+`modules/woz_aliro/src/aliro_prim_psa.c:217`
 
 Sign a message with ECDSA over P-256 using SHA-256, via PSA Crypto.
 Writes the signature to sig. Returns 0 on success, -1 if private key import or signing fails.
 
 ### `int aliro_ecdsa_p256_verify(const uint8_t pub[ALIRO_P256_POINT], const uint8_t *msg, size_t msg_len, const uint8_t sig[ALIRO_P256_SIG])`
-`modules/woz_aliro/src/aliro_prim_psa.c:218`
+`modules/woz_aliro/src/aliro_prim_psa.c:243`
 
 Verify an ECDSA-P256/SHA-256 signature against a message and public key, via PSA Crypto.
 Returns 0 if the signature verifies, -1 if public key import fails or verification fails.

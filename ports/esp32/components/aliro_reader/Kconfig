@@ -14,6 +14,20 @@ config ALIRO_LAT_TRACE
 	  read + store per boundary, nothing on the UWB re-arm hot path.
 	  Disable to compile the trace out entirely.
 
+config WOZ_ALIRO_LAB
+	bool "Aliro Lab transaction trace"
+	default y
+	depends on ALIRO_LAT_TRACE
+	help
+	  Compile in the structured "[ALAB] t=<us> ev=..." trace at transaction
+	  phase boundaries so tools/aliro_lab.py can turn a captured serial log
+	  into a scored walk-up report (phase waterfall, approach curve, checks).
+	  Like the sibling `uwbdiag` trace, it ships in every Aliro build but
+	  stays OFF at boot — the `lab on`/`lab off` console command toggles it
+	  at runtime, off the UWB hot path. Its per-phase lines come from the
+	  aliro-lat stamps, hence the ALIRO_LAT_TRACE dependency. Set n to strip
+	  it entirely from a hardened production image.
+
 config WOZ_ALIRO_STEPUP
 	bool "Enable the Aliro step-up (Access Document) phase"
 	default n

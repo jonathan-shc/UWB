@@ -314,12 +314,12 @@ const FW = {
   FIRA_RANGE_MAX_CM: 3000,     // modules/woz_uwb/src/fira/fira_session.h:42
   FIRA_RANGE_TRUST_K: 3,       // modules/woz_uwb/src/fira/fira_session.h:64
   FIRA_RANGE_SPREAD_CM: 50,    // modules/woz_uwb/src/fira/fira_session.h:65
-  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:118
-  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:119
-  ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:120
-  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:121
-  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:122
-  ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:123
+  ALIRO_UNLOCK_RANGE_CM: 100,  // ports/esp32/apps/matter-lock/main/app_main.cpp:119
+  ALIRO_RELOCK_RANGE_CM: 250,  // ports/esp32/apps/matter-lock/main/app_main.cpp:120
+  ALIRO_RANGE_MEDIAN_N: 5,     // ports/esp32/apps/matter-lock/main/app_main.cpp:121
+  ALIRO_NEAR_DWELL: 2,         // ports/esp32/apps/matter-lock/main/app_main.cpp:122
+  ALIRO_FAR_DWELL: 3,          // ports/esp32/apps/matter-lock/main/app_main.cpp:123
+  ALIRO_PEER_GONE_MS: 1500,    // ports/esp32/apps/matter-lock/main/app_main.cpp:124
   CTRL_TICK_MS: 200,           // ports/esp32/apps/matter-lock/main/app_main.cpp:270
   BLOCK_MS: 192,               // modules/woz_uwb/src/driver/uwb_selftest.c:36
   SPOOF_CM: -400,              // tests/host/test_twin.c:211
@@ -358,7 +358,7 @@ class RangeStore {
 }
 
 /* ── Approach controller: port of the ESP32 walk-up loop, app_main.cpp ────── */
-/* median of first n — app_main.cpp:175-193 */
+/* median of first n — app_main.cpp:179-199 */
 function rangeMedian(win, n){
   const t = win.slice(0, n).sort((a,b)=>a-b);
   return t[Math.floor(n/2)];
@@ -487,7 +487,7 @@ function resetWorld(){
   sim.store = new RangeStore();
   sim.ctrl = new ApproachController(sim.store, events);
   sim.ctrl.unlockCm = +$("c-thresh").value;
-  sim.store.listener = () => {                       // on_uwb_range, app_main.cpp:197-215
+  sim.store.listener = () => {                       // on_uwb_range, app_main.cpp:203-221
     sim.activeSinceTick = true;
     mark(P.FIRST_RANGE);
     if (sim.store.trustedRangeCm() !== null) mark(P.TRUSTED_RANGE);
