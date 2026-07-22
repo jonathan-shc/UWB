@@ -15,3 +15,4 @@
 | [`tools/docs_start.py`](docs_start.md) | Give the rendered site a real "Get started" landing. |
 | [`tools/docs_theme.py`](docs_theme.md) | Retheme the rendered site: warm paper surfaces, serif display headings. |
 | [`tools/docs_title.py`](docs_title.md) | Title the generated pages after the repository, not after the checkout directory. |
+| [`tools/docs_twin.py`](docs_twin.md) | Fold the interactive walk-up digital twin into the rendered site. |

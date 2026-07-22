@@ -21,6 +21,8 @@ passes run over a site/ kept from a previous build, so a page may already carry
 the injections. Run from the repo root, after the generators and before the
 link pass.
 
+**discussed in** [`web-twin/README.md`](../../../web-twin/README.md)
+
 ```mermaid
 flowchart TD
   main --> pages_url
