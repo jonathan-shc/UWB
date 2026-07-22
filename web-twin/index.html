@@ -580,39 +580,52 @@ function step(dtMs){
   }
 }
 
-/* ── Canvas: a 2.5D perspective scene ─────────────────────────────────────────
- * One-point perspective looking down a corridor at the door. World is metres
- * with the reader/door at the origin and the corridor running along -X toward
- * the camera (17 m back); the phone approaches from -X. Everything below is
+/* ── Canvas: an isometric side view ───────────────────────────────────────────
+ * A parallel (axonometric) projection seen from the front-side, so the phone
+ * travels across a contained iso floor toward the door on the right while you
+ * watch from an angle. World is metres, reader/door at the origin, +X the
+ * approach axis (phone at -X), +Y lateral depth, +Z up. Everything below is
  * decoration over the same simulation state — waves, an RF density field, and a
  * spring-loaded bolt — so the firmware-cited decision logic is untouched. */
 const cv = $("scene"), cx = cv.getContext("2d");
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
-const REFZ = 8, ZCAM = 17;
-const view = { W: 0, H: 0, cx: 0, horizon: 0, vspan: 0, lat: 0, vup: 0 };
+/* Screen directions of the world axes (parallel projection): X approach runs
+ * dead horizontal (door to the right, phone crosses on a level line), Y depth
+ * recedes up-and-slightly-right, Z is straight up. A horizontal walk line is
+ * what keeps the scene reading clean rather than slanted. */
+const EX = [1.0, 0.0], EY = [0.30, -0.50], HZ = 1.0;
+const FX0 = -10, FX1 = 1.0, FY0 = -3.4, FY1 = 3.4;   // floor stage bounds (m)
+const view = { W: 0, H: 0, cx: 0, cy: 0, S: 40 };
+/* Auto-frame: fit the whole floor, the door top and the phone's travel into the
+ * canvas with a margin, so nothing runs off the edges at any aspect ratio. */
 function resize(){
   view.W = cv.width = Math.max(1, cv.parentElement.clientWidth) * devicePixelRatio;
   view.H = cv.height = Math.max(1, cv.parentElement.clientHeight) * devicePixelRatio;
-  view.cx = view.W * 0.5;
-  view.horizon = view.H * 0.24;
-  view.vspan = view.H * 0.27;
-  view.lat = view.W * 0.052;
-  view.vup = view.H * 0.17;
+  const pts = [[FX0, FY0, 0], [FX1, FY0, 0], [FX1, FY1, 0], [FX0, FY1, 0],
+               [0.1, 0, 2.15], [0.1, 0.35, 2.15], [FX0, 0, 0.65]];
+  let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+  for (const [x, y, z] of pts){
+    const ux = x * EX[0] + y * EY[0], uy = x * EX[1] + y * EY[1] - z * HZ;
+    mnx = Math.min(mnx, ux); mxx = Math.max(mxx, ux); mny = Math.min(mny, uy); mxy = Math.max(mxy, uy);
+  }
+  const m = Math.min(view.W, view.H) * 0.07;
+  view.S = Math.min((view.W - 2 * m) / (mxx - mnx), (view.H - 2 * m) / (mxy - mny));
+  view.cx = m - mnx * view.S;
+  view.cy = m - mny * view.S;
 }
 addEventListener("resize", resize);
-/* Ground/edge point (metres) -> screen; wz raises it off the floor. */
+/* World point (metres) -> screen; wz raises it straight up off the floor. */
 function project(wx, wy, wz){
-  let z = wx + ZCAM; if (z < 1) z = 1;
-  const s = REFZ / z;
-  return { x: view.cx + wy * view.lat * s, y: view.horizon + view.vspan * s - (wz || 0) * view.vup * s, s };
+  return {
+    x: view.cx + (wx * EX[0] + wy * EY[0]) * view.S,
+    y: view.cy + (wx * EX[1] + wy * EY[1]) * view.S - (wz || 0) * view.S * HZ,
+  };
 }
-/* Screen -> ground (wz = 0), for dragging the phone across the floor. */
+/* Screen -> ground (wz = 0): invert the 2x2 axis matrix. Exact (no perspective). */
 function unproject(sx, sy){
-  let s = (sy - view.horizon) / view.vspan;
-  const sMin = REFZ / (ZCAM + 0.4);
-  if (s < sMin) s = sMin;
-  const z = REFZ / s;
-  return { x: z - ZCAM, y: (sx - view.cx) / (view.lat * s) };
+  const dx = (sx - view.cx) / view.S, dy = (sy - view.cy) / view.S;
+  const det = EX[0] * EY[1] - EY[0] * EX[1];
+  return { x: (dx * EY[1] - EY[0] * dy) / det, y: (EX[0] * dy - dx * EX[1]) / det };
 }
 
 /* Animation-only state (no bearing on the decision logic). */
@@ -629,13 +642,20 @@ for (let i = 0; i < 56; i++){
 }
 const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 
-/* A world-radius ring around the door, traced as a perspective floor path. */
+/* A world-radius ring around the door, traced as an iso floor path. */
 function floorRing(R){
   cx.beginPath();
   for (let i = 0; i <= 56; i++){
     const a = i / 56 * Math.PI * 2, p = project(R * Math.cos(a), R * Math.sin(a), 0);
     i ? cx.lineTo(p.x, p.y) : cx.moveTo(p.x, p.y);
   }
+  cx.closePath();
+}
+/* The bounded stage floor as a screen-space quad. */
+function floorPath(){
+  const c = [[FX0, FY0], [FX1, FY0], [FX1, FY1], [FX0, FY1]];
+  cx.beginPath();
+  c.forEach((p, i) => { const q = project(p[0], p[1], 0); i ? cx.lineTo(q.x, q.y) : cx.moveTo(q.x, q.y); });
   cx.closePath();
 }
 
@@ -663,138 +683,145 @@ function draw(){
   const ground = C("--card"), grid = C("--hairline"), line = C("--line"), muted = C("--muted"),
         faint = C("--faint"), strong = C("--strong"), ink = C("--ink"), accent = C("--accent"),
         amber = C("--amber"), cyan = C("--cyan"), green = C("--green"), panel2 = C("--panel2"),
-        doorOpen = C("--door-open"), mono = C("--mono"), motion = !RM.matches, dpr = devicePixelRatio;
+        raise = C("--raise"), doorOpen = C("--door-open"), mono = C("--mono"),
+        motion = !RM.matches, dpr = devicePixelRatio, S = view.S;
   const W = view.W, H = view.H;
-  cx.clearRect(0, 0, W, H);
-  cx.lineJoin = "round";
-
-  /* 1. ground + a soft terracotta pool of light at the door for depth */
+  cx.clearRect(0, 0, W, H); cx.lineJoin = "round"; cx.textAlign = "center";
   cx.fillStyle = ground; cx.fillRect(0, 0, W, H);
   const dr = project(0, 0, 0);
-  let pool = cx.createRadialGradient(dr.x, dr.y, 0, dr.x, dr.y, H * 0.6);
-  pool.addColorStop(0, hexA(accent, 0.10 + 0.10 * scene.glow));
-  pool.addColorStop(1, hexA(accent, 0));
+
+  /* 1. the stage floor: a framed slab with a near->far depth gradient, then
+   *    everything painted on it clipped to its edges */
+  const fFront = project(0, FY0, 0).y, fBack = project(0, FY1, 0).y;
+  let floorG = cx.createLinearGradient(0, fBack, 0, fFront);
+  floorG.addColorStop(0, hexA(raise, 0.32)); floorG.addColorStop(1, hexA(raise, 0.7));
+  floorPath(); cx.fillStyle = floorG; cx.fill();
+  cx.strokeStyle = hexA(line, 0.45); cx.lineWidth = 1.2 * dpr; cx.stroke();
+  cx.save(); floorPath(); cx.clip();
+  let pool = cx.createRadialGradient(dr.x, dr.y, 0, dr.x, dr.y, S * 6);
+  pool.addColorStop(0, hexA(accent, 0.09 + 0.11 * scene.glow)); pool.addColorStop(1, hexA(accent, 0));
   cx.fillStyle = pool; cx.fillRect(0, 0, W, H);
-
-  /* 2. receding floor grid, fading toward the door */
   cx.lineWidth = dpr;
-  for (let gx = -14; gx <= 0; gx++){
-    const a = project(gx, -6, 0), b = project(gx, 6, 0);
-    cx.strokeStyle = hexA(line, clamp(a.s * 0.5, 0.05, 0.55));
-    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+  for (let gx = Math.ceil(FX0); gx <= FX1; gx++){
+    const a = project(gx, FY0, 0), b = project(gx, FY1, 0);
+    cx.strokeStyle = hexA(line, 0.4); cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
   }
-  for (let gy = -6; gy <= 6; gy++){
-    const a = project(-14, gy, 0), b = project(0, gy, 0);
-    cx.strokeStyle = hexA(grid, 0.5);
-    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+  for (let gy = Math.ceil(FY0); gy <= FY1; gy++){
+    const a = project(FX0, gy, 0), b = project(FX1, gy, 0);
+    cx.strokeStyle = hexA(grid, 0.55); cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
   }
-
-  /* 3. threshold zones painted on the floor */
-  drawZone(sim.bleRadius, cyan, false, [7 * dpr, 7 * dpr], "BLE " + sim.bleRadius.toFixed(1) + " m (SIM)", faint, mono);
+  /* zones */
+  drawZone(sim.bleRadius, cyan, false, [7 * dpr, 7 * dpr], "BLE " + sim.bleRadius.toFixed(1) + " m", faint, mono);
   drawZone(FW.ALIRO_RELOCK_RANGE_CM / 100, muted, false, [3 * dpr, 6 * dpr], "relock 250 cm", faint, mono);
   drawZone(sim.ctrl.unlockCm / 100, amber, true, [], "unlock " + sim.ctrl.unlockCm + " cm", muted, mono);
-
-  /* 4. UWB / BLE wavefronts rippling out from the reader */
+  /* wavefronts */
   for (const w of scene.waves){
-    const k = w.age / w.life, col = C(WAVE[w.kind][0]);
-    floorRing(w.max * (0.15 + 0.85 * k));
-    cx.strokeStyle = hexA(col, (1 - k) * 0.5);
-    cx.lineWidth = (1 - k) * 2.4 * dpr + 0.4 * dpr;
-    cx.stroke();
+    const k = w.age / w.life;
+    floorRing(w.max * (0.12 + 0.88 * k));
+    cx.strokeStyle = hexA(C(WAVE[w.kind][0]), (1 - k) * 0.55);
+    cx.lineWidth = (1 - k) * 2.4 * dpr + 0.4 * dpr; cx.stroke();
   }
-
-  /* 5. RF density field: motes near the reader, thicker up close (perspective) */
+  /* RF density field */
   const density = sim.sessionActive ? 0.5 : sim.connected ? 0.28 : 0.14;
   for (const p of scene.parts){
-    const wob = motion ? 0.13 : 0;
+    const wob = motion ? 0.12 : 0;
     const wx = p.x + Math.sin(sim.t * 0.0004 * p.sp + p.seed) * wob;
     const wy = p.y + Math.cos(sim.t * 0.00034 * p.sp + p.seed * 1.7) * wob;
-    const bob = 0.04 + (motion ? 0.03 * (0.5 + 0.5 * Math.sin(sim.t * 0.002 + p.seed)) : 0.02);
-    const pp = project(wx, wy, bob), r0 = Math.hypot(p.x, p.y);
-    const al = (1 - r0 / 4.6) * density;
+    const bob = motion ? 0.02 + 0.03 * (0.5 + 0.5 * Math.sin(sim.t * 0.002 + p.seed)) : 0.03;
+    const pp = project(wx, wy, bob), al = (1 - Math.hypot(p.x, p.y) / 4.6) * density;
     if (al <= 0.01) continue;
     cx.fillStyle = hexA(amber, al);
-    cx.beginPath(); cx.arc(pp.x, pp.y, Math.max(0.6 * dpr, 1.5 * dpr * pp.s * 0.7), 0, 6.283); cx.fill();
+    cx.beginPath(); cx.arc(pp.x, pp.y, 1.7 * dpr, 0, 6.283); cx.fill();
   }
+  cx.restore();
 
-  /* 6. door, reader module, and the spring-loaded bolt (far, drawn first) */
-  const base = project(0.32, 0, 0), ds = base.s;
-  const doorW = 0.98 * view.lat * ds, doorTop = base.y - 2.02 * view.vup * ds;
-  softShadow(base.x, base.y, doorW * 0.7, doorW * 0.26);
-  roundRect(base.x - doorW / 2, doorTop, doorW, base.y - doorTop, Math.min(10 * dpr, doorW * 0.12));
-  cx.fillStyle = sim.ctrl.locked ? panel2 : doorOpen; cx.fill();
-  cx.lineWidth = 1.4 * dpr; cx.strokeStyle = sim.ctrl.locked ? muted : green; cx.stroke();
+  /* 2. door + reader + bolt (right, at the origin) as extruded iso boxes */
+  softShadow(dr.x, dr.y, 0.58 * S, 0.22 * S);
+  box3(0.12, 0, 0, 0.92, 1.95, 0.3, sim.ctrl.locked ? panel2 : doorOpen, sim.ctrl.locked ? muted : green);
+  const dt2 = project(0.12, 0, 0);
   cx.strokeStyle = hexA(line, 0.6); cx.lineWidth = dpr;
-  roundRect(base.x - doorW / 2 + doorW * 0.16, doorTop + (base.y - doorTop) * 0.1,
-            doorW * 0.68, (base.y - doorTop) * 0.8, doorW * 0.06); cx.stroke();
+  roundRect(dt2.x - 0.46 * S + 0.15 * S, dt2.y - 1.95 * S * HZ + 0.19 * S * HZ, 0.62 * S, 1.48 * S * HZ, 0.06 * S); cx.stroke();
   /* bolt: extends into the jamb (left) when locked, retracts green when open */
-  const boltY = project(0.30, 0, 1.0).y, boltH = 0.12 * view.vup * ds;
-  const boltLen = (0.10 + 0.22 * scene.boltPos) * view.lat * ds, boltX = base.x - doorW / 2;
+  const boltB = project(0.12, 0, 0.98), boltH = 0.14 * S * HZ, boltLen = (0.12 + 0.24 * scene.boltPos) * S;
   cx.fillStyle = sim.ctrl.locked ? ink : green;
-  roundRect(boltX - boltLen, boltY - boltH / 2, boltLen + doorW * 0.06, boltH, boltH * 0.4); cx.fill();
-  /* reader module + its glow */
-  const rp = project(0.30, 0, 1.08), rw = 0.22 * view.lat * ds, rh = 0.3 * view.vup * ds;
+  roundRect(boltB.x - 0.46 * S - boltLen, boltB.y - boltH, boltLen + 0.1 * S, boltH, boltH * 0.4); cx.fill();
+  /* reader module + glow */
+  const rp = project(0.12, 0, 1.06);
   if (scene.glow > 0.02){
-    let rg = cx.createRadialGradient(rp.x, rp.y, 0, rp.x, rp.y, rw * (2.6 + scene.glow));
-    rg.addColorStop(0, hexA(accent, 0.28 * scene.glow + 0.06)); rg.addColorStop(1, hexA(accent, 0));
-    cx.fillStyle = rg; cx.beginPath(); cx.arc(rp.x, rp.y, rw * (2.8 + scene.glow), 0, 6.283); cx.fill();
+    let rg = cx.createRadialGradient(rp.x, rp.y, 0, rp.x, rp.y, S * (0.7 + 0.5 * scene.glow));
+    rg.addColorStop(0, hexA(accent, 0.3 * scene.glow + 0.05)); rg.addColorStop(1, hexA(accent, 0));
+    cx.fillStyle = rg; cx.beginPath(); cx.arc(rp.x, rp.y, S * (0.75 + 0.5 * scene.glow), 0, 6.283); cx.fill();
   }
-  roundRect(rp.x - rw / 2, rp.y - rh / 2, rw, rh, Math.min(4 * dpr, rw * 0.28));
-  cx.fillStyle = accent; cx.fill();
-  cx.fillStyle = "#fff"; cx.globalAlpha = 0.85;
-  cx.beginPath(); cx.arc(rp.x, rp.y, Math.max(1.1 * dpr, rw * 0.13), 0, 6.283); cx.fill(); cx.globalAlpha = 1;
+  box3(0.12, 0, 0.92, 0.34, 0.34, 0.16, accent, null);
+  cx.fillStyle = "#fff"; cx.globalAlpha = 0.9;
+  cx.beginPath(); cx.arc(rp.x, rp.y, Math.max(1.2 * dpr, 0.035 * S), 0, 6.283); cx.fill(); cx.globalAlpha = 1;
 
-  /* 7. the DS-TWR ranging beam, reader -> phone, pulsing on each block */
-  const ph = project(sim.phone.x, sim.phone.y, 0);
+  /* 3. the DS-TWR ranging beam, reader -> phone, pulsing on each block */
   if (sim.sessionActive){
-    const a = project(0.30, 0, 0.62), b = project(sim.phone.x, sim.phone.y, 0.34);
+    const a = project(0.12, 0, 0.6), b = project(sim.phone.x, sim.phone.y, 0.3);
     let bg = cx.createLinearGradient(a.x, a.y, b.x, b.y);
     bg.addColorStop(0, hexA(accent, 0.25 + 0.5 * scene.beam)); bg.addColorStop(1, hexA(cyan, 0.2 + 0.4 * scene.beam));
     cx.strokeStyle = bg; cx.lineWidth = (0.8 + scene.beam * 1.8) * dpr;
     cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
     if (motion){
-      const t = (sim.t % 620) / 620, px2 = a.x + (b.x - a.x) * t, py2 = a.y + (b.y - a.y) * t;
+      const t = (sim.t % 620) / 620;
       cx.fillStyle = hexA(cyan, 0.8 * (1 - Math.abs(t - 0.5) * 2) + 0.2);
-      cx.beginPath(); cx.arc(px2, py2, 2.4 * dpr, 0, 6.283); cx.fill();
+      cx.beginPath(); cx.arc(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 2.4 * dpr, 0, 6.283); cx.fill();
     }
   }
 
-  /* 8. the phone: a standing slab with a soft shadow and a lit screen */
-  const ps = ph.s, phW = 0.19 * view.lat * ps, phTop = ph.y - 0.36 * view.vup * ps;
-  softShadow(ph.x, ph.y, phW * 0.85, phW * 0.34);
+  /* 4. the phone: an extruded slab with a soft shadow and a lit screen */
+  const ph = project(sim.phone.x, sim.phone.y, 0);
+  softShadow(ph.x, ph.y, 0.2 * S, 0.09 * S);
   if (sim.connected){
-    let pg = cx.createRadialGradient(ph.x, (ph.y + phTop) / 2, 0, ph.x, (ph.y + phTop) / 2, phW * 2.2);
-    pg.addColorStop(0, hexA(cyan, 0.3)); pg.addColorStop(1, hexA(cyan, 0));
-    cx.fillStyle = pg; cx.fillRect(ph.x - phW * 2.2, phTop - phW, phW * 4.4, ph.y - phTop + phW * 2);
+    const mid = project(sim.phone.x, sim.phone.y, 0.28);
+    let pg = cx.createRadialGradient(mid.x, mid.y, 0, mid.x, mid.y, 0.62 * S);
+    pg.addColorStop(0, hexA(cyan, 0.34)); pg.addColorStop(1, hexA(cyan, 0));
+    cx.fillStyle = pg; cx.beginPath(); cx.arc(mid.x, mid.y, 0.62 * S, 0, 6.283); cx.fill();
   }
-  const bodyH = ph.y - phTop, rad = Math.min(5 * dpr, phW * 0.22);
-  let body = cx.createLinearGradient(0, phTop, 0, ph.y);
-  body.addColorStop(0, strong); body.addColorStop(1, panel2);
-  roundRect(ph.x - phW / 2, phTop, phW, bodyH, rad); cx.fillStyle = body; cx.fill();
-  cx.lineWidth = 1.2 * dpr; cx.strokeStyle = hexA(ink, 0.5); cx.stroke();
-  roundRect(ph.x - phW * 0.34, phTop + bodyH * 0.12, phW * 0.68, bodyH * 0.76, rad * 0.7);
+  const pb = box3(sim.phone.x, sim.phone.y, 0, 0.3, 0.58, 0.09, strong, hexA(ink, 0.5));
+  roundRect(pb.flX + pb.w * 0.16, pb.fty + pb.h * 0.12, pb.w * 0.68, pb.h * 0.76, Math.min(4 * dpr, pb.w * 0.16));
   cx.fillStyle = sim.connected ? hexA(cyan, 0.9) : hexA(muted, 0.4); cx.fill();
 
-  /* 9. distance label above the phone */
-  const lp = project(sim.phone.x, sim.phone.y, 0.54);
-  cx.font = `${11 * dpr}px ${mono}`; cx.textAlign = "center";
-  cx.fillStyle = muted; cx.fillText((sim.trueCm() / 100).toFixed(2) + " m", lp.x, lp.y);
+  /* 5. distance label above the phone */
+  const lp = project(sim.phone.x, sim.phone.y, 0.52);
+  cx.font = `${11 * dpr}px ${mono}`; cx.fillStyle = muted;
+  cx.fillText((sim.trueCm() / 100).toFixed(2) + " m", lp.x, lp.y);
 
-  /* 10. gentle vignette to focus the scene */
-  let vg = cx.createRadialGradient(W / 2, H * 0.55, H * 0.3, W / 2, H * 0.55, H * 0.9);
-  vg.addColorStop(0, hexA(ink, 0)); vg.addColorStop(1, hexA(ink, 0.06));
+  /* 6. gentle vignette */
+  let vg = cx.createRadialGradient(W / 2, H * 0.5, H * 0.32, W / 2, H * 0.5, H * 0.95);
+  vg.addColorStop(0, hexA(ink, 0)); vg.addColorStop(1, hexA(ink, 0.05));
   cx.fillStyle = vg; cx.fillRect(0, 0, W, H);
 }
 
+/* An extruded box on the iso floor: a base at (x,y,z0), width/height/depth in m.
+ * Draws a shaded right + top face then the front face; returns front-face rect. */
+function box3(x, y, z0, wm, hm, dm, faceCol, strokeCol){
+  const S = view.S, dpr = devicePixelRatio, base = project(x, y, z0);
+  const halfW = wm * S / 2, hpx = hm * S * HZ;
+  const flX = base.x - halfW, frX = base.x + halfW, fby = base.y, fty = base.y - hpx;
+  const dx = EX[0] * 0 + EY[0] * dm * S, dy = EY[1] * dm * S;   // depth offset (back-right)
+  poly([[frX, fby], [frX, fty], [frX + dx, fty + dy], [frX + dx, fby + dy]], shade(faceCol, -0.16));
+  poly([[flX, fty], [frX, fty], [frX + dx, fty + dy], [flX + dx, fty + dy]], shade(faceCol, 0.12));
+  roundRect(flX, fty, halfW * 2, hpx, Math.min(6 * dpr, halfW * 0.4));
+  cx.fillStyle = faceCol; cx.fill();
+  if (strokeCol){ cx.strokeStyle = strokeCol; cx.lineWidth = 1.3 * dpr; cx.stroke(); }
+  return { flX, frX, fty, fby, w: halfW * 2, h: hpx, base };
+}
+function poly(pts, fill){
+  cx.beginPath();
+  pts.forEach((p, i) => i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1]));
+  cx.closePath(); cx.fillStyle = fill; cx.fill();
+}
 /* Paint a threshold circle on the floor with an optional tint fill + label. */
 function drawZone(R, color, fill, dash, label, labelColor, mono){
   const dpr = devicePixelRatio;
   floorRing(R);
-  if (fill){ cx.fillStyle = hexA(color, 0.09); cx.fill(); }
+  if (fill){ cx.fillStyle = hexA(color, 0.1); cx.fill(); }
   cx.setLineDash(dash); cx.strokeStyle = hexA(color, 0.75); cx.lineWidth = 1.3 * dpr;
   cx.stroke(); cx.setLineDash([]);
-  const lp = project(-R, 0, 0);        // front of the ring, nearest the viewer
-  cx.font = `${10 * dpr}px ${mono}`; cx.textAlign = "center"; cx.fillStyle = labelColor;
+  const lp = project(clamp(-R, FX0 + 0.4, -0.4), 0, 0);   // front of the ring, kept on-stage
+  cx.font = `${10 * dpr}px ${mono}`; cx.fillStyle = labelColor;
   cx.fillText(label, lp.x, lp.y + 13 * dpr);
 }
 function softShadow(x, y, rx, ry){
@@ -805,6 +832,17 @@ function roundRect(x, y, w, h, r){
   cx.beginPath();
   if (cx.roundRect) cx.roundRect(x, y, w, Math.max(1, h), r);
   else cx.rect(x, y, w, Math.max(1, h));
+}
+/* Lighten (amt>0) or darken (amt<0) a hex colour for the box faces. */
+function shade(c, amt){
+  c = (c || "").trim();
+  if (c[0] !== "#") return c;
+  let h = c.slice(1);
+  if (h.length === 3) h = h.split("").map(x => x + x).join("");
+  const n = parseInt(h, 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const f = v => Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt));
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
 }
 /* A CSS color (hex, rgb(a), or a token value) plus an alpha, for canvas fills. */
 function hexA(c, a){
@@ -893,7 +931,7 @@ cv.addEventListener("pointerdown", e => {
   const r = cv.getBoundingClientRect();
   const mx = (e.clientX - r.left) * devicePixelRatio, my = (e.clientY - r.top) * devicePixelRatio;
   const p = project(sim.phone.x, sim.phone.y, 0.18);
-  if (Math.hypot(mx - p.x, my - p.y) < Math.max(30 * devicePixelRatio, 46 * devicePixelRatio * p.s)){
+  if (Math.hypot(mx - p.x, my - p.y) < Math.max(34 * devicePixelRatio, 0.6 * view.S)){
     dragging = true; cv.classList.add("dragging"); cv.setPointerCapture(e.pointerId);
     setWalking(0); $("hint").style.opacity = "0";
   }
@@ -902,7 +940,7 @@ cv.addEventListener("pointermove", e => {
   if (!dragging) return;
   const r = cv.getBoundingClientRect();
   const u = unproject((e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio);
-  const wx = Math.min(-0.15, u.x), wy = Math.max(-6, Math.min(6, u.y));
+  const wx = Math.max(FX0 + 0.3, Math.min(-0.15, u.x)), wy = Math.max(FY0 + 0.3, Math.min(FY1 - 0.3, u.y));
   const d = Math.hypot(wx, wy) || 0.001;
   const cl = Math.max(0.15, Math.min(14, d));
   sim.phone.x = wx * cl / d; sim.phone.y = wy * cl / d;
