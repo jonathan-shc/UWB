@@ -25,6 +25,10 @@ twister-out/
 # Commit bench.env.example only.
 bench.env
 
+# Local merged firmware for bench-testing the browser flasher; the published
+# copy comes from CI (release.yml) via tools/docs_flash.py.
+/web-flasher/openaliro-matter-lock.bin
+
 # macOS
 .DS_Store
 

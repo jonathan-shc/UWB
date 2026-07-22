@@ -96,8 +96,27 @@ python3 tools/docs_graph.py
 echo "==> reference fill"
 python3 tools/docs_api.py
 
+echo "==> 3d surface"
+python3 tools/docs_3d.py
+
+echo "==> theme"
+python3 tools/docs_theme.py
+
+# Last, after every generator-page pass: the twin is a self-contained page with
+# its own chrome, so copying it in earlier trips passes that glob site/*.html
+# expecting the generator's layout (e.g. the github chip's theme-toggle anchor).
+# It only needs to exist before the link pass, which validates the CTA link.
+echo "==> digital twin"
+python3 tools/docs_twin.py
+
 echo "==> link pass"
 python3 tools/docs_links.py
+
+# After the link pass on purpose: the flash page is standalone with absolute
+# links only, so it needs no rewriting, and when no firmware is available the
+# page does not exist for the pass to scan.
+echo "==> web flasher"
+python3 tools/docs_flash.py
 
 if [ "$SKIPPED_GEN" -eq 1 ]; then
 	echo "==> freshness gate (skipped: no page generator configured)"
