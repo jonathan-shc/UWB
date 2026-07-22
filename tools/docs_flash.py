@@ -8,10 +8,10 @@ answers Access-Control-Allow-Origin), so the browser cannot fetch the image
 from the release; it has to sit next to the page on the same origin. This
 pass stages it at site-build time, preferring in order:
 
-  1. web-flasher/openaliro-matter-lock.bin (gitignored): a local
+  1. web-flasher/openaliro-matter-lock-esp32s3.bin (gitignored): a local
      `idf.py merge-bin` output for bench runs, published with the committed
      manifest (version "dev").
-  2. The latest release's loose assets (openaliro-matter-lock.bin +
+  2. The latest release's loose assets (openaliro-matter-lock-esp32s3.bin +
      openaliro-matter-lock.manifest.json, uploaded by release.yml), fetched
      server side where CORS does not apply; the manifest arrives already
      version-stamped.
@@ -41,7 +41,7 @@ from pathlib import Path
 
 SITE = Path("site")
 SRC = Path("web-flasher")
-FIRMWARE = "openaliro-matter-lock.bin"
+FIRMWARE = "openaliro-matter-lock-esp32s3.bin"
 # The C5 image is optional: releases predating the ESP32-C5 build lack it,
 # and a bench checkout may have merged only one target. The manifest gets
 # pruned to whatever was staged, so the page never advertises a 404.

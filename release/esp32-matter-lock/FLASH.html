@@ -74,7 +74,7 @@ over Wi-Fi, your iPhone carries the key in Wallet, and the lock opens as you wal
 </thead>
 <tbody>
 <tr>
-<td><code>openaliro-matter-lock.bin</code></td>
+<td><code>openaliro-matter-lock-esp32s3.bin</code></td>
 <td>one merged image (bootloader + partitions + app), flashed at 0x0</td>
 </tr>
 <tr>
@@ -211,7 +211,7 @@ wire per the build's source of truth <code>ports/esp32/components/woz_uwb/port/b
 (<code>/dev/cu.usbmodem…</code> on macOS, <code>COM…</code> on Windows). Chip not detected? Hold BOOT while
 plugging in, retry, then replug.</p>
 <p>Manual equivalent:</p>
-<pre><code class="language-bash">esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock.bin
+<pre><code class="language-bash">esptool.py --chip esp32s3 --baud 460800 write_flash 0x0 openaliro-matter-lock-esp32s3.bin
 </code></pre>
 <p>Reflashing wipes any previous commissioning.</p>
 <h2>5 · Watch it boot</h2>

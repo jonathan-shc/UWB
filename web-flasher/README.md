@@ -3,7 +3,7 @@
 A static page that flashes the merged lock image over WebSerial with
 [ESP Web Tools](https://esphome.github.io/esp-web-tools/): plug in the board,
 click Install, boot a working lock. One manifest carries a build per chip
-(`openaliro-matter-lock.bin` for the ESP32-S3,
+(`openaliro-matter-lock-esp32s3.bin` for the ESP32-S3,
 `openaliro-matter-lock-esp32c5.bin` for the ESP32-C5); ESP Web Tools flashes
 the one matching the connected chip, and the page's Board dropdown can pin a
 chip explicitly (it serves the button a single-build manifest built
@@ -36,10 +36,10 @@ neither the `github.com` redirect nor its CDN answers
 firmware must sit next to the page on the same origin. `tools/docs_flash.py`
 stages it at site-build time, preferring in order:
 
-1. `web-flasher/openaliro-matter-lock.bin` (gitignored): a local
+1. `web-flasher/openaliro-matter-lock-esp32s3.bin` (gitignored): a local
    `idf.py merge-bin` output, published with the committed `dev` manifest.
    A sibling `openaliro-matter-lock-esp32c5.bin` rides along when present.
-2. The latest GitHub release's loose assets (`openaliro-matter-lock.bin`,
+2. The latest GitHub release's loose assets (`openaliro-matter-lock-esp32s3.bin`,
    `openaliro-matter-lock-esp32c5.bin` and
    `openaliro-matter-lock.manifest.json`, uploaded by release.yml), fetched
    server side where CORS does not apply.
@@ -58,8 +58,8 @@ hardware has not been run yet. To bench it:
 ```bash
 cd ports/esp32/apps/matter-lock
 idf.py set-target esp32s3 && idf.py build
-idf.py merge-bin -o openaliro-matter-lock.bin
-cp build/openaliro-matter-lock.bin ../../../../web-flasher/
+idf.py merge-bin -o openaliro-matter-lock-esp32s3.bin
+cp build/openaliro-matter-lock-esp32s3.bin ../../../../web-flasher/
 # ESP32-C5 variant, own build dir so the S3 build survives:
 #   idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig set-target esp32c5
 #   idf.py -B build-c5 -D SDKCONFIG=build-c5/sdkconfig build merge-bin \

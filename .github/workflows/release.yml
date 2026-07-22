@@ -144,7 +144,7 @@ jobs:
           . "$ESP_MATTER_PATH/export.sh"
           idf.py set-target esp32s3
           idf.py build
-          idf.py merge-bin -o openaliro-matter-lock.bin
+          idf.py merge-bin -o openaliro-matter-lock-esp32s3.bin
       - name: build the matter-lock app (esp32c5) and merge one image
         # Own build dir + sdkconfig so the S3 build above stays untouched
         # (set-target wipes both otherwise). sdkconfig.defaults.esp32c5 is
@@ -164,7 +164,7 @@ jobs:
         run: |
           out=dist/openaliro-esp32-matter-lock
           mkdir -p "$out"
-          cp ports/esp32/apps/matter-lock/build/openaliro-matter-lock.bin "$out"/
+          cp ports/esp32/apps/matter-lock/build/openaliro-matter-lock-esp32s3.bin "$out"/
           cp ports/esp32/apps/matter-lock/build-c5/openaliro-matter-lock-esp32c5.bin "$out"/
           cp release/esp32-matter-lock/FLASH.md release/esp32-matter-lock/FLASH.html \
             release/esp32-matter-lock/flash.sh "$out"/
@@ -208,7 +208,7 @@ jobs:
           # page (tools/docs_flash.py) pulls these by fixed name from the
           # latest release, and a bare `esptool write_flash 0x0` needs only
           # the .bin.
-          cp dist/openaliro-esp32-matter-lock/openaliro-matter-lock.bin out/
+          cp dist/openaliro-esp32-matter-lock/openaliro-matter-lock-esp32s3.bin out/
           cp dist/openaliro-esp32-matter-lock/openaliro-matter-lock-esp32c5.bin out/
           cp dist/openaliro-esp32-matter-lock/manifest.json \
             out/openaliro-matter-lock.manifest.json

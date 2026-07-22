@@ -6,7 +6,7 @@
   "builds": [
     {
       "chipFamily": "ESP32-S3",
-      "parts": [{ "path": "openaliro-matter-lock.bin", "offset": 0 }]
+      "parts": [{ "path": "openaliro-matter-lock-esp32s3.bin", "offset": 0 }]
     },
     {
       "chipFamily": "ESP32-C5",
