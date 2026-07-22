@@ -24,8 +24,9 @@ K=3) and shows the result in the footer.
 
 ## Theming and the docs site
 
-The page is themed off the same design tokens as the docs site (the cool-grey
-grounds, blue accent, and system type), and is fully light/dark aware: it reads
+The page is themed off the same design tokens as the docs site (the warm ivory
+paper, terracotta accent, and system type from `tools/docs_theme.py`), and is
+fully light/dark aware: it reads
 the site's own `dm-theme` preference from local storage, falls back to the OS
 setting, and carries a matching theme toggle in its top bar. So it looks like
 part of the site whether it is opened on its own or reached from it.

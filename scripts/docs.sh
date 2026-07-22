@@ -78,9 +78,6 @@ python3 tools/docs_title.py
 echo "==> media"
 python3 tools/docs_media.py
 
-echo "==> digital twin"
-python3 tools/docs_twin.py
-
 echo "==> github"
 python3 tools/docs_github.py
 
@@ -104,6 +101,13 @@ python3 tools/docs_3d.py
 
 echo "==> theme"
 python3 tools/docs_theme.py
+
+# Last, after every generator-page pass: the twin is a self-contained page with
+# its own chrome, so copying it in earlier trips passes that glob site/*.html
+# expecting the generator's layout (e.g. the github chip's theme-toggle anchor).
+# It only needs to exist before the link pass, which validates the CTA link.
+echo "==> digital twin"
+python3 tools/docs_twin.py
 
 echo "==> link pass"
 python3 tools/docs_links.py
