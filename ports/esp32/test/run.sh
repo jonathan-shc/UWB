@@ -135,5 +135,92 @@ cc -std=c11 -O1 -Wall -Wextra \
 rm -f "$LBIN"
 
 echo
+echo "== host: aliro_ble transport vs NimBLE fakes =="
+# Target-only sources compiled against the recording doubles in sdkfake/.
+# These suites prove branch logic + wiring against the fakes, not hardware
+# truth; the dynamic-tag advert bytes are cross-checked against the KAT'd
+# aliro_advtag_derive. See sdkfake/sdkfake.h.
+SDKFAKE="$HERE/sdkfake"
+EBIN="$(mktemp -t esp_aliro_ble.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$SDKFAKE" -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_esp_aliro_ble.c" \
+   "$HERE/../components/aliro_ble/aliro_ble.c" \
+   "$ALIRO/src/aliro_advtag.c" "$ALIRO/src/aliro_hash.c" \
+   "$HERE/aliro_prim_host.c" \
+   "$SDKFAKE/fake_nimble.c" "$SDKFAKE/fake_nvs.c" -o "$EBIN"
+"$EBIN"
+rm -f "$EBIN"
+
+echo
+echo "== host: aliro_prov NVS backend vs in-RAM NVS fake =="
+NBIN="$(mktemp -t esp_prov_nvs.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$SDKFAKE" -I "$ALIRO/include" \
+   "$HERE/test_esp_prov_nvs.c" \
+   "$HERE/../components/aliro_reader/aliro_prov_nvs.c" \
+   "$ALIRO/src/aliro_prov.c" \
+   "$SDKFAKE/fake_nvs.c" -o "$NBIN"
+"$NBIN"
+rm -f "$NBIN"
+
+echo
+echo "== host: aliro_stepup worker vs FreeRTOS fakes =="
+# The queue/task doubles are pumped synchronously; the decrypt/parse/verify
+# underneath is the real shared-core code on the stepup_vectors.h KATs.
+WBIN="$(mktemp -t esp_stepup_worker.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 \
+   -I "$SDKFAKE" -I "$HERE" -I "$ALIRO/include" -I "$ALIRO/src" \
+   "$HERE/test_esp_stepup_worker.c" \
+   "$HERE/../components/aliro_reader/aliro_stepup_worker.c" \
+   "$ALIRO/src/aliro_stepup.c" "$ALIRO/src/aliro_stepup_parse.c" \
+   "$ALIRO/src/aliro_hash.c" "$ALIRO/src/aliro_crypto.c" \
+   "$HERE/aliro_prim_host.c" \
+   "$SDKFAKE/fake_freertos.c" -o "$WBIN"
+"$WBIN"
+rm -f "$WBIN"
+
+echo
+echo "== host: reader bench console vs esp_console fakes =="
+CSBIN="$(mktemp -t esp_app_shell.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra -DCONFIG_WOZ_ALIRO_STEPUP=1 -DWOZ_PORT_HOST \
+   -I "$SDKFAKE" -I "$HERE/../apps/reader/main" \
+   -I "$HERE/../../../modules/woz_uwb/src/facade" \
+   -I "$ALIRO/include" -I "$WOZ_PORT_INC" \
+   "$HERE/test_esp_app_shell.c" \
+   "$HERE/../apps/reader/main/app_shell.c" \
+   "$HERE/../apps/reader/main/main.c" \
+   "$SDKFAKE/fake_freertos.c" "$SDKFAKE/fake_esp.c" -o "$CSBIN"
+# pipefail keeps the binary's exit status; the grep hides the handlers' own
+# bench printf noise without dropping any ok/FAIL/RESULT line.
+"$CSBIN" | grep -E '^(--|  ok|  FAIL|RESULT)'
+rm -f "$CSBIN"
+
+echo
+echo "== host: DW3000 ESP-IDF backend vs GPIO/SPI fakes =="
+DBIN="$(mktemp -t esp_dw3000_port.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$SDKFAKE" -I "$HERE/../components/woz_uwb/port" \
+   -I "$HERE/../../../deps/dw3000/platform" \
+   -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
+   "$HERE/test_esp_dw3000_port.c" \
+   "$HERE/../components/woz_uwb/port/dw3000_hw.c" \
+   "$HERE/../components/woz_uwb/port/dw3000_spi.c" \
+   "$SDKFAKE/fake_driver.c" "$SDKFAKE/fake_freertos.c" -o "$DBIN"
+"$DBIN"
+rm -f "$DBIN"
+
+echo
+echo "== host: --wrap RX-callback shim chaining =="
+SBIN2="$(mktemp -t esp_wrap_stubs.XXXXXX)"
+cc -std=c11 -O1 -Wall -Wextra \
+   -I "$HERE/../../../deps/dw3000/dwt_uwb_driver" \
+   -I "$HERE/../../../modules/woz_uwb/src/ccc" \
+   "$HERE/test_esp_wrap_stubs.c" \
+   "$HERE/../components/woz_uwb/port/woz_wrap_stubs.c" -o "$SBIN2"
+"$SBIN2"
+rm -f "$SBIN2"
+
+echo
 echo "== target: port build + link-seam guard =="
 bash "$HERE/verify_port.sh"
