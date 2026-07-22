@@ -43,7 +43,10 @@ PHASE_LABEL = dict(PHASES)
 
 # Bench-derived timing envelopes (ms): generous margins over the measured
 # walk-up numbers on this hardware (auth segment 203 ms fast / 757 ms
-# standard, connect->bolt 2.6 s). Exceeding one is a WARN, not a FAIL.
+# standard, connect->bolt 2.6 s). The auth segment is op05->auth1 (the phone
+# initiating the access protocol through EXCHANGE), NOT connect->auth1: the
+# connect->op05 gap is BLE/phone start latency, not reader auth work, and
+# folding it in mismeasures the segment. Exceeding an envelope is WARN, not FAIL.
 BUDGET_AUTH_FAST_MS = 400
 BUDGET_AUTH_STD_MS = 1100
 BUDGET_BOLT_MS = 4000
@@ -246,7 +249,8 @@ def run_checks(txn):
     slow = []
     if "auth1" in ph and txn.flow in ("fast", "standard"):
         limit = BUDGET_AUTH_FAST_MS if txn.flow == "fast" else BUDGET_AUTH_STD_MS
-        got = txn.offset_ms("auth1")
+        seg_start = ph["op05"] if "op05" in ph else txn.t0()
+        got = (ph["auth1"] - seg_start) / 1000.0
         if got > limit:
             slow.append("auth segment %.0f ms (envelope %d)" % (got, limit))
     if "bolt" in ph:
