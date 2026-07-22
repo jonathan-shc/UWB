@@ -114,6 +114,13 @@ jobs:
             sed -i 's/cffi==1.15.0/cffi==1.15.1/' \
               connectedhomeip/connectedhomeip/scripts/setup/constraints.txt \
               connectedhomeip/connectedhomeip/scripts/setup/requirements.all.txt &&
+            # Same story one step later: requirements.esp32.txt pins
+            # bitarray==2.6.0, which has no wheel for the container's build
+            # python 3.12, so pip compiles it from source and fails on a
+            # missing Python.h. 2.8.2 is the first release with a cp312
+            # manylinux x86_64 wheel, so pip installs it prebuilt.
+            sed -i 's/bitarray==2.6.0/bitarray==2.8.2/' \
+              connectedhomeip/connectedhomeip/scripts/setup/requirements.esp32.txt &&
             ./install.sh --no-host-tool
           )
           setup || {
