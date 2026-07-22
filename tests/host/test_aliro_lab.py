@@ -76,7 +76,7 @@ def with_extra(events, extra):
 
 class SampleLogTest(unittest.TestCase):
     def setUp(self):
-        with open(SAMPLE) as f:
+        with open(SAMPLE, errors="replace") as f:
             self.txns, self.checks = analyze(f.read())
 
     def test_two_transactions(self):
@@ -221,7 +221,9 @@ class CaptureArtifactTest(unittest.TestCase):
     artifact must parse and score clean (a full walk-up, no FAIL check)."""
 
     def setUp(self):
-        with open(CAPTURE) as f:
+        # Real tio captures carry stray binary bytes (console escape sequences);
+        # read exactly the way the tool does.
+        with open(CAPTURE, errors="replace") as f:
             self.txns, self.checks = analyze(f.read())
 
     def test_has_transactions(self):
