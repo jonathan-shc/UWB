@@ -1438,6 +1438,11 @@ int ccc_prepoll_listen(uint8_t channel, uint8_t preamble_code)
  * this is ever called from an ISR or a coop thread at prio <= -11. */
 void ccc_prepoll_stop(void)
 {
+	/* Per-session PHY freshness: drop the cache on every stop so the next
+	 * session's dwt_configure (and its RX calibration) runs exactly once, at
+	 * prewarm time, never on the M4 critical path. RAM-only, so it is safe
+	 * even when the early-return below skips the SPI work. */
+	g_phy_valid = false;
 	if (!g_listen_gate) {
 		return; /* never started or already stopped — the driver may be unprobed, so no SPI
 			 */

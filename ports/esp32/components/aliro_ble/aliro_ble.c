@@ -363,7 +363,7 @@ static const struct ble_gatt_svc_def k_gatt_svcs[] = {
  * the peer's default interval. Re-request from the host task once the peer's
  * procedure has had time to finish; give up after a few tries so we never
  * fight a peer that insists on its own params. */
-#define CONN_UPD_ITVL_MAX   24u /* accept anything <= 30 ms (1.25 ms units) */
+#define CONN_UPD_ITVL_MAX   12u /* accept only 15 ms (1.25 ms units); iOS idles at ~30 */
 #define CONN_UPD_RETRY_MS   120u
 #define CONN_UPD_MAX_TRIES  3u
 static struct ble_npl_callout s_conn_upd_retry;
@@ -373,14 +373,17 @@ static uint8_t s_conn_upd_tries;
 
 static void request_fast_conn(uint16_t conn_handle)
 {
-	/* The Aliro transaction is 15-20 lock-step round trips, so the
-	 * connection interval is nearly linear latency. Ask for Apple's
-	 * 15 ms floor (units: interval 1.25 ms, timeout 10 ms); iOS may
-	 * settle anywhere in [15, 30] ms — still well under its ~30+ ms
-	 * default. Best-effort: a rejected request keeps the old params. */
+	/* The walk-up is dozens of lock-step round trips (GATT discovery
+	 * alone is ~29 events), so the connection interval is nearly linear
+	 * latency. Demand exactly Apple's 15 ms floor (units: interval
+	 * 1.25 ms, timeout 10 ms): the earlier [15, 30] request was
+	 * satisfied by iOS's ~30 ms default, which the bench showed keeps
+	 * discovery at ~900 ms. Equal min/max at a 15 ms multiple stays
+	 * within the accessory guidelines. Best-effort: a rejected request
+	 * keeps the old params. */
 	struct ble_gap_upd_params params = {
 		.itvl_min = 12, /* 15 ms */
-		.itvl_max = 24, /* 30 ms */
+		.itvl_max = 12, /* 15 ms */
 		.latency = 0,
 		.supervision_timeout = 400, /* 4 s */
 	};
@@ -405,14 +408,23 @@ static void conn_upd_retry_ev(struct ble_npl_event *ev)
 }
 
 /* Arm one retry unless the interval is already acceptable or the budget is
- * spent. Called from GAP events only (host task). */
+ * spent. Called from GAP events only (host task). W-level logs on every exit
+ * so one bench line always states the interval the transaction will run at. */
 static void conn_upd_schedule_retry(uint16_t conn_handle)
 {
 	struct ble_gap_conn_desc desc;
 
-	if (s_conn_upd_tries >= CONN_UPD_MAX_TRIES ||
-	    ble_gap_conn_find(conn_handle, &desc) != 0 ||
-	    desc.conn_itvl <= CONN_UPD_ITVL_MAX) {
+	if (ble_gap_conn_find(conn_handle, &desc) != 0) {
+		return;
+	}
+	if (desc.conn_itvl <= CONN_UPD_ITVL_MAX) {
+		ESP_LOGW(TAG, "conn itvl %u us; fast enough, no retry",
+			 (unsigned)desc.conn_itvl * 1250u);
+		return;
+	}
+	if (s_conn_upd_tries >= CONN_UPD_MAX_TRIES) {
+		ESP_LOGW(TAG, "conn itvl stuck at %u us after %u tries",
+			 (unsigned)desc.conn_itvl * 1250u, (unsigned)s_conn_upd_tries);
 		return;
 	}
 	if (!s_conn_upd_retry_init) {
