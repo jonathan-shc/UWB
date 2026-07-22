@@ -145,6 +145,8 @@ struct woz_host_rx_rec {
 	uint32_t systime;             /* dwt_readsystimestamphi32 */
 	int stsq_ret;                 /* dwt_readstsquality return */
 	int16_t stsq_val;             /* ...and its quality index out-param */
+	int radio_init_ret;           /* uwb_min_radio_init return (default 0 = up) */
+	int32_t configure_ret;        /* dwt_configure return (default DWT_SUCCESS) */
 };
 extern struct woz_host_rx_rec woz_host_rx;
 void woz_host_rx_reset(void);

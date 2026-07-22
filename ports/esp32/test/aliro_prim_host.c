@@ -17,13 +17,50 @@
 
 #include <string.h>
 
+/* ---- failure injection (reader error-path tests) --------------------------
+ *
+ * All hooks default OFF and disarm themselves after firing, so suites that do
+ * not touch them (crypto, stepup) see the plain double. Two shapes:
+ *   fail_<op>        > 0: fail the next N calls of <op>, decrementing each time
+ *   fail_<op>_after >= 0: succeed that many calls, then fail ONE and reset to -1
+ * The _after shape exists because some ops are nested (keygen draws from
+ * aliro_random; the phone helpers seal with the same GCM the reader uses), so
+ * the test must be able to fail the Nth call, not the first. */
+int aliro_prim_host_fail_init;
+int aliro_prim_host_fail_keygen;
+int aliro_prim_host_fail_sign;
+int aliro_prim_host_fail_pub_from_priv;
+int aliro_prim_host_fail_random_after = -1;
+int aliro_prim_host_fail_encrypt_after = -1;
+
+/* Consume one call against an _after counter; returns 1 when this call must fail. */
+static int fail_after_fires(int *after)
+{
+	if (*after < 0) {
+		return 0;
+	}
+	if (*after == 0) {
+		*after = -1;
+		return 1;
+	}
+	(*after)--;
+	return 0;
+}
+
 int aliro_prim_init(void)
 {
+	if (aliro_prim_host_fail_init > 0) {
+		aliro_prim_host_fail_init--;
+		return -1;
+	}
 	return 0;
 }
 
 int aliro_random(uint8_t *out, size_t len)
 {
+	if (fail_after_fires(&aliro_prim_host_fail_random_after)) {
+		return -1;
+	}
 	/* Deterministic host filler; the host suite does not need CSPRNG quality. */
 	for (size_t i = 0; i < len; i++) {
 		out[i] = (uint8_t)(0x5a + i);
@@ -323,6 +360,9 @@ int aliro_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce,
 {
 	uint8_t full[16];
 
+	if (fail_after_fires(&aliro_prim_host_fail_encrypt_after)) {
+		return -1;
+	}
 	if (tag_len > 16) {
 		return -1;
 	}
@@ -392,6 +432,10 @@ static void fake_point(const uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_
 
 int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256_POINT])
 {
+	if (aliro_prim_host_fail_keygen > 0) {
+		aliro_prim_host_fail_keygen--;
+		return -1;
+	}
 	if (aliro_random(priv, ALIRO_P256_SCALAR) != 0) {
 		return -1;
 	}
@@ -402,6 +446,10 @@ int aliro_ec_p256_keygen(uint8_t priv[ALIRO_P256_SCALAR], uint8_t pub[ALIRO_P256
 int aliro_ec_p256_pub_from_priv(const uint8_t priv[ALIRO_P256_SCALAR],
 				uint8_t pub[ALIRO_P256_POINT])
 {
+	if (aliro_prim_host_fail_pub_from_priv > 0) {
+		aliro_prim_host_fail_pub_from_priv--;
+		return -1;
+	}
 	fake_point(priv, pub);
 	return 0;
 }
@@ -452,6 +500,10 @@ static void fake_sig(const uint8_t x[32], const uint8_t *msg, size_t msg_len,
 int aliro_ecdsa_p256_sign(const uint8_t priv[ALIRO_P256_SCALAR], const uint8_t *msg, size_t msg_len,
 			  uint8_t sig[ALIRO_P256_SIG])
 {
+	if (aliro_prim_host_fail_sign > 0) {
+		aliro_prim_host_fail_sign--;
+		return -1;
+	}
 	fake_sig(priv, msg, msg_len, sig); /* priv == pub.x by construction */
 	return 0;
 }

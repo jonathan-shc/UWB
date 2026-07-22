@@ -40,10 +40,21 @@
 #include "aliro_apdu.h"
 #include "aliro_ble.h"
 #include "aliro_crypto.h"
+#include "aliro_lab.h"
 #include "aliro_prim.h"
 #include "aliro_prov.h"
 #include "aliro_ranging.h"
 #include "aliro_reader.h"
+
+/* Failure injection into the prim double (aliro_prim_host.c). Every hook
+ * defaults off and disarms itself after firing, so the walk-ups before
+ * section E run against the plain fakes. */
+extern int aliro_prim_host_fail_init;
+extern int aliro_prim_host_fail_keygen;
+extern int aliro_prim_host_fail_sign;
+extern int aliro_prim_host_fail_pub_from_priv;
+extern int aliro_prim_host_fail_random_after;  /* -1 off; N: fail after N successes */
+extern int aliro_prim_host_fail_encrypt_after; /* -1 off; N: fail after N successes */
 
 static int fails;
 
@@ -80,8 +91,13 @@ int aliro_ble_start(const struct aliro_ble_config *cfg)
 	return 0;
 }
 
+static bool s_ble_prepare_fail;
+
 int aliro_ble_prepare(const struct aliro_ble_config *cfg)
 {
+	if (s_ble_prepare_fail) {
+		return -1;
+	}
 	s_cfg = *cfg;
 	return 0;
 }
@@ -150,6 +166,14 @@ static int tx_pending(void)
 	return s_txn - s_tx_rd;
 }
 
+/* Reclaim the recording queue (TX_MAX slots for the whole run). Only call at a
+ * scenario boundary where every previously sent frame has been consumed. */
+static void tx_reset(void)
+{
+	s_txn = 0;
+	s_tx_rd = 0;
+}
+
 /* ---- aliro_ranging double ------------------------------------------------ */
 
 static int s_rng_inits, s_rng_starts, s_rng_stops, s_rng_feeds;
@@ -158,9 +182,16 @@ static uint8_t s_rng_ursk[ALIRO_URSK_LEN];
 static uint8_t s_rng_feed_buf[64];
 static size_t s_rng_feed_len;
 
+/* One-shot failure switches for section E (self-clearing, default off). */
+static int s_rng_init_fail, s_rng_start_fail;
+
 int aliro_ranging_init(void)
 {
 	s_rng_inits++;
+	if (s_rng_init_fail) {
+		s_rng_init_fail = 0;
+		return -1;
+	}
 	return 0;
 }
 
@@ -169,6 +200,10 @@ int aliro_ranging_start(uint16_t conn_handle, uint32_t session_id, const uint8_t
 {
 	(void)conn_handle;
 	(void)sc_ble;
+	if (s_rng_start_fail) {
+		s_rng_start_fail = 0;
+		return -1;
+	}
 	s_rng_sid = session_id;
 	memcpy(s_rng_ursk, ursk, ALIRO_URSK_LEN);
 	s_rng_starts++;
@@ -623,6 +658,170 @@ static uint32_t ph_sid(const struct ph *p)
 	       ((uint32_t)p->txid[14] << 8) | (uint32_t)p->txid[15];
 }
 
+/* ---- section-E phone variants (error-path walk-ups) ---------------------- */
+
+/* ph_auth0_resp with a caller-chosen status word: the reader must log the odd
+ * SW and continue the standard phase regardless. */
+static void ph_auth0_resp_sw2(struct ph *p, uint16_t conn, uint8_t eph_seed, uint8_t sw1,
+			      uint8_t sw2)
+{
+	uint8_t pl[80], shared[32];
+	size_t n;
+
+	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
+	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	aliro_crypto_derive_z(shared, p->txid, p->z);
+	n = tlv1(pl, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	pl[n++] = sw1;
+	pl[n++] = sw2;
+	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+}
+
+/* Fast-phase AUTH0Response off the Kpersistent agreed in the last standard
+ * phase (p->kp), mirroring the section-B inline flow: fresh ephemeral,
+ * cryptogram under CryptogramSK, fast channel + BleSK keys derived so the
+ * script can complete the walk-up if the reader accepts the match. Also runs
+ * the ECDH so z is ready if the reader falls back to the standard phase. */
+static int ph_auth0_resp_fast(struct ph *p, uint16_t conn, uint8_t eph_seed)
+{
+	uint8_t salt[ALIRO_SALT_MAX], enc[32], dec[32], fast[ALIRO_KEY_BLOCK_LEN];
+	uint8_t crypt[64], payload[48], pl[160], shared[32];
+	size_t sl, n = 0;
+	static const uint8_t zero_iv[12] = {0};
+
+	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
+	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	aliro_crypto_derive_z(shared, p->txid, p->z);
+
+	if (aliro_salt_build(ALIRO_SALT_CRYPTOGRAM, p->txid, p->rvk + 1, p->r_eph_pub + 1, p->r_id,
+			     ALIRO_IFACE_BLE, 0x0100, p->exp_phase, 0x01, p->cred_pub + 1, p->a5,
+			     p->a5n, salt, &sl) != 0 ||
+	    aliro_crypto_derive_block(p->kp, salt, sl, p->eph_pub + 1, fast) != 0) {
+		return -1;
+	}
+	memset(payload, 0x22, sizeof(payload));
+	if (aliro_aes256_gcm_encrypt(fast + ALIRO_CRYPTOGRAM_SK_OFFSET, zero_iv, sizeof(zero_iv),
+				     NULL, 0, payload, sizeof(payload), crypt, crypt + 48,
+				     16) != 0) {
+		return -1;
+	}
+	aliro_crypto_split(fast, 0, enc, dec, p->ursk);
+	memcpy(p->k_r2p, enc, 32);
+	memcpy(p->k_p2r, dec, 32);
+	p->r2p_ctr = p->p2r_ctr = 1;
+	if (aliro_crypto_derive_ble_keys(fast, k_ble_salt, sizeof(k_ble_salt), p->ble_r2p,
+					 p->ble_p2r) != 0) {
+		return -1;
+	}
+	p->ble_r2p_ctr = p->ble_p2r_ctr = 1;
+
+	n += tlv1(pl + n, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	n += tlv1(pl + n, 0x9D, crypt, 64);
+	pl[n++] = 0x90;
+	pl[n++] = 0x00;
+	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+	return 0;
+}
+
+/* AUTH0Response carrying a garbage cryptogram: the reader's fast trial must
+ * match no stored Kpersistent and fall back to the standard phase. */
+static void ph_auth0_resp_badcrypt(struct ph *p, uint16_t conn, uint8_t eph_seed)
+{
+	uint8_t pl[200], shared[32], junk[64];
+	size_t n;
+
+	memset(p->eph_priv, eph_seed, sizeof(p->eph_priv));
+	aliro_ec_p256_pub_from_priv(p->eph_priv, p->eph_pub);
+	aliro_ecdh_p256(p->eph_priv, p->r_eph_pub, shared);
+	aliro_crypto_derive_z(shared, p->txid, p->z);
+	memset(junk, 0x6B, sizeof(junk));
+	n = tlv1(pl, ALIRO_TAG_DEVICE_PUBX, p->eph_pub, 65);
+	n += tlv1(pl + n, 0x9D, junk, 64);
+	pl[n++] = 0x90;
+	pl[n++] = 0x00;
+	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, n);
+}
+
+/* ph_auth1_resp variant: derive the channels as usual, then either seal a
+ * well-formed response under a caller-chosen SW (junk_pt=0) or seal a
+ * plaintext that cannot parse as an AUTH1Response (junk_pt=1). */
+static int ph_auth1_resp_v(struct ph *p, uint16_t conn, int junk_pt, uint8_t sw1, uint8_t sw2)
+{
+	size_t n;
+	const uint8_t *f = tx_next(&n);
+	const uint8_t *body;
+	size_t blen;
+	uint8_t ins;
+
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_AUTH1) {
+		return -1;
+	}
+	if (ph_derive_standard(p) != 0) {
+		return -1;
+	}
+
+	uint8_t td[160], pt[160], sig[64], pl[200], tag[16];
+	size_t tn, ptn = 0;
+
+	if (junk_pt) {
+		pt[ptn++] = 0xDE;
+		pt[ptn++] = 0xAD;
+	} else {
+		if (aliro_apdu_build_authdata(ALIRO_AUTH_DEVICE, p->r_id, p->eph_pub + 1,
+					      p->r_eph_pub + 1, p->txid, td, sizeof(td), &tn) != 0 ||
+		    aliro_ecdsa_p256_sign(p->cred_priv, td, tn, sig) != 0) {
+			return -1;
+		}
+		ptn += tlv1(pt + ptn, ALIRO_TAG_DEVICE_PUB, p->cred_pub, 65);
+		ptn += tlv1(pt + ptn, ALIRO_TAG_SIG, sig, 64);
+	}
+	if (ph_seal(p->k_p2r, &p->p2r_ctr, NULL, 0, pt, ptn, pl, tag) != 0) {
+		return -1;
+	}
+	memcpy(pl + ptn, tag, 16);
+	pl[ptn + 16] = sw1;
+	pl[ptn + 17] = sw2;
+	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, ptn + 18);
+	return 0;
+}
+
+/* Open the reader's EXCHANGE, then reply with a device-side error status: the
+ * reader must fail the session instead of completing the AP. */
+static int ph_exchange_err(struct ph *p, uint16_t conn)
+{
+	size_t n;
+	const uint8_t *f = tx_next(&n);
+	const uint8_t *body;
+	size_t blen;
+	uint8_t ins;
+
+	if (f == NULL || parse_cmd(f, n, &ins, &body, &blen) != 0 || ins != ALIRO_INS_EXCHANGE ||
+	    blen < 17) {
+		return -1;
+	}
+
+	uint8_t pt[64];
+	size_t ctn = blen - 16;
+
+	if (ph_open(p->k_r2p, &p->r2p_ctr, NULL, 0, body, ctn, body + ctn, pt) != 0) {
+		return -1;
+	}
+
+	static const uint8_t err_body[4] = {0x00, 0x02, 0x00, 0x42};
+	uint8_t pl[64], tag[16];
+
+	if (ph_seal(p->k_p2r, &p->p2r_ctr, NULL, 0, err_body, sizeof(err_body), pl, tag) != 0) {
+		return -1;
+	}
+	memcpy(pl + sizeof(err_body), tag, 16);
+	pl[sizeof(err_body) + 16] = 0x90;
+	pl[sizeof(err_body) + 17] = 0x00;
+	ph_send(conn, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, pl, sizeof(err_body) + 18);
+	return 0;
+}
+
 /* ---- the script ---------------------------------------------------------- */
 
 int main(void)
@@ -635,6 +834,14 @@ int main(void)
 	memset(&p, 0, sizeof(p));
 
 	printf("== T0: start + dev-identity walk-up (dev-open trust policy) ==\n");
+	/* console/notify paths before anything is provisioned or presented, plus
+	 * the compiled-out (CONFIG_WOZ_ALIRO_LAB=n) lab stubs */
+	aliro_reader_prov_print(); /* "last cred : (none presented yet)" branch */
+	okc("t0.trust_last_nothing", aliro_reader_trust_last() == 1);
+	aliro_reader_notify_unlock(true); /* no established session: warn only */
+	okc("t0.notify_no_session", tx_pending() == 0);
+	aliro_lab_set_enabled(true); /* stub: stays disabled */
+	okc("t0.lab_stub_off", !aliro_lab_enabled());
 	okc("t0.no_auth_cred_yet", !aliro_reader_authenticated_credential(out65));
 	okc("t0.start", aliro_reader_start() == 0);
 	okc("t0.transport_up", s_ble_started && s_cfg.cb.on_data != NULL);
@@ -955,6 +1162,338 @@ int main(void)
 
 		okc("d.dev_identity_persisted",
 		    aliro_prov_load(&id2, &ts2) == 0 && id2.is_dev && ts2.count == 0);
+	}
+
+	printf("\n== E: failure injection — bring-up, provisioning, walk-up error paths ==\n");
+	tx_reset(); /* every earlier frame is consumed; reclaim the queue */
+
+	/* E1: engine/transport bring-up failures */
+	aliro_prim_host_fail_init = 1;
+	okc("e1.start_crypto_fail", aliro_reader_start() == -1);
+	aliro_prim_host_fail_init = 1;
+	okc("e1.start_attached_crypto_fail", aliro_reader_start_attached() == -1);
+	s_ble_prepare_fail = true;
+	okc("e1.ble_prepare_fail", aliro_reader_ble_prepare() == NULL);
+	s_ble_prepare_fail = false;
+	s_rng_init_fail = 1; /* ranging adapter down: start still succeeds, auth-only */
+	okc("e1.start_ranging_unavailable", aliro_reader_start() == 0);
+
+	/* E2: provisioning + trust console error paths (dev identity, empty store) */
+	uint8_t idle_priv[32], idle_pub[65];
+
+	memset(idle_priv, 0xB7, sizeof(idle_priv));
+	aliro_ec_p256_pub_from_priv(idle_priv, idle_pub);
+	okc("e2.add_trust", aliro_reader_provision_add_trust(idle_pub) == 0);
+	okc("e2.add_trust_dup", aliro_reader_provision_add_trust(idle_pub) == 1);
+	s_nvs_fail = true;
+	okc("e2.add_trust_store_fail", aliro_reader_provision_add_trust(p.cred_pub) == -1);
+	okc("e2.trust_clear_store_fail", aliro_reader_trust_clear() == -1);
+	s_nvs_fail = false;
+	aliro_reader_prov_print(); /* anchor-listing loop + last-cred hexdump */
+	okc("e2.trust_clear", aliro_reader_trust_clear() == 0);
+
+	/* E3: provisioned identity + two anchors (an idle one first, so the fast
+	 * trial later has a no-Kpersistent slot to skip over) */
+	okc("e3.provision_id", aliro_reader_provision_identity(rid, sp, grk0) == 0);
+	okc("e3.trust_idle", aliro_reader_provision_add_trust(idle_pub) == 0);
+	okc("e3.trust_walker", aliro_reader_provision_add_trust(p.cred_pub) == 0);
+	aliro_ec_p256_pub_from_priv(sp, p.rvk);
+
+	/* E4: AUTH0-response failure paths */
+	{
+		size_t dn;
+
+		/* too short for the SW */
+		s_cfg.cb.on_connected(30);
+		ph_initiate(&p, 30, 0);
+		okc("e4.auth0_a", ph_take_auth0(&p) == 0);
+		{
+			static const uint8_t one[1] = {0x00};
+
+			ph_send(30, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, one, sizeof(one));
+		}
+		okc("e4.short_auth0resp_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(30);
+
+		/* device ephemeral that is not an uncompressed point: ECDH fails */
+		s_cfg.cb.on_connected(31);
+		ph_initiate(&p, 31, 0);
+		okc("e4.auth0_b", ph_take_auth0(&p) == 0);
+		{
+			uint8_t badpub[65], bpl[80];
+			size_t bn;
+
+			memset(badpub, 0x05, sizeof(badpub)); /* prefix != 0x04 */
+			bn = tlv1(bpl, ALIRO_TAG_DEVICE_PUBX, badpub, 65);
+			bpl[bn++] = 0x90;
+			bpl[bn++] = 0x00;
+			ph_send(31, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, bpl, bn);
+		}
+		okc("e4.ecdh_fail_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(31);
+
+		/* live ephemeral generation failures: a concurrent session consumes
+		 * the spare pair, so start_auth must generate inline — and fail */
+		s_cfg.cb.on_connected(32);
+		ph_initiate(&p, 32, 0); /* consumes the spare */
+		okc("e4.auth0_c", tx_next(&dn) != NULL);
+		s_cfg.cb.on_connected(33);
+		aliro_prim_host_fail_keygen = 1;
+		ph_initiate(&p, 33, 0);
+		okc("e4.keygen_fail_no_auth0", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(33); /* refills the spare */
+		s_cfg.cb.on_disconnected(32);
+		s_cfg.cb.on_connected(34);
+		ph_initiate(&p, 34, 0); /* consumes the refilled spare */
+		okc("e4.auth0_d", tx_next(&dn) != NULL);
+		s_cfg.cb.on_connected(35);
+		aliro_prim_host_fail_random_after = 1; /* keygen draws once, txid fails */
+		ph_initiate(&p, 35, 0);
+		okc("e4.random_fail_no_auth0", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(35);
+		s_cfg.cb.on_disconnected(34);
+
+		/* reader-transcript signature failure */
+		s_cfg.cb.on_connected(36);
+		ph_initiate(&p, 36, 0);
+		okc("e4.auth0_e", ph_take_auth0(&p) == 0);
+		aliro_prim_host_fail_sign = 1;
+		ph_auth0_resp(&p, 36, 0xE6);
+		okc("e4.sign_fail_no_auth1", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(36);
+	}
+
+	/* E5: AUTH1-response failure paths (each walk-up reaches SENT_AUTH1) */
+	{
+		size_t dn;
+
+		/* too short for the SW */
+		s_cfg.cb.on_connected(37);
+		ph_initiate(&p, 37, 0);
+		okc("e5.auth0_a", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 37, 0xE7);
+		okc("e5.auth1_sent_a", tx_next(&dn) != NULL);
+		{
+			static const uint8_t one[1] = {0x22};
+
+			ph_send(37, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, one, sizeof(one));
+		}
+		okc("e5.short_auth1resp_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(37);
+
+		/* shorter than a GCM tag once the SW is stripped */
+		s_cfg.cb.on_connected(38);
+		ph_initiate(&p, 38, 0);
+		okc("e5.auth0_b", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 38, 0xE8);
+		okc("e5.auth1_sent_b", tx_next(&dn) != NULL);
+		{
+			uint8_t small[10] = {0};
+
+			small[8] = 0x90;
+			small[9] = 0x00;
+			ph_send(38, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, small,
+				sizeof(small));
+		}
+		okc("e5.tagless_auth1resp_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(38);
+
+		/* ciphertext larger than the decrypt scratch buffer */
+		s_cfg.cb.on_connected(39);
+		ph_initiate(&p, 39, 0);
+		okc("e5.auth0_c", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 39, 0xE9);
+		okc("e5.auth1_sent_c", tx_next(&dn) != NULL);
+		{
+			uint8_t big[300];
+
+			memset(big, 0x33, sizeof(big));
+			big[298] = 0x90;
+			big[299] = 0x00;
+			ph_send(39, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, big, sizeof(big));
+		}
+		okc("e5.oversize_auth1resp_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(39);
+
+		/* decrypts fine, parses as nothing */
+		s_cfg.cb.on_connected(40);
+		ph_initiate(&p, 40, 0);
+		okc("e5.auth0_d", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 40, 0xEA);
+		okc("e5.junk_pt_sealed", ph_auth1_resp_v(&p, 40, 1, 0x90, 0x00) == 0);
+		okc("e5.junk_pt_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(40);
+	}
+
+	/* E6: full standard walk-up under odd SWs + established-phase failures */
+	{
+		int stores;
+
+		s_cfg.cb.on_connected(41);
+		ph_initiate(&p, 41, 1);
+		okc("e6.auth0", ph_take_auth0(&p) == 0);
+		ph_auth0_resp_sw2(&p, 41, 0xEB, 0x6A, 0x80); /* odd SW: warn + continue */
+		okc("e6.auth1_resp_sw", ph_auth1_resp_v(&p, 41, 0, 0x69, 0x82) == 0);
+		s_rng_start_fail = 1; /* ranging adapter refuses to arm: warn only */
+		okc("e6.exchange", ph_exchange_resp(&p, 41) == 0);
+		okc("e6.ap_completed", ph_take_ap_completed(&p) == 0);
+
+		/* an SDU the BleSK channel cannot open is dumped, not fed */
+		{
+			static const uint8_t junk[5] = {0xDE, 0xAD, 0xBE, 0xEF, 0x55};
+			int feeds = s_rng_feeds;
+
+			s_cfg.cb.on_data(41, junk, sizeof(junk));
+			okc("e6.bad_sdu_not_fed", s_rng_feeds == feeds);
+		}
+
+		/* reader-status seal failure: nothing goes on the wire */
+		aliro_prim_host_fail_encrypt_after = 0;
+		aliro_reader_notify_unlock(true);
+		okc("e6.notify_seal_fail", tx_pending() == 0);
+
+		/* the standard phase minted a Kpersistent; the persist fails on this
+		 * disconnect and is retried on a later one */
+		stores = s_nvs_stores;
+		s_nvs_fail = true;
+		s_cfg.cb.on_disconnected(41);
+		okc("e6.kp_persist_deferred", s_nvs_stores == stores);
+		s_nvs_fail = false;
+	}
+
+	/* E7: expedited-fast — skipped anchor, no-match fallback, lost group key */
+	tx_reset();
+	{
+		/* fast succeeds; the anchor without a Kpersistent is skipped over */
+		s_cfg.cb.on_connected(42);
+		ph_initiate(&p, 42, 1);
+		okc("e7.auth0_fast_offered", ph_take_auth0(&p) == 0 && p.exp_phase == 0x01);
+		okc("e7.fast_resp", ph_auth0_resp_fast(&p, 42, 0xEC) == 0);
+		okc("e7.exchange", ph_exchange_resp(&p, 42) == 0);
+		okc("e7.ap_completed", ph_take_ap_completed(&p) == 0);
+		s_cfg.cb.on_disconnected(42); /* also retries the deferred persist */
+
+		/* garbage cryptogram: no Kpersistent matches, standard continues */
+		s_cfg.cb.on_connected(43);
+		ph_initiate(&p, 43, 1);
+		okc("e7.auth0_b", ph_take_auth0(&p) == 0 && p.exp_phase == 0x01);
+		ph_auth0_resp_badcrypt(&p, 43, 0xED);
+		okc("e7.nomatch_auth1_resp", ph_auth1_resp(&p, 43, NULL, 0) == 0);
+		okc("e7.nomatch_exchange", ph_exchange_resp(&p, 43) == 0);
+		okc("e7.nomatch_ap_completed", ph_take_ap_completed(&p) == 0);
+		s_cfg.cb.on_disconnected(43);
+
+		/* group key lost: provisioning commits but the fast trial and the
+		 * standard AUTH1 both dead-end on the missing salt field 1 */
+		aliro_prim_host_fail_pub_from_priv = 1;
+		okc("e7.provision_no_group_x",
+		    aliro_reader_provision_identity(rid, sp, grk0) == 0);
+		s_cfg.cb.on_connected(44);
+		ph_initiate(&p, 44, 1);
+		okc("e7.auth0_c", ph_take_auth0(&p) == 0 && p.exp_phase == 0x01);
+		okc("e7.fast_resp_c", ph_auth0_resp_fast(&p, 44, 0xEE) == 0);
+		okc("e7.auth1_resp_c", ph_auth1_resp(&p, 44, NULL, 0) == 0);
+		okc("e7.no_group_x_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(44);
+		okc("e7.provision_restore", aliro_reader_provision_identity(rid, sp, grk0) == 0);
+	}
+
+	/* E8: EXCHANGE-response failures + seal failures on the reader side */
+	tx_reset();
+	{
+		size_t dn;
+
+		/* response too short for the SW */
+		s_cfg.cb.on_connected(46);
+		ph_initiate(&p, 46, 0);
+		okc("e8.auth0_a", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 46, 0xF1);
+		okc("e8.auth1_resp_a", ph_auth1_resp(&p, 46, NULL, 0) == 0);
+		okc("e8.exchange_sent_a", tx_next(&dn) != NULL);
+		{
+			static const uint8_t one[1] = {0x11};
+
+			ph_send(46, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, one, sizeof(one));
+		}
+		okc("e8.short_exresp_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(46);
+
+		/* response body that cannot decrypt */
+		s_cfg.cb.on_connected(47);
+		ph_initiate(&p, 47, 0);
+		okc("e8.auth0_b", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 47, 0xF2);
+		okc("e8.auth1_resp_b", ph_auth1_resp(&p, 47, NULL, 0) == 0);
+		okc("e8.exchange_sent_b", tx_next(&dn) != NULL);
+		{
+			uint8_t junk[40];
+
+			memset(junk, 0x5C, sizeof(junk));
+			junk[38] = 0x90;
+			junk[39] = 0x00;
+			ph_send(47, ALIRO_PROTO_ACCESS, ALIRO_AP_OP_RESPONSE, junk, sizeof(junk));
+		}
+		okc("e8.garbage_exresp_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(47);
+
+		/* device rejects the EXCHANGE with an error status */
+		s_cfg.cb.on_connected(48);
+		ph_initiate(&p, 48, 0);
+		okc("e8.auth0_c", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 48, 0xF3);
+		okc("e8.auth1_resp_c", ph_auth1_resp(&p, 48, NULL, 0) == 0);
+		okc("e8.exchange_err", ph_exchange_err(&p, 48) == 0);
+		okc("e8.exchange_err_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(48);
+
+		/* the reader's own EXCHANGE seal fails (after the phone's seal) */
+		s_cfg.cb.on_connected(49);
+		ph_initiate(&p, 49, 0);
+		okc("e8.auth0_d", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 49, 0xF4);
+		aliro_prim_host_fail_encrypt_after = 1; /* phone seals once, reader fails */
+		okc("e8.auth1_resp_d", ph_auth1_resp(&p, 49, NULL, 0) == 0);
+		okc("e8.exchange_seal_fail_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(49);
+
+		/* the reader's AP-Completed seal fails (after the phone's seal) */
+		s_cfg.cb.on_connected(50);
+		ph_initiate(&p, 50, 0);
+		okc("e8.auth0_e", ph_take_auth0(&p) == 0);
+		ph_auth0_resp(&p, 50, 0xF5);
+		okc("e8.auth1_resp_e", ph_auth1_resp(&p, 50, NULL, 0) == 0);
+		aliro_prim_host_fail_encrypt_after = 1; /* phone ok-body, then AP seal */
+		okc("e8.exchange_resp_e", ph_exchange_resp(&p, 50) == 0);
+		okc("e8.ap_seal_fail_dead", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(50);
+	}
+
+	/* E9: trust store filled to the brim + a rejected walk-up: trust_last
+	 * has a presented key but nowhere to put it */
+	tx_reset();
+	{
+		struct ph q;
+		uint8_t fill_priv[32], fill_pub[65];
+
+		memset(fill_priv, 0xB8, sizeof(fill_priv));
+		aliro_ec_p256_pub_from_priv(fill_priv, fill_pub);
+		okc("e9.fill3", aliro_reader_provision_add_trust(fill_pub) == 0);
+		memset(fill_priv, 0xB9, sizeof(fill_priv));
+		aliro_ec_p256_pub_from_priv(fill_priv, fill_pub);
+		okc("e9.fill4", aliro_reader_provision_add_trust(fill_pub) == 0);
+
+		memset(&q, 0, sizeof(q));
+		memcpy(q.rvk, p.rvk, sizeof(q.rvk));
+		memset(q.cred_priv, 0xC9, sizeof(q.cred_priv));
+		aliro_ec_p256_pub_from_priv(q.cred_priv, q.cred_pub);
+		s_cfg.cb.on_connected(45);
+		ph_initiate(&q, 45, 0);
+		okc("e9.auth0", ph_take_auth0(&q) == 0);
+		ph_auth0_resp(&q, 45, 0xEF);
+		okc("e9.auth1_resp", ph_auth1_resp(&q, 45, NULL, 0) == 0);
+		okc("e9.rejected", tx_pending() == 0);
+		s_cfg.cb.on_disconnected(45);
+		okc("e9.trust_last_full", aliro_reader_trust_last() == -1);
 	}
 
 	/* console/status entry points: exercised for effect-free execution */
