@@ -357,6 +357,74 @@ static const struct ble_gatt_svc_def k_gatt_svcs[] = {
 	{0},
 };
 
+/* Fast-interval retry: the request fired at GAP connect loses a "different
+ * transaction collision" (HCI 0x2A) against the iPhone's own link setup on
+ * every observed walk-up, leaving the whole GATT-discovery window (~900 ms) at
+ * the peer's default interval. Re-request from the host task once the peer's
+ * procedure has had time to finish; give up after a few tries so we never
+ * fight a peer that insists on its own params. */
+#define CONN_UPD_ITVL_MAX   24u /* accept anything <= 30 ms (1.25 ms units) */
+#define CONN_UPD_RETRY_MS   120u
+#define CONN_UPD_MAX_TRIES  3u
+static struct ble_npl_callout s_conn_upd_retry;
+static bool s_conn_upd_retry_init;
+static uint16_t s_conn_upd_conn;
+static uint8_t s_conn_upd_tries;
+
+static void request_fast_conn(uint16_t conn_handle)
+{
+	/* The Aliro transaction is 15-20 lock-step round trips, so the
+	 * connection interval is nearly linear latency. Ask for Apple's
+	 * 15 ms floor (units: interval 1.25 ms, timeout 10 ms); iOS may
+	 * settle anywhere in [15, 30] ms — still well under its ~30+ ms
+	 * default. Best-effort: a rejected request keeps the old params. */
+	struct ble_gap_upd_params params = {
+		.itvl_min = 12, /* 15 ms */
+		.itvl_max = 24, /* 30 ms */
+		.latency = 0,
+		.supervision_timeout = 400, /* 4 s */
+	};
+	int rc = ble_gap_update_params(conn_handle, &params);
+
+	if (rc != 0) {
+		ESP_LOGW(TAG, "conn param update request rc=%d", rc);
+	}
+}
+
+static void conn_upd_retry_ev(struct ble_npl_event *ev)
+{
+	struct ble_gap_conn_desc desc;
+
+	(void)ev;
+	if (ble_gap_conn_find(s_conn_upd_conn, &desc) != 0 ||
+	    desc.conn_itvl <= CONN_UPD_ITVL_MAX) {
+		return; /* connection gone, or already fast enough */
+	}
+	s_conn_upd_tries++;
+	request_fast_conn(s_conn_upd_conn);
+}
+
+/* Arm one retry unless the interval is already acceptable or the budget is
+ * spent. Called from GAP events only (host task). */
+static void conn_upd_schedule_retry(uint16_t conn_handle)
+{
+	struct ble_gap_conn_desc desc;
+
+	if (s_conn_upd_tries >= CONN_UPD_MAX_TRIES ||
+	    ble_gap_conn_find(conn_handle, &desc) != 0 ||
+	    desc.conn_itvl <= CONN_UPD_ITVL_MAX) {
+		return;
+	}
+	if (!s_conn_upd_retry_init) {
+		ble_npl_callout_init(&s_conn_upd_retry, nimble_port_get_dflt_eventq(),
+				     conn_upd_retry_ev, NULL);
+		s_conn_upd_retry_init = true;
+	}
+	s_conn_upd_conn = conn_handle;
+	ble_npl_callout_reset(&s_conn_upd_retry,
+			      ble_npl_time_ms_to_ticks32(CONN_UPD_RETRY_MS));
+}
+
 // NimBLE GAP event callback that handles connection, disconnection, and advertising-related events for the Aliro BLE service.
 static int gap_event(struct ble_gap_event *event, void *arg)
 {
@@ -370,24 +438,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 			return 0;
 		}
 		aliro_lat_begin(); /* walk-up t=0 */
-		{
-			/* The Aliro transaction is 15-20 lock-step round trips, so the
-			 * connection interval is nearly linear latency. Ask for Apple's
-			 * 15 ms floor (units: interval 1.25 ms, timeout 10 ms); iOS may
-			 * settle anywhere in [15, 30] ms — still well under its ~30+ ms
-			 * default. Best-effort: a rejected request keeps the old params. */
-			struct ble_gap_upd_params params = {
-				.itvl_min = 12, /* 15 ms */
-				.itvl_max = 24, /* 30 ms */
-				.latency = 0,
-				.supervision_timeout = 400, /* 4 s */
-			};
-			int rc = ble_gap_update_params(event->connect.conn_handle, &params);
-
-			if (rc != 0) {
-				ESP_LOGW(TAG, "conn param update request rc=%d", rc);
-			}
-		}
+		s_conn_upd_tries = 0;
+		request_fast_conn(event->connect.conn_handle);
 		return 0;
 	case BLE_GAP_EVENT_CONN_UPDATE: {
 		/* W so it lands in the default WARN console: this one line per connect
@@ -404,10 +456,16 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 			ESP_LOGW(TAG, "conn update failed: status=%d",
 				 event->conn_update.status);
 		}
+		/* Covers both outcomes that leave us slow: our request rejected
+		 * (collision), or the peer's own update completing at its default. */
+		conn_upd_schedule_retry(event->conn_update.conn_handle);
 		return 0;
 	}
 	case BLE_GAP_EVENT_DISCONNECT:
 		ESP_LOGI(TAG, "GAP disconnect reason=%d", event->disconnect.reason);
+		if (s_conn_upd_retry_init) {
+			ble_npl_callout_stop(&s_conn_upd_retry);
+		}
 		aliro_advertise();
 		return 0;
 	case BLE_GAP_EVENT_ADV_COMPLETE:
