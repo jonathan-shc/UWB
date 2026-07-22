@@ -34,7 +34,8 @@ the nRF5340 build at the repository root.
   `~/esp/esp-idf` and `~/esp/esp-matter`; override with `IDF_EXPORT=` and
   `ESP_MATTER_PATH=` on any target.
 - ESP32-S3 dev board plus a DWM3000EVB wired per
-  [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md).
+  [`docs/esp32-bringup.md`](../../../../docs/esp32-bringup.md). An ESP32-C5 works too:
+  `make set-target TARGET=esp32c5` and use the C5 pin column in the same doc.
 - An Apple Home setup that can commission a Matter-over-Wi-Fi accessory and mint an Aliro
   key: a home hub, and an iPhone new enough to carry the key.
 

@@ -1,16 +1,28 @@
-/* DW3000 (DWM3000EVB) wiring on ESP32-S3, SPI2/FSPI. Source of truth for the
- * wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB is
- * soldered to your board. */
+/* DW3000 (DWM3000EVB) wiring per ESP32 target, SPI2/FSPI. Source of truth for
+ * the wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB
+ * is soldered to your board. */
 #ifndef WOZ_ESP_BOARD_PINS_H
 #define WOZ_ESP_BOARD_PINS_H
 
 #include "driver/spi_master.h"
+#include "sdkconfig.h"
 
 #define WOZ_DW3000_SPI_HOST   SPI2_HOST
 
+#if CONFIG_IDF_TARGET_ESP32C5
+/* ESP32-C5-DevKitC-1. The S3 data pins are taken on the C5: GPIO11/12 are the
+ * UART0 console and GPIO13 is USB-Serial-JTAG. 8/9/23 avoid the strapping pins
+ * (2/7/25/27/28, plus 3/26 per the devkit guide) and the GPIO27 RGB LED. */
+#define WOZ_DW3000_PIN_SCLK    8
+#define WOZ_DW3000_PIN_MOSI    9
+#define WOZ_DW3000_PIN_MISO   23
+#else
+/* ESP32-S3 (original bring-up target). */
 #define WOZ_DW3000_PIN_SCLK   12
 #define WOZ_DW3000_PIN_MOSI   11
 #define WOZ_DW3000_PIN_MISO   13
+#endif
+
 #define WOZ_DW3000_PIN_CS     10
 #define WOZ_DW3000_PIN_RST     4
 #define WOZ_DW3000_PIN_IRQ     5
