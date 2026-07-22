@@ -38,6 +38,7 @@
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
 #include <aliro_ble.h> // aliro_ble_time_updated()
+#include <aliro_lab.h>
 #include <aliro_lat.h>
 #include <esp_netif_sntp.h>
 #include <woz_uwb_facade.h>
@@ -279,6 +280,9 @@ static void aliro_reader_task(void *arg)
 		}
 
 		if (trusted) {
+			// Task context (not the UWB RX path): one trace line per trusted
+			// range block gives the approach curve in the Aliro Lab report.
+			aliro_lab_evi("range", "cm", cm);
 			if (!present) {
 				// First trusted range this approach: grant + fire the Wallet
 				// unlock animation ("Reader Status Changed", Unsecured, Aliro
