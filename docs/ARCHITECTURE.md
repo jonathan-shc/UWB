@@ -619,9 +619,9 @@ bounce buffer; on reads the body slice of the RX buffer is copied back.
 
 ### [`ports/esp32/components/woz_uwb/port/board_pins.h`](architecture/ports.esp32.components.woz_uwb.port/board_pins.h.md)
 
-DW3000 (DWM3000EVB) wiring on ESP32-S3, SPI2/FSPI. Source of truth for the
-wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB is
-soldered to your board.
+DW3000 (DWM3000EVB) wiring per ESP32 target, SPI2/FSPI. Source of truth for
+the wiring table in docs/esp32-bringup.md. Change to match how the DWM3000EVB
+is soldered to your board.
 
 **used by** [`ports/esp32/components/woz_uwb/port/dw3000_hw.c`](architecture/ports.esp32.components.woz_uwb.port/dw3000_hw.c.md), [`ports/esp32/components/woz_uwb/port/dw3000_spi.c`](architecture/ports.esp32.components.woz_uwb.port/dw3000_spi.c.md)
 
@@ -1031,10 +1031,10 @@ answers Access-Control-Allow-Origin), so the browser cannot fetch the image
 from the release; it has to sit next to the page on the same origin. This
 pass stages it at site-build time, preferring in order:
 
-  1. web-flasher/openaliro-matter-lock.bin (gitignored): a local
+  1. web-flasher/openaliro-matter-lock-esp32s3.bin (gitignored): a local
      `idf.py merge-bin` output for bench runs, published with the committed
      manifest (version "dev").
-  2. The latest release's loose assets (openaliro-matter-lock.bin +
+  2. The latest release's loose assets (openaliro-matter-lock-esp32s3.bin +
      openaliro-matter-lock.manifest.json, uploaded by release.yml), fetched
      server side where CORS does not apply; the manifest arrives already
      version-stamped.
