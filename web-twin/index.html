@@ -94,6 +94,13 @@
     font-size: .58rem; font-weight: 650; letter-spacing: .14em; text-transform: uppercase; color: var(--faint);
     border: 1px solid var(--line); border-radius: 99px; padding: .14rem .45rem;
   }
+  .back-link {
+    display: inline-flex; align-items: center; gap: .3rem; text-decoration: none;
+    color: var(--muted); font-size: .82rem; font-weight: 550; white-space: nowrap;
+    border: 1px solid var(--line); border-radius: 8px; padding: .28rem .62rem;
+    transition: border-color .15s, color .15s;
+  }
+  .back-link:hover { border-color: var(--tint-line); color: var(--accent); }
   .topbar .sub { color: var(--muted); font-size: .82rem; flex: 1; min-width: 0; }
   @media (max-width: 620px) { .topbar .sub { display: none; } }
   .icon-btn {
@@ -203,6 +210,7 @@
 </head>
 <body>
 <div class="topbar">
+  <a id="backBtn" class="back-link" href="index.html" hidden>&larr; Docs</a>
   <span class="brand"><b>openaliro</b><span class="tag">Digital Twin</span></span>
   <span class="sub">the reader's real unlock logic, line-cited from the firmware — drag the phone or press Walk up</span>
   <button id="themeBtn" class="icon-btn" aria-label="Toggle light / dark theme" title="Toggle theme">
@@ -286,6 +294,16 @@
       root.dataset.theme = isDark() ? "light" : "dark";
       try { localStorage.setItem("dm-theme", root.dataset.theme); } catch (e) { /* blocked */ }
     };
+    /* Back to the docs: shown only when this page is the site copy (twin.html)
+     * or was reached from another page. The standalone web-twin/index.html has
+     * nowhere to go back to, so the control stays hidden and never dead-links. */
+    const back = document.getElementById("backBtn");
+    if (back && (/twin\.html$/.test(location.pathname) || document.referrer)) {
+      back.hidden = false;
+      back.addEventListener("click", (e) => {
+        if (document.referrer && history.length > 1) { e.preventDefault(); history.back(); }
+      });
+    }
   });
 })();
 
@@ -459,8 +477,8 @@ function log(cls, msg){
 function mark(phase){ if (phase > sim.phase) sim.phase = phase; }
 
 const events = {
-  grant(cm){ mark(P.TRUSTED_RANGE); log("uwb", `trusted range ${cm} cm — granting (Wallet notify)`); },
-  unlock(f){ mark(P.BOLT_DRIVEN); log("ok", `approach ${f} cm (median) — UNLOCK, bolt drawn`); },
+  grant(cm){ mark(P.TRUSTED_RANGE); emitWave("uwb"); log("uwb", `trusted range ${cm} cm — granting (Wallet notify)`); },
+  unlock(f){ mark(P.BOLT_DRIVEN); emitWave("ok"); log("ok", `approach ${f} cm (median) — UNLOCK, bolt drawn`); },
   relock(f){ log("ok", f === null ? "relock (bolt thrown)" : `departed ${f} cm (median) — RELOCK`); },
   secured(){ log("ble", "peer gone 1500 ms silent — Wallet Secured"); },
 };
@@ -504,16 +522,19 @@ function authAdvance(){
 /* One 192 ms ranging block (uwb_selftest.c:36): measure, condition, latch. */
 function rangingBlock(){
   sim.blockN++;
+  scene.beam = 1;                                   // pulse the DS-TWR link visual
   let cm;
   if (sim.spoofArmed){
     sim.spoofArmed = false;
     cm = FW.SPOOF_CM;                                // test_twin.c:211
     const before = sim.store.lastRangeCm();
     sim.store.setCccRangeCm(cm);
+    emitWave("bad");                                 // a red pulse that the gate kills
     log("bad", `Ghost-Peak spoof (${cm} cm) REJECTED — layer 1; range stays ` +
                `${before === null ? "—" : before + " cm"}, trust reset`);
     return;
   }
+  emitWave("uwb");
   cm = sim.trueCm();
   if (sim.noise){
     /* Per-block spikes are firmware-documented bench behaviour: consecutive
@@ -559,83 +580,244 @@ function step(dtMs){
   }
 }
 
-/* ── Canvas ───────────────────────────────────────────────────────────────── */
+/* ── Canvas: a 2.5D perspective scene ─────────────────────────────────────────
+ * One-point perspective looking down a corridor at the door. World is metres
+ * with the reader/door at the origin and the corridor running along -X toward
+ * the camera (17 m back); the phone approaches from -X. Everything below is
+ * decoration over the same simulation state — waves, an RF density field, and a
+ * spring-loaded bolt — so the firmware-cited decision logic is untouched. */
 const cv = $("scene"), cx = cv.getContext("2d");
-let view = { scale: 50, ox: 0, oy: 0 };
+const RM = matchMedia("(prefers-reduced-motion: reduce)");
+const REFZ = 8, ZCAM = 17;
+const view = { W: 0, H: 0, cx: 0, horizon: 0, vspan: 0, lat: 0, vup: 0 };
 function resize(){
-  const r = cv.parentElement.getBoundingClientRect();
-  cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio;
-  const m = 0.6; // margin, metres
-  view.scale = Math.min(cv.width / (12 + 2*m), cv.height / (9 + 2*m));
-  view.ox = cv.width - (0.5 + m) * view.scale;   // reader near the right edge
-  view.oy = cv.height / 2;
+  view.W = cv.width = Math.max(1, cv.parentElement.clientWidth) * devicePixelRatio;
+  view.H = cv.height = Math.max(1, cv.parentElement.clientHeight) * devicePixelRatio;
+  view.cx = view.W * 0.5;
+  view.horizon = view.H * 0.24;
+  view.vspan = view.H * 0.27;
+  view.lat = view.W * 0.052;
+  view.vup = view.H * 0.17;
 }
 addEventListener("resize", resize);
-const px = (x,y) => [view.ox + x*view.scale, view.oy + y*view.scale];
+/* Ground/edge point (metres) -> screen; wz raises it off the floor. */
+function project(wx, wy, wz){
+  let z = wx + ZCAM; if (z < 1) z = 1;
+  const s = REFZ / z;
+  return { x: view.cx + wy * view.lat * s, y: view.horizon + view.vspan * s - (wz || 0) * view.vup * s, s };
+}
+/* Screen -> ground (wz = 0), for dragging the phone across the floor. */
+function unproject(sx, sy){
+  let s = (sy - view.horizon) / view.vspan;
+  const sMin = REFZ / (ZCAM + 0.4);
+  if (s < sMin) s = sMin;
+  const z = REFZ / s;
+  return { x: z - ZCAM, y: (sx - view.cx) / (view.lat * s) };
+}
 
-function ring(rM, color, dash, label){
-  const [ox,oy] = px(0,0), r = rM*view.scale;
-  cx.beginPath(); cx.setLineDash(dash); cx.strokeStyle = color; cx.lineWidth = devicePixelRatio;
-  cx.arc(ox, oy, r, 0, 2*Math.PI); cx.stroke(); cx.setLineDash([]);
-  if (label){
-    cx.fillStyle = color; cx.font = `${10*devicePixelRatio}px ${getComputedStyle(document.body).getPropertyValue("--mono")}`;
-    cx.textAlign = "center";
-    cx.fillText(label, ox - r * 0.7071, oy - r * 0.7071 - 4*devicePixelRatio);
+/* Animation-only state (no bearing on the decision logic). */
+const scene = { waves: [], parts: [], boltPos: 1, boltVel: 0, beam: 0, bleAcc: 0, glow: 0.12 };
+const WAVE = { uwb: ["--amber", 4.2, 1100], ble: ["--cyan", 8, 1500], ok: ["--green", 5.2, 1300], bad: ["--red", 2.4, 700] };
+function emitWave(kind){
+  const w = WAVE[kind] || WAVE.uwb;
+  scene.waves.push({ kind, age: 0, life: w[2], max: kind === "ble" ? sim.bleRadius : w[1] });
+  if (scene.waves.length > 20) scene.waves.shift();
+}
+for (let i = 0; i < 56; i++){
+  const r = Math.sqrt(Math.random()) * 4.4, a = Math.random() * Math.PI * 2;
+  scene.parts.push({ x: r * Math.cos(a), y: r * Math.sin(a), seed: Math.random() * 6.28, sp: 0.3 + Math.random() * 0.8 });
+}
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+
+/* A world-radius ring around the door, traced as a perspective floor path. */
+function floorRing(R){
+  cx.beginPath();
+  for (let i = 0; i <= 56; i++){
+    const a = i / 56 * Math.PI * 2, p = project(R * Math.cos(a), R * Math.sin(a), 0);
+    i ? cx.lineTo(p.x, p.y) : cx.moveTo(p.x, p.y);
   }
+  cx.closePath();
+}
+
+/* Advance the decorative animation (waves age, bolt spring, glow, BLE breathing). */
+function updateScene(dt){
+  for (const w of scene.waves) w.age += dt;
+  scene.waves = scene.waves.filter(w => w.age < w.life);
+  scene.beam = Math.max(0, scene.beam - dt / 280);
+  const gT = sim.sessionActive ? 1 : sim.connected ? 0.5 : 0.12;
+  scene.glow += (gT - scene.glow) * Math.min(1, dt / 220);
+  if (sim.connected && !RM.matches){
+    scene.bleAcc += dt;
+    if (scene.bleAcc > 950){ scene.bleAcc = 0; emitWave("ble"); }
+  }
+  const target = sim.ctrl.locked ? 1 : 0;
+  if (RM.matches){ scene.boltPos = target; scene.boltVel = 0; return; }
+  const f = Math.min(1.6, dt / 16.67);
+  scene.boltVel += ((target - scene.boltPos) * 0.14 - scene.boltVel * 0.85) * f;
+  scene.boltVel = clamp(scene.boltVel, -0.5, 0.5);
+  scene.boltPos = clamp(scene.boltPos + scene.boltVel * f, -0.12, 1.12);
 }
 
 function draw(){
-  const css = getComputedStyle(document.documentElement);
-  const C = n => css.getPropertyValue(n).trim();
-  cx.clearRect(0,0,cv.width,cv.height);
-  const dpr = devicePixelRatio;
-  /* 1 m floor grid */
-  cx.strokeStyle = C("--panel2"); cx.lineWidth = dpr * 0.7;
-  for (let x = -14; x <= 1; x++){ const [gx] = px(x,0); cx.beginPath(); cx.moveTo(gx,0); cx.lineTo(gx,cv.height); cx.stroke(); }
-  for (let y = -8; y <= 8; y++){ const [,gy] = px(0,y); cx.beginPath(); cx.moveTo(0,gy); cx.lineTo(cv.width,gy); cx.stroke(); }
-  /* rings: relock, unlock threshold, BLE radius */
-  ring(sim.bleRadius, C("--cyan"), [6*dpr,6*dpr], "BLE " + sim.bleRadius.toFixed(1) + " m (SIM)");
-  ring(FW.ALIRO_RELOCK_RANGE_CM/100, C("--muted"), [3*dpr,5*dpr], "relock 250 cm");
-  ring(sim.ctrl.unlockCm/100, C("--amber"), [], "unlock " + sim.ctrl.unlockCm + " cm");
-  /* wall + door + bolt */
-  const [wx] = px(0.35, 0);
-  cx.fillStyle = C("--line");
-  cx.fillRect(wx, 0, 5*dpr, cv.height);
-  const doorH = 1.1 * view.scale;
-  cx.fillStyle = sim.ctrl.locked ? C("--panel2") : C("--door-open");
-  cx.fillRect(wx - 3*dpr, view.oy - doorH/2, 8*dpr, doorH);
-  cx.strokeStyle = sim.ctrl.locked ? C("--muted") : C("--green");
-  cx.lineWidth = dpr; cx.strokeRect(wx - 3*dpr, view.oy - doorH/2, 8*dpr, doorH);
-  /* bolt bar: slides out of the frame when locked */
-  cx.fillStyle = sim.ctrl.locked ? C("--ink") : C("--green");
-  const boltW = 0.3 * view.scale;
-  cx.fillRect(wx - 3*dpr - (sim.ctrl.locked ? boltW : boltW*0.25), view.oy - 3*dpr,
-              (sim.ctrl.locked ? boltW : boltW*0.25) + 3*dpr, 6*dpr);
-  /* reader on the door */
-  const [rx,ry] = px(0,0);
-  cx.fillStyle = C("--amber"); cx.beginPath(); cx.arc(rx, ry, 4*dpr, 0, 2*Math.PI); cx.fill();
-  /* UWB activity arcs from the reader */
-  if (sim.sessionActive && !matchMedia("(prefers-reduced-motion: reduce)").matches){
-    const ph = (sim.t % 1000) / 1000;
-    for (const k of [0, .5]){
-      const a = (ph + k) % 1;
-      cx.strokeStyle = C("--amber"); cx.globalAlpha = (1-a) * 0.35; cx.lineWidth = dpr;
-      cx.beginPath(); cx.arc(rx, ry, (0.3 + a*1.6) * view.scale, Math.PI*0.6, Math.PI*1.4); cx.stroke();
-    }
-    cx.globalAlpha = 1;
+  const css = getComputedStyle(document.documentElement), C = n => css.getPropertyValue(n).trim();
+  const ground = C("--card"), grid = C("--hairline"), line = C("--line"), muted = C("--muted"),
+        faint = C("--faint"), strong = C("--strong"), ink = C("--ink"), accent = C("--accent"),
+        amber = C("--amber"), cyan = C("--cyan"), green = C("--green"), panel2 = C("--panel2"),
+        doorOpen = C("--door-open"), mono = C("--mono"), motion = !RM.matches, dpr = devicePixelRatio;
+  const W = view.W, H = view.H;
+  cx.clearRect(0, 0, W, H);
+  cx.lineJoin = "round";
+
+  /* 1. ground + a soft terracotta pool of light at the door for depth */
+  cx.fillStyle = ground; cx.fillRect(0, 0, W, H);
+  const dr = project(0, 0, 0);
+  let pool = cx.createRadialGradient(dr.x, dr.y, 0, dr.x, dr.y, H * 0.6);
+  pool.addColorStop(0, hexA(accent, 0.10 + 0.10 * scene.glow));
+  pool.addColorStop(1, hexA(accent, 0));
+  cx.fillStyle = pool; cx.fillRect(0, 0, W, H);
+
+  /* 2. receding floor grid, fading toward the door */
+  cx.lineWidth = dpr;
+  for (let gx = -14; gx <= 0; gx++){
+    const a = project(gx, -6, 0), b = project(gx, 6, 0);
+    cx.strokeStyle = hexA(line, clamp(a.s * 0.5, 0.05, 0.55));
+    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
   }
-  /* distance line + phone */
-  const [phx, phy] = px(sim.phone.x, sim.phone.y);
-  cx.strokeStyle = C("--muted"); cx.setLineDash([2*dpr,4*dpr]); cx.lineWidth = dpr;
-  cx.beginPath(); cx.moveTo(rx,ry); cx.lineTo(phx,phy); cx.stroke(); cx.setLineDash([]);
-  cx.fillStyle = C("--muted");
-  cx.font = `${10*dpr}px ${css.getPropertyValue("--mono")}`;
-  cx.textAlign = "center";
-  cx.fillText((sim.trueCm()/100).toFixed(2) + " m", (rx+phx)/2, (ry+phy)/2 - 6*dpr);
-  const pw = 13*dpr, phh = 24*dpr;
-  cx.fillStyle = sim.connected ? C("--cyan") : C("--panel2");
-  cx.strokeStyle = C("--ink"); cx.lineWidth = dpr;
-  cx.beginPath(); cx.roundRect(phx-pw/2, phy-phh/2, pw, phh, 3*dpr); cx.fill(); cx.stroke();
+  for (let gy = -6; gy <= 6; gy++){
+    const a = project(-14, gy, 0), b = project(0, gy, 0);
+    cx.strokeStyle = hexA(grid, 0.5);
+    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+  }
+
+  /* 3. threshold zones painted on the floor */
+  drawZone(sim.bleRadius, cyan, false, [7 * dpr, 7 * dpr], "BLE " + sim.bleRadius.toFixed(1) + " m (SIM)", faint, mono);
+  drawZone(FW.ALIRO_RELOCK_RANGE_CM / 100, muted, false, [3 * dpr, 6 * dpr], "relock 250 cm", faint, mono);
+  drawZone(sim.ctrl.unlockCm / 100, amber, true, [], "unlock " + sim.ctrl.unlockCm + " cm", muted, mono);
+
+  /* 4. UWB / BLE wavefronts rippling out from the reader */
+  for (const w of scene.waves){
+    const k = w.age / w.life, col = C(WAVE[w.kind][0]);
+    floorRing(w.max * (0.15 + 0.85 * k));
+    cx.strokeStyle = hexA(col, (1 - k) * 0.5);
+    cx.lineWidth = (1 - k) * 2.4 * dpr + 0.4 * dpr;
+    cx.stroke();
+  }
+
+  /* 5. RF density field: motes near the reader, thicker up close (perspective) */
+  const density = sim.sessionActive ? 0.5 : sim.connected ? 0.28 : 0.14;
+  for (const p of scene.parts){
+    const wob = motion ? 0.13 : 0;
+    const wx = p.x + Math.sin(sim.t * 0.0004 * p.sp + p.seed) * wob;
+    const wy = p.y + Math.cos(sim.t * 0.00034 * p.sp + p.seed * 1.7) * wob;
+    const bob = 0.04 + (motion ? 0.03 * (0.5 + 0.5 * Math.sin(sim.t * 0.002 + p.seed)) : 0.02);
+    const pp = project(wx, wy, bob), r0 = Math.hypot(p.x, p.y);
+    const al = (1 - r0 / 4.6) * density;
+    if (al <= 0.01) continue;
+    cx.fillStyle = hexA(amber, al);
+    cx.beginPath(); cx.arc(pp.x, pp.y, Math.max(0.6 * dpr, 1.5 * dpr * pp.s * 0.7), 0, 6.283); cx.fill();
+  }
+
+  /* 6. door, reader module, and the spring-loaded bolt (far, drawn first) */
+  const base = project(0.32, 0, 0), ds = base.s;
+  const doorW = 0.98 * view.lat * ds, doorTop = base.y - 2.02 * view.vup * ds;
+  softShadow(base.x, base.y, doorW * 0.7, doorW * 0.26);
+  roundRect(base.x - doorW / 2, doorTop, doorW, base.y - doorTop, Math.min(10 * dpr, doorW * 0.12));
+  cx.fillStyle = sim.ctrl.locked ? panel2 : doorOpen; cx.fill();
+  cx.lineWidth = 1.4 * dpr; cx.strokeStyle = sim.ctrl.locked ? muted : green; cx.stroke();
+  cx.strokeStyle = hexA(line, 0.6); cx.lineWidth = dpr;
+  roundRect(base.x - doorW / 2 + doorW * 0.16, doorTop + (base.y - doorTop) * 0.1,
+            doorW * 0.68, (base.y - doorTop) * 0.8, doorW * 0.06); cx.stroke();
+  /* bolt: extends into the jamb (left) when locked, retracts green when open */
+  const boltY = project(0.30, 0, 1.0).y, boltH = 0.12 * view.vup * ds;
+  const boltLen = (0.10 + 0.22 * scene.boltPos) * view.lat * ds, boltX = base.x - doorW / 2;
+  cx.fillStyle = sim.ctrl.locked ? ink : green;
+  roundRect(boltX - boltLen, boltY - boltH / 2, boltLen + doorW * 0.06, boltH, boltH * 0.4); cx.fill();
+  /* reader module + its glow */
+  const rp = project(0.30, 0, 1.08), rw = 0.22 * view.lat * ds, rh = 0.3 * view.vup * ds;
+  if (scene.glow > 0.02){
+    let rg = cx.createRadialGradient(rp.x, rp.y, 0, rp.x, rp.y, rw * (2.6 + scene.glow));
+    rg.addColorStop(0, hexA(accent, 0.28 * scene.glow + 0.06)); rg.addColorStop(1, hexA(accent, 0));
+    cx.fillStyle = rg; cx.beginPath(); cx.arc(rp.x, rp.y, rw * (2.8 + scene.glow), 0, 6.283); cx.fill();
+  }
+  roundRect(rp.x - rw / 2, rp.y - rh / 2, rw, rh, Math.min(4 * dpr, rw * 0.28));
+  cx.fillStyle = accent; cx.fill();
+  cx.fillStyle = "#fff"; cx.globalAlpha = 0.85;
+  cx.beginPath(); cx.arc(rp.x, rp.y, Math.max(1.1 * dpr, rw * 0.13), 0, 6.283); cx.fill(); cx.globalAlpha = 1;
+
+  /* 7. the DS-TWR ranging beam, reader -> phone, pulsing on each block */
+  const ph = project(sim.phone.x, sim.phone.y, 0);
+  if (sim.sessionActive){
+    const a = project(0.30, 0, 0.62), b = project(sim.phone.x, sim.phone.y, 0.34);
+    let bg = cx.createLinearGradient(a.x, a.y, b.x, b.y);
+    bg.addColorStop(0, hexA(accent, 0.25 + 0.5 * scene.beam)); bg.addColorStop(1, hexA(cyan, 0.2 + 0.4 * scene.beam));
+    cx.strokeStyle = bg; cx.lineWidth = (0.8 + scene.beam * 1.8) * dpr;
+    cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
+    if (motion){
+      const t = (sim.t % 620) / 620, px2 = a.x + (b.x - a.x) * t, py2 = a.y + (b.y - a.y) * t;
+      cx.fillStyle = hexA(cyan, 0.8 * (1 - Math.abs(t - 0.5) * 2) + 0.2);
+      cx.beginPath(); cx.arc(px2, py2, 2.4 * dpr, 0, 6.283); cx.fill();
+    }
+  }
+
+  /* 8. the phone: a standing slab with a soft shadow and a lit screen */
+  const ps = ph.s, phW = 0.19 * view.lat * ps, phTop = ph.y - 0.36 * view.vup * ps;
+  softShadow(ph.x, ph.y, phW * 0.85, phW * 0.34);
+  if (sim.connected){
+    let pg = cx.createRadialGradient(ph.x, (ph.y + phTop) / 2, 0, ph.x, (ph.y + phTop) / 2, phW * 2.2);
+    pg.addColorStop(0, hexA(cyan, 0.3)); pg.addColorStop(1, hexA(cyan, 0));
+    cx.fillStyle = pg; cx.fillRect(ph.x - phW * 2.2, phTop - phW, phW * 4.4, ph.y - phTop + phW * 2);
+  }
+  const bodyH = ph.y - phTop, rad = Math.min(5 * dpr, phW * 0.22);
+  let body = cx.createLinearGradient(0, phTop, 0, ph.y);
+  body.addColorStop(0, strong); body.addColorStop(1, panel2);
+  roundRect(ph.x - phW / 2, phTop, phW, bodyH, rad); cx.fillStyle = body; cx.fill();
+  cx.lineWidth = 1.2 * dpr; cx.strokeStyle = hexA(ink, 0.5); cx.stroke();
+  roundRect(ph.x - phW * 0.34, phTop + bodyH * 0.12, phW * 0.68, bodyH * 0.76, rad * 0.7);
+  cx.fillStyle = sim.connected ? hexA(cyan, 0.9) : hexA(muted, 0.4); cx.fill();
+
+  /* 9. distance label above the phone */
+  const lp = project(sim.phone.x, sim.phone.y, 0.54);
+  cx.font = `${11 * dpr}px ${mono}`; cx.textAlign = "center";
+  cx.fillStyle = muted; cx.fillText((sim.trueCm() / 100).toFixed(2) + " m", lp.x, lp.y);
+
+  /* 10. gentle vignette to focus the scene */
+  let vg = cx.createRadialGradient(W / 2, H * 0.55, H * 0.3, W / 2, H * 0.55, H * 0.9);
+  vg.addColorStop(0, hexA(ink, 0)); vg.addColorStop(1, hexA(ink, 0.06));
+  cx.fillStyle = vg; cx.fillRect(0, 0, W, H);
+}
+
+/* Paint a threshold circle on the floor with an optional tint fill + label. */
+function drawZone(R, color, fill, dash, label, labelColor, mono){
+  const dpr = devicePixelRatio;
+  floorRing(R);
+  if (fill){ cx.fillStyle = hexA(color, 0.09); cx.fill(); }
+  cx.setLineDash(dash); cx.strokeStyle = hexA(color, 0.75); cx.lineWidth = 1.3 * dpr;
+  cx.stroke(); cx.setLineDash([]);
+  const lp = project(-R, 0, 0);        // front of the ring, nearest the viewer
+  cx.font = `${10 * dpr}px ${mono}`; cx.textAlign = "center"; cx.fillStyle = labelColor;
+  cx.fillText(label, lp.x, lp.y + 13 * dpr);
+}
+function softShadow(x, y, rx, ry){
+  cx.save(); cx.globalAlpha = 0.16; cx.fillStyle = "#000";
+  cx.beginPath(); cx.ellipse(x, y, rx, ry, 0, 0, 6.283); cx.fill(); cx.restore();
+}
+function roundRect(x, y, w, h, r){
+  cx.beginPath();
+  if (cx.roundRect) cx.roundRect(x, y, w, Math.max(1, h), r);
+  else cx.rect(x, y, w, Math.max(1, h));
+}
+/* A CSS color (hex, rgb(a), or a token value) plus an alpha, for canvas fills. */
+function hexA(c, a){
+  c = (c || "").trim();
+  if (c[0] === "#"){
+    let h = c.slice(1);
+    if (h.length === 3) h = h.split("").map(x => x + x).join("");
+    const n = parseInt(h, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  const m = c.match(/rgba?\(([^)]+)\)/);
+  if (m){ const p = m[1].split(",").map(s => s.trim()); return `rgba(${p[0]},${p[1]},${p[2]},${a})`; }
+  return c;
 }
 
 /* ── UI wiring ────────────────────────────────────────────────────────────── */
@@ -705,13 +887,13 @@ bindRange("c-thresh", "o-thresh", v => v + " cm", v => { if (sim.ctrl) sim.ctrl.
 bindRange("c-ble", "o-ble", v => (+v).toFixed(1) + " m", v => sim.bleRadius = v);
 $("c-noise").onchange = () => sim.noise = $("c-noise").checked;
 
-/* drag the phone */
+/* drag the phone across the perspective floor */
 let dragging = false;
 cv.addEventListener("pointerdown", e => {
   const r = cv.getBoundingClientRect();
   const mx = (e.clientX - r.left) * devicePixelRatio, my = (e.clientY - r.top) * devicePixelRatio;
-  const [phx, phy] = px(sim.phone.x, sim.phone.y);
-  if (Math.hypot(mx-phx, my-phy) < 40 * devicePixelRatio){
+  const p = project(sim.phone.x, sim.phone.y, 0.18);
+  if (Math.hypot(mx - p.x, my - p.y) < Math.max(30 * devicePixelRatio, 46 * devicePixelRatio * p.s)){
     dragging = true; cv.classList.add("dragging"); cv.setPointerCapture(e.pointerId);
     setWalking(0); $("hint").style.opacity = "0";
   }
@@ -719,13 +901,13 @@ cv.addEventListener("pointerdown", e => {
 cv.addEventListener("pointermove", e => {
   if (!dragging) return;
   const r = cv.getBoundingClientRect();
-  const wx = ((e.clientX - r.left) * devicePixelRatio - view.ox) / view.scale;
-  const wy = ((e.clientY - r.top) * devicePixelRatio - view.oy) / view.scale;
+  const u = unproject((e.clientX - r.left) * devicePixelRatio, (e.clientY - r.top) * devicePixelRatio);
+  const wx = Math.min(-0.15, u.x), wy = Math.max(-6, Math.min(6, u.y));
   const d = Math.hypot(wx, wy) || 0.001;
   const cl = Math.max(0.15, Math.min(14, d));
-  sim.phone.x = wx * cl/d; sim.phone.y = wy * cl/d;
+  sim.phone.x = wx * cl / d; sim.phone.y = wy * cl / d;
   /* keep the angle slider honest: 0° = straight out from the door */
-  const deg = Math.round(((Math.atan2(wy, wx) * 180/Math.PI - 180) + 540) % 360 - 180);
+  const deg = Math.round(((Math.atan2(sim.phone.y, sim.phone.x) * 180 / Math.PI - 180) + 540) % 360 - 180);
   sim.angleDeg = Math.max(-70, Math.min(70, deg));
   $("c-angle").value = sim.angleDeg;
   $("o-angle").textContent = sim.angleDeg + "°";
@@ -743,6 +925,7 @@ let lastT = performance.now();
 function frame(now){
   const dt = Math.min(100, now - lastT); lastT = now;
   step(dt);
+  updateScene(dt);
   draw();
   render();
   requestAnimationFrame(frame);

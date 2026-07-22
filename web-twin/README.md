@@ -6,6 +6,14 @@ toward the door, or press Walk up, and the reader's unlock pipeline reacts:
 BLE connect radius, Aliro session bring-up, UWB DS-TWR ranging blocks, the
 range-integrity trust gate, the approach controller, the bolt.
 
+The scene is a 2.5D perspective view drawn on a plain canvas (no library, so it
+stays self-contained): a receding floor, a lit reader module and a spring-loaded
+bolt, UWB wavefronts rippling out on each 192 ms ranging block, and a drifting
+RF density field that thickens while a session is active. When the page is the
+site copy (`site/twin.html`) or was reached from another page, a "Docs" link in
+the top bar goes back; opened on its own it has nowhere to return to, so the
+link stays hidden rather than dead-linking.
+
 The decision logic is a line-cited port of the firmware. The range store and
 trust gate mirror `modules/woz_uwb/src/fira/fira_session.c`, the unlock seam
 mirrors `modules/woz_uwb/src/facade/woz_uwb_facade.c`, and the median/dwell
