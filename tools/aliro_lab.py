@@ -85,6 +85,9 @@ class Transaction:
             self.flow = "fast"
         elif self.has("flow.standard"):
             self.flow = "standard"
+        # Trusted-range samples (the approach curve), one per ranged block.
+        self.ranges = [(e.t_us, e.attrs["cm"]) for e in self.events
+                       if e.name == "range" and "cm" in e.attrs]
 
     def has(self, name):
         return any(e.name == name for e in self.events)
@@ -330,6 +333,11 @@ def render_terminal(name, txns, checks_by_txn, use_color):
             out.append("  ranging setup: " + ", ".join(
                 "%s id=%d" % (e.name, e.attrs.get("id", -1)) for e in setup))
 
+        if txn.ranges:
+            cms = [cm for _, cm in txn.ranges]
+            out.append("  approach: %d trusted ranges (%d cm first, %d cm closest)"
+                       % (len(cms), cms[0], min(cms)))
+
         out.append("  checks:")
         for cid, _cls, status, detail in checks:
             out.append("    %s  %-12s %s"
@@ -387,8 +395,17 @@ h2 { font-size: 1.05rem; margin-bottom: .25rem; }
 .lane:hover { background: var(--track); }
 .lane .lbl { color: var(--ink-2); font-size: .9rem; text-align: right; }
 .track { position: relative; height: 14px; background: none; }
-.track .fill { position: absolute; left: 0; top: 0; bottom: 0;
-  background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px; }
+.track .fill { position: absolute; top: 0; bottom: 0;
+  background: var(--bar); border-radius: 4px; min-width: 2px; }
+.chart-title { color: var(--muted); font-size: .75rem; text-transform: uppercase;
+  letter-spacing: .04em; margin: 1rem 0 .25rem; }
+svg.approach { width: 100%; height: auto; display: block; }
+svg.approach .grid { stroke: var(--grid); stroke-width: 1; }
+svg.approach .tick { fill: var(--muted); font-size: 11px; }
+svg.approach .mark { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
+svg.approach .marklbl { fill: var(--ink-2); font-size: 11px; }
+svg.approach .series { fill: none; stroke: var(--bar); stroke-width: 2; }
+svg.approach .dot { fill: var(--bar); stroke: var(--surface); stroke-width: 2; }
 .lane .val { color: var(--ink-2); font-size: .85rem;
   font-variant-numeric: tabular-nums; }
 .lane .val .d { color: var(--muted); }
@@ -412,6 +429,66 @@ td.detail { color: var(--ink-2); }
 
 _BADGE_TEXT = {"pass": "✓ PASS", "warn": "! WARN", "fail": "✗ FAIL", "n/a": "— N/A"}
 _BADGE_CLASS = {"pass": "pass", "warn": "warn", "fail": "fail", "n/a": "na"}
+
+
+def render_approach_svg(txn):
+    """Distance-over-time chart of the approach: one dot per trusted range,
+    dashed markers at grant/bolt/relock. Inline SVG, themed via the CSS vars."""
+    if len(txn.ranges) < 2:
+        return ""
+    t0 = txn.t0()
+    pts = [((t - t0) / 1000.0, cm) for t, cm in txn.ranges]
+    marks = []
+    for name, label in (("grant.sent", "grant"), ("relock.sent", "relock")):
+        for ev in txn.named(name):
+            marks.append(((ev.t_us - t0) / 1000.0, label))
+    if "bolt" in txn.phases:
+        marks.append(((txn.phases["bolt"] - t0) / 1000.0, "bolt"))
+    width, height = 800.0, 220.0
+    pad_l, pad_r, pad_t, pad_b = 48.0, 12.0, 16.0, 30.0
+    # The x-domain follows the range data only; a marker far outside it (e.g. a
+    # relock long after ranging stopped) would squash the curve, so those drop.
+    xs = [x for x, _ in pts]
+    ys = [y for _, y in pts]
+    xmin, xmax = min(xs), max(xs)
+    if xmax - xmin < 1e-9:
+        xmax = xmin + 1.0
+    marks = [(x, label) for x, label in marks if xmin <= x <= xmax]
+    ypad = max((max(ys) - min(ys)) * 0.12, 5.0)
+    ymin, ymax = max(0.0, min(ys) - ypad), max(ys) + ypad
+
+    def sx(x):
+        return pad_l + (width - pad_l - pad_r) * (x - xmin) / (xmax - xmin)
+
+    def sy(y):
+        return pad_t + (height - pad_t - pad_b) * (ymax - y) / (ymax - ymin)
+
+    s = ['<svg class="approach" viewBox="0 0 %d %d" role="img" '
+         'aria-label="trusted range in cm over time">' % (width, height)]
+    for i in range(5):
+        gval = ymin + (ymax - ymin) * i / 4.0
+        gy = sy(gval)
+        s.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" class="grid"/>'
+                 % (pad_l, gy, width - pad_r, gy))
+        s.append('<text x="%.1f" y="%.1f" class="tick" text-anchor="end">%d</text>'
+                 % (pad_l - 6, gy + 3.5, round(gval)))
+    for x in (xmin, xmax):
+        s.append('<text x="%.1f" y="%.1f" class="tick" text-anchor="middle">'
+                 "%.1f s</text>" % (sx(x), height - 10, x / 1000.0))
+    for x, label in marks:
+        lx = min(max(sx(x), pad_l + 20.0), width - pad_r - 24.0)
+        s.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" class="mark"/>'
+                 % (sx(x), pad_t, sx(x), height - pad_b))
+        s.append('<text x="%.1f" y="%.1f" class="marklbl" text-anchor="middle">'
+                 "%s</text>" % (lx, pad_t - 4, label))
+    s.append('<polyline points="%s" class="series"/>'
+             % " ".join("%.1f,%.1f" % (sx(x), sy(y)) for x, y in pts))
+    for x, y in pts:
+        s.append('<circle cx="%.1f" cy="%.1f" r="3.5" class="dot">'
+                 "<title>%d cm at %.2f s</title></circle>" % (sx(x), sy(y), y, x / 1000.0))
+    s.append("</svg>")
+    return ('<p class="chart-title">approach — trusted range (cm) over time</p>'
+            + "".join(s))
 
 
 def render_html(name, txns, checks_by_txn):
@@ -455,18 +532,24 @@ def render_html(name, txns, checks_by_txn):
             prev_t = None
             for key, label in present:
                 t = txn.phases[key]
-                width = 100.0 * (t - t0) / span
+                seg_from = prev_t if prev_t is not None else t0
+                left = 100.0 * (seg_from - t0) / span
+                seg_w = 100.0 * (t - seg_from) / span
                 delta = ("" if prev_t is None
                          else ' <span class="d">(+%s)</span>' % fmt_ms(t - prev_t))
                 parts.append(
                     '<div class="lane" title="%s at t=%d µs">'
                     '<span class="lbl">%s</span>'
-                    '<span class="track"><span class="fill" style="width:%.2f%%">'
-                    "</span></span>"
+                    '<span class="track"><span class="fill" '
+                    'style="left:%.2f%%;width:%.2f%%"></span></span>'
                     '<span class="val">%s ms%s</span></div>'
-                    % (e(label), t, e(label), width, fmt_ms(t - t0), delta))
+                    % (e(label), t, e(label), left, seg_w, fmt_ms(t - t0), delta))
                 prev_t = t
             parts.append('<div class="axis"></div>')
+
+        chart = render_approach_svg(txn)
+        if chart:
+            parts.append(chart)
 
         setup = [ev for ev in txn.events if ev.name in ("rtx", "rrx")]
         if setup:

@@ -109,6 +109,13 @@ class SampleLogTest(unittest.TestCase):
         self.assertEqual(status_of(self.checks[0], "kp"), "pass")
         self.assertEqual(status_of(self.checks[1], "kp"), "n/a")
 
+    def test_ranges_parsed(self):
+        std, fast = self.txns
+        self.assertEqual(len(std.ranges), 8)
+        self.assertEqual(std.ranges[0][1], 187)
+        self.assertEqual(len(fast.ranges), 8)
+        self.assertEqual(min(cm for _, cm in fast.ranges), 66)
+
 
 class CheckBranchTest(unittest.TestCase):
     def one(self, events):
@@ -255,6 +262,14 @@ class MainTest(unittest.TestCase):
         self.assertIn("PASS", html_text)
         self.assertIn("connect → bolt", html_text)
         self.assertNotIn("FAIL", html_text.replace("✗ FAIL", ""))
+        self.assertIn("approach: 8 trusted ranges", term)
+        self.assertIn('svg class="approach"', html_text)
+
+    def test_no_approach_chart_without_ranges(self):
+        rc, term, html_text = self.run_main(lines(*GOOD_FAST))
+        self.assertEqual(rc, 0)
+        self.assertNotIn("approach", term)
+        self.assertNotIn('svg class="approach"', html_text)
 
     def test_fail_exit_one(self):
         rc, term, html_text = self.run_main(

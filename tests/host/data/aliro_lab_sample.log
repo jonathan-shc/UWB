@@ -35,6 +35,11 @@ I (13612) woz_uwb: block 1 ranged
 I (13997) app_main: Aliro trusted range 187 cm: granting (Wallet notify)
 I (14004) aliro_reader: [conn 1] Reader-Status-Changed Unsecured/grant sent (28 B, rc=0)
 [ALAB] t=14004000 ev=grant.sent
+[ALAB] t=13998000 ev=range cm=187
+[ALAB] t=14310000 ev=range cm=158
+[ALAB] t=14620000 ev=range cm=126
+[ALAB] t=14930000 ev=range cm=98
+[ALAB] t=15240000 ev=range cm=77
 I (15388) app_main: Aliro approach 74 cm (median): unlocking
 aliro-lat: connect+0 op05+180 auth0+196 auth1+757 exch+889 apc+893 m4+1290 range+1612 trusted+1997 bolt+3389 ms
 [ALAB] t=12000000 ev=ph.connect
@@ -47,6 +52,9 @@ aliro-lat: connect+0 op05+180 auth0+196 auth1+757 exch+889 apc+893 m4+1290 range
 [ALAB] t=13612000 ev=ph.range
 [ALAB] t=13997000 ev=ph.trusted
 [ALAB] t=15389000 ev=ph.bolt
+[ALAB] t=15700000 ev=range cm=69
+[ALAB] t=16300000 ev=range cm=90
+[ALAB] t=17100000 ev=range cm=163
 I (21390) app_main: Aliro peer gone (1503 ms silent): relock + secured
 I (21398) aliro_reader: [conn 1] Reader-Status-Changed Secured/relock sent (28 B, rc=0)
 [ALAB] t=21398000 ev=relock.sent
@@ -78,6 +86,11 @@ I (45995) woz_uwb: block 1 ranged
 I (46305) app_main: Aliro trusted range 173 cm: granting (Wallet notify)
 I (46311) aliro_reader: [conn 1] Reader-Status-Changed Unsecured/grant sent (28 B, rc=0)
 [ALAB] t=46311000 ev=grant.sent
+[ALAB] t=46306000 ev=range cm=173
+[ALAB] t=46610000 ev=range cm=149
+[ALAB] t=46915000 ev=range cm=121
+[ALAB] t=47220000 ev=range cm=93
+[ALAB] t=47525000 ev=range cm=71
 I (47600) app_main: Aliro approach 68 cm (median): unlocking
 aliro-lat: connect+0 op05+176 auth0+190 auth1+203 exch+291 apc+294 m4+650 range+995 trusted+1305 bolt+2601 ms
 [ALAB] t=45000000 ev=ph.connect
@@ -90,6 +103,9 @@ aliro-lat: connect+0 op05+176 auth0+190 auth1+203 exch+291 apc+294 m4+650 range+
 [ALAB] t=45995000 ev=ph.range
 [ALAB] t=46305000 ev=ph.trusted
 [ALAB] t=47601000 ev=ph.bolt
+[ALAB] t=47900000 ev=range cm=66
+[ALAB] t=48600000 ev=range cm=101
+[ALAB] t=49400000 ev=range cm=178
 I (51990) app_main: Aliro peer gone (1501 ms silent): relock + secured
 I (51996) aliro_reader: [conn 1] Reader-Status-Changed Secured/relock sent (28 B, rc=0)
 [ALAB] t=51996000 ev=relock.sent

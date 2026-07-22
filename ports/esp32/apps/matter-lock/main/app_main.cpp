@@ -37,6 +37,7 @@
 #ifdef CONFIG_ENABLE_ALIRO_BLE_UWB
 #include <aliro_reader_delegate.h>
 #include <aliro_reader.h>
+#include <aliro_lab.h>
 #include <aliro_lat.h>
 #include <woz_uwb_facade.h>
 #include "door_lock_manager.h"
@@ -274,6 +275,9 @@ static void aliro_reader_task(void *arg)
 		}
 
 		if (trusted) {
+			// Task context (not the UWB RX path): one trace line per trusted
+			// range block gives the approach curve in the Aliro Lab report.
+			aliro_lab_evi("range", "cm", cm);
 			if (!present) {
 				// First trusted range this approach: grant + fire the Wallet
 				// unlock animation ("Reader Status Changed", Unsecured, Aliro
