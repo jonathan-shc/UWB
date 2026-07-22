@@ -85,6 +85,22 @@ psa_flags=(-std=c11 -O1 -w -I"$HOSTD/psafake" -I"$SRC/ccc")
 
 # Host-side tooling tests (pure-stdlib Python; no toolchain involved).
 # test_flash_html needs the python-markdown package and skips cleanly without.
-python3 "$ROOT/tests/host/test_aliro_lab.py"
-python3 "$ROOT/tests/host/test_mqtt_bridge.py"
-python3 "$ROOT/tests/host/test_flash_html.py"
+# Each suite is folded to one summary row matching the side binaries above;
+# the full unittest log is replayed on failure.
+py_suite() { # <name> <script> <note>
+	local out ran skipped note
+	if ! out="$(python3 "$2" 2>&1)"; then
+		printf '%s\n' "$out"
+		printf '  %s: FAIL\n' "$1"
+		exit 1
+	fi
+	ran="$(printf '%s' "$out" | sed -n 's/^Ran \([0-9]*\) tests*.*/\1/p')"
+	skipped="$(printf '%s' "$out" | sed -n 's/.*skipped=\([0-9]*\).*/\1/p')"
+	skipped="${skipped:-0}"
+	note="$3"
+	[ "$skipped" -gt 0 ] && note="$note, $skipped skipped"
+	printf '  %s: PASS (%d checks — %s)\n' "$1" "$((ran - skipped))" "$note"
+}
+py_suite aliro-lab "$ROOT/tests/host/test_aliro_lab.py" "python, log-report tooling"
+py_suite mqtt-bridge "$ROOT/tests/host/test_mqtt_bridge.py" "python, fake paho/serial"
+py_suite flash-html "$ROOT/tests/host/test_flash_html.py" "python, needs markdown pkg"
