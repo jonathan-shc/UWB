@@ -42,7 +42,7 @@ ENV := $(strip \
   $(if $(STRICT),STRICT=$(STRICT)) \
   $(if $(HA),HA=$(HA)))
 
-.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
+.PHONY: help bootstrap ws-seed ws-clean build rebuild pretty selftest test test-san check coverage test-port test-ws test-web docs docs-publish fuzz cbmc verify flash flash-erase term clean
 
 ##@ Setup
 ## bootstrap: fetch NCS v3.3.0 + add-on (~6.5 GB), apply patches  ·  first run only
@@ -117,6 +117,12 @@ verify:
 	@$(MAKE) --no-print-directory fuzz
 	@$(MAKE) --no-print-directory cbmc
 	@printf '\n  ✓ all host gates passed\n'
+
+## check: every host-side suite under one banner  ->  live rows + summary table
+##   Parallel by default; SERIAL=1 streams suites one at a time, SUITES="..."
+##   scopes (firmware shared webtwin). The pre-push look, runnable any time.
+check:
+	@$(REPO_ROOT)/scripts/test-runner.sh
 
 ## test-port: host-runnable ESP32 port tests (port headers, crypto KATs, codec)
 ##   No ESP-IDF needed; the on-target build check inside skips cleanly without it.
