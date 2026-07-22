@@ -10,10 +10,10 @@ answers Access-Control-Allow-Origin), so the browser cannot fetch the image
 from the release; it has to sit next to the page on the same origin. This
 pass stages it at site-build time, preferring in order:
 
-  1. web-flasher/openaliro-matter-lock.bin (gitignored): a local
+  1. web-flasher/openaliro-matter-lock-esp32s3.bin (gitignored): a local
      `idf.py merge-bin` output for bench runs, published with the committed
      manifest (version "dev").
-  2. The latest release's loose assets (openaliro-matter-lock.bin +
+  2. The latest release's loose assets (openaliro-matter-lock-esp32s3.bin +
      openaliro-matter-lock.manifest.json, uploaded by release.yml), fetched
      server side where CORS does not apply; the manifest arrives already
      version-stamped.
@@ -35,18 +35,25 @@ links are absolute or flash-local, so it needs no rewriting. docs.sh drives it.
 ## API
 
 ### `repo_slug() -> str`
-`tools/docs_flash.py:80`
+`tools/docs_flash.py:85`
 
 owner/repo for the origin remote, or '' if none.
 
 **called by** `main`
 
 ### `inject(page: Path, anchor: str, addition: str, before: bool) -> str`
-`tools/docs_flash.py:102`
+`tools/docs_flash.py:107`
 
 Insert addition next to anchor in page, once; report what happened.
 
 **called by** `link_site`
+
+### `prune_manifest(dst: Path) -> None`
+`tools/docs_flash.py:133`
+
+Drop manifest builds whose firmware did not get staged.
+
+**called by** `main`
 
 <details><summary>Undocumented (3)</summary>
 
