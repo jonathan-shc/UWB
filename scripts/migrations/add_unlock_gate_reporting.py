@@ -11,6 +11,16 @@ ROOT = Path(__file__).resolve().parents[2]
 P = ROOT / "apps" / "dwm3001cdk-lock" / "src" / "matter_commission.c"
 s = P.read_text()
 
+# 0) Forward declaration: on_invoke_request() appears before the work/helper
+# implementation below. Without this, C creates an implicit non-static declaration
+# and the later static definition becomes a compile error.
+fwd_anchor = '''/* Defined with the subscription table it walks; see notify_lock_state(). */\nstatic void notify_lock_state_changed(void);\n'''
+fwd = '''#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH\nstatic void notify_unlock_gate_changed(void);\n#endif\n'''
+if fwd not in s:
+    if fwd_anchor not in s:
+        raise SystemExit('notify_lock_state_changed forward-declaration anchor not found')
+    s = s.replace(fwd_anchor, fwd_anchor + fwd, 1)
+
 # 1) Add the endpoint-3 report helper immediately before the existing notify work.
 marker = '''/**\n * Work callback that sends lock state subscription reports to all CASE sessions.\n */\nstatic void notify_work_fn(struct k_work *w)\n'''
 if 'static void notify_unlock_gate_state(struct sub_state *s)' not in s:
