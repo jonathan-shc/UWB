@@ -970,6 +970,9 @@ static void send_framed(uint8_t opcode, const uint8_t *payload, size_t len)
  */
 /* Defined with the subscription table it walks; see notify_lock_state(). */
 static void notify_lock_state_changed(void);
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+static void notify_unlock_gate_changed(void);
+#endif
 /* Re-arms the periodic report; defined with the table it walks. */
 static void subscription_heartbeat_arm(void);
 
@@ -1182,6 +1185,13 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	    (inv.command == MATTER_CMD_DL_LOCK_DOOR || inv.command == MATTER_CMD_DL_UNLOCK_DOOR)) {
 		notify_lock_state_changed();
 	}
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (inv.endpoint == MATTER_ENDPOINT_UNLOCK_GATE && inv.cluster == MATTER_CLUSTER_ON_OFF &&
+	    (inv.command == MATTER_CMD_ON_OFF_OFF || inv.command == MATTER_CMD_ON_OFF_ON ||
+	     inv.command == MATTER_CMD_ON_OFF_TOGGLE)) {
+		notify_unlock_gate_changed();
+	}
+#endif
 	if (inv.cluster == MATTER_CLUSTER_NETWORK_COMMISSIONING &&
 	    inv.command == MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK) {
 		/*
@@ -1679,6 +1689,55 @@ static void notify_lock_state(struct sub_state *s)
 	}
 }
 
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+/** Send the owner-gate OnOff attribute to one active CASE subscription. */
+static void notify_unlock_gate_state(struct sub_state *s)
+{
+	struct matter_im_read one;
+	size_t tlv_len = 0u;
+	size_t framed = 0u;
+	uint8_t slot;
+	int rc;
+
+	if (!s->in_use || !s->active || s->session_id == 0u || !s->peer.valid) {
+		return;
+	}
+	slot = case_slot_of(s->session_id);
+	if (slot >= MATTER_CASE_SESSIONS) {
+		return;
+	}
+
+	memset(&one, 0, sizeof(one));
+	one.n_paths = 1u;
+	one.paths[0].endpoint = MATTER_ENDPOINT_UNLOCK_GATE;
+	one.paths[0].have_endpoint = true;
+	one.paths[0].cluster = MATTER_CLUSTER_ON_OFF;
+	one.paths[0].have_cluster = true;
+	one.paths[0].attribute = MATTER_ATTR_ON_OFF_ON_OFF;
+	one.paths[0].have_attribute = true;
+	one.subscription_id = s->id;
+
+	rc = matter_im_report_data_encode(&s_im, &one, s_notify_tlv, sizeof(s_notify_tlv),
+					  &tlv_len, NULL);
+	if (rc != MATTER_OK) {
+		LOG_ERR("  cannot build the UnlockGate report (%d)", rc);
+		return;
+	}
+
+	rc = matter_exchange_send_initiator(&s_case_x[slot], s_next_init_exchange++,
+					    MATTER_PROTOCOL_INTERACTION_MODEL,
+					    MATTER_IM_OP_REPORT_DATA, s_notify_tlv, tlv_len,
+					    s_notify_out, sizeof(s_notify_out), &framed);
+	if (rc != MATTER_OK) {
+		LOG_ERR("  cannot frame the UnlockGate report (%d)", rc);
+		return;
+	}
+	rc = matter_thread_send_to(&s->peer, s_notify_out, framed);
+	LOG_INF("  UnlockGate report to subscription 0x%08x, %u B, rc=%d",
+		(unsigned int)s->id, (unsigned int)framed, rc);
+}
+#endif
+
 /**
  * Work callback that sends lock state subscription reports to all CASE sessions.
  */
@@ -1692,6 +1751,21 @@ static void notify_work_fn(struct k_work *w)
 }
 
 static K_WORK_DEFINE(s_notify_work, notify_work_fn);
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+static void unlock_gate_notify_work_fn(struct k_work *w)
+{
+	ARG_UNUSED(w);
+	for (uint8_t i = 0u; i < MATTER_CASE_SESSIONS; i++) {
+		notify_unlock_gate_state(&s_subs[i]);
+	}
+}
+static K_WORK_DEFINE(s_unlock_gate_notify_work, unlock_gate_notify_work_fn);
+
+static void notify_unlock_gate_changed(void)
+{
+	k_work_submit(&s_unlock_gate_notify_work);
+}
+#endif
 static void heartbeat_work_fn(struct k_work *w);
 static K_WORK_DELAYABLE_DEFINE(s_heartbeat_work, heartbeat_work_fn);
 

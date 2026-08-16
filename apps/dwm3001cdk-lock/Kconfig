@@ -375,6 +375,7 @@ config ULTRAWIDELOCK_HEAP_PROBE
 	  Needs CONFIG_MBEDTLS_MEMORY_DEBUG=y, which is not a shipping setting.
 
 rsource "Kconfig.battery-status"
+rsource "Kconfig.unlock-gate"
 
 source "Kconfig.zephyr"
 

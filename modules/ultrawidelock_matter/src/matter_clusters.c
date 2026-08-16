@@ -10,6 +10,9 @@
  * checks neither way, but a missing case here reads as a missing case.
  */
 #include "matter_clusters.h"
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+#include "unlock_gate.h"
+#endif
 
 #include <stddef.h>
 #include <string.h>
@@ -86,6 +89,13 @@ static const uint32_t k_lock_servers[] = {
 static const uint32_t k_power_servers[] = {
 	MATTER_CLUSTER_DESCRIPTOR,
 	MATTER_CLUSTER_POWER_SOURCE,
+};
+#endif
+
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+static const uint32_t k_unlock_gate_servers[] = {
+	MATTER_CLUSTER_DESCRIPTOR,
+	MATTER_CLUSTER_ON_OFF,
 };
 #endif
 
@@ -176,6 +186,11 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 		       cluster == MATTER_CLUSTER_DOOR_LOCK ||
 		       cluster == MATTER_CLUSTER_APPROACH_DIRECTION;
 	}
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (endpoint == MATTER_ENDPOINT_UNLOCK_GATE) {
+		return cluster == MATTER_CLUSTER_DESCRIPTOR || cluster == MATTER_CLUSTER_ON_OFF;
+	}
+#endif
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return false;
 	}
@@ -203,6 +218,9 @@ static const uint16_t k_endpoints[] = {
 #ifdef CONFIG_CUSTOM_BATTERY_STATUS
 	MATTER_ENDPOINT_POWER_SOURCE,
 #endif
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	MATTER_ENDPOINT_UNLOCK_GATE,
+#endif
 };
 
 /**
@@ -225,6 +243,34 @@ static size_t list_endpoints(void *ctx, const uint16_t **out)
 static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t attribute)
 {
 	(void)ctx;
+
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (endpoint == MATTER_ENDPOINT_UNLOCK_GATE) {
+		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+			switch (attribute) {
+			case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			case MATTER_ATTR_DESC_SERVER_LIST:
+			case MATTER_ATTR_DESC_CLIENT_LIST:
+			case MATTER_ATTR_DESC_PARTS_LIST:
+				return MATTER_IM_STATUS_SUCCESS;
+			default:
+				return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+			}
+		}
+		if (cluster != MATTER_CLUSTER_ON_OFF) return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		switch (attribute) {
+		case MATTER_ATTR_ON_OFF_ON_OFF:
+		case MATTER_ATTR_FEATURE_MAP:
+		case MATTER_ATTR_CLUSTER_REVISION:
+		case MATTER_ATTR_ATTRIBUTE_LIST:
+		case MATTER_ATTR_ACCEPTED_CMD_LIST:
+		case MATTER_ATTR_GENERATED_CMD_LIST:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	}
+#endif
 
 	/*
 	 * Endpoint, then cluster, then attribute. The ORDER is the answer:
@@ -511,6 +557,75 @@ static void put_id_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const
  * share cluster IDs -- Descriptor is on both -- and a single flat switch on
  * cluster would answer the root's Descriptor for the lock.
  */
+
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+static const uint32_t k_unlock_gate_attrs[] = {
+	MATTER_ATTR_ON_OFF_ON_OFF,
+	MATTER_ATTR_GENERATED_CMD_LIST,
+	MATTER_ATTR_ACCEPTED_CMD_LIST,
+	MATTER_ATTR_ATTRIBUTE_LIST,
+	MATTER_ATTR_FEATURE_MAP,
+	MATTER_ATTR_CLUSTER_REVISION,
+};
+
+static void unlock_gate_attr_value(uint32_t cluster, uint32_t attribute,
+				   struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	size_t i;
+
+	if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+		switch (attribute) {
+		case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_start_container(w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_TYPE), MATTER_DEVICE_TYPE_ON_OFF_PLUGIN_UNIT);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_REVISION), MATTER_DEVICE_TYPE_ON_OFF_PLUGIN_REV);
+			(void)matter_tlv_end_container(w);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_SERVER_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			for (i = 0; i < sizeof(k_unlock_gate_servers) / sizeof(k_unlock_gate_servers[0]); i++)
+				(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, k_unlock_gate_servers[i]);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_CLIENT_LIST:
+		case MATTER_ATTR_DESC_PARTS_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_end_container(w);
+			return;
+		default:
+			return;
+		}
+	}
+	if (cluster != MATTER_CLUSTER_ON_OFF) return;
+	switch (attribute) {
+	case MATTER_ATTR_ON_OFF_ON_OFF:
+		(void)matter_tlv_put_bool(w, tag, unlock_gate_allows_passive()); return;
+	case MATTER_ATTR_FEATURE_MAP:
+		(void)matter_tlv_put_u64(w, tag, 0u); return;
+	case MATTER_ATTR_CLUSTER_REVISION:
+		(void)matter_tlv_put_u64(w, tag, 6u); return;
+	case MATTER_ATTR_ATTRIBUTE_LIST:
+		(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+		for (i = 0; i < sizeof(k_unlock_gate_attrs) / sizeof(k_unlock_gate_attrs[0]); i++)
+			(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, k_unlock_gate_attrs[i]);
+		(void)matter_tlv_end_container(w); return;
+	case MATTER_ATTR_ACCEPTED_CMD_LIST:
+		(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_CMD_ON_OFF_OFF);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_CMD_ON_OFF_ON);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_CMD_ON_OFF_TOGGLE);
+		(void)matter_tlv_end_container(w); return;
+	case MATTER_ATTR_GENERATED_CMD_LIST:
+		(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+		(void)matter_tlv_end_container(w); return;
+	default:
+		return;
+	}
+}
+#endif
+
 static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster,
 			    uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 {
@@ -719,6 +834,12 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 		lock_attr_value(info, cluster, attribute, w, tag);
 		return;
 	}
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (endpoint == MATTER_ENDPOINT_UNLOCK_GATE) {
+		unlock_gate_attr_value(cluster, attribute, w, tag);
+		return;
+	}
+#endif
 
 	if (cluster == MATTER_CLUSTER_ADMIN_COMMISSIONING) {
 		/* No hooks installed means no window can ever be open, and saying
@@ -927,6 +1048,9 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			 */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_LOCK);
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+			(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_UNLOCK_GATE);
+#endif
 			(void)matter_tlv_end_container(w);
 			return;
 		default:
@@ -1198,6 +1322,12 @@ static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)
 		*out = k_lock_servers;
 		return sizeof(k_lock_servers) / sizeof(k_lock_servers[0]);
 	}
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (endpoint == MATTER_ENDPOINT_UNLOCK_GATE) {
+		*out = k_unlock_gate_servers;
+		return sizeof(k_unlock_gate_servers) / sizeof(k_unlock_gate_servers[0]);
+	}
+#endif
 	if (endpoint != MATTER_ENDPOINT_ROOT) {
 		return 0u;
 	}
@@ -1212,6 +1342,13 @@ static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)
 static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const uint32_t **out)
 {
 	(void)ctx;
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (endpoint == MATTER_ENDPOINT_UNLOCK_GATE) {
+		if (cluster == MATTER_CLUSTER_DESCRIPTOR) { *out = k_desc_attrs; return sizeof(k_desc_attrs) / sizeof(k_desc_attrs[0]); }
+		if (cluster == MATTER_CLUSTER_ON_OFF) { *out = k_unlock_gate_attrs; return sizeof(k_unlock_gate_attrs) / sizeof(k_unlock_gate_attrs[0]); }
+		return 0u;
+	}
+#endif
 
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
@@ -2315,6 +2452,18 @@ static uint8_t clear_user(struct matter_device_info *info, const struct matter_i
 
 static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *response_command)
 {
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	if (inv->endpoint == MATTER_ENDPOINT_UNLOCK_GATE) {
+		if (inv->cluster != MATTER_CLUSTER_ON_OFF) return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		*response_command = MATTER_IM_NO_RESPONSE;
+		switch (inv->command) {
+		case MATTER_CMD_ON_OFF_OFF: unlock_gate_set(false); return MATTER_IM_STATUS_SUCCESS;
+		case MATTER_CMD_ON_OFF_ON: unlock_gate_set(true); return MATTER_IM_STATUS_SUCCESS;
+		case MATTER_CMD_ON_OFF_TOGGLE: unlock_gate_set(!unlock_gate_allows_passive()); return MATTER_IM_STATUS_SUCCESS;
+		default: return MATTER_IM_STATUS_UNSUPPORTED_COMMAND;
+		}
+	}
+#endif
 	struct matter_device_info *info = (struct matter_device_info *)ctx;
 	uint64_t v = 0u;
 

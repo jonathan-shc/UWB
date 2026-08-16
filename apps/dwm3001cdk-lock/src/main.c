@@ -30,6 +30,9 @@
 #endif
 #include "ml_feed.h" /* channel-classifier glue; plain feed when ML is off */
 #include "status_led.h"
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+#include "unlock_gate.h"
+#endif
 #include "uwb_cirdiag.h" /* latched Ipatov scalars, for the channel classifier */
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_ANCHOR)
 #include "ultrawidelock_satellite.h" /* second-anchor verdict; gates PREDICT only */
@@ -546,6 +549,9 @@ int main(void)
 
 		status_led_signal(STATUS_LED_SESSION, session_now);
 		if (session_now && !session_was_up) {
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+			unlock_gate_session_reset();
+#endif
 			/*
 			 * A session cannot come up without the phone approaching: the
 			 * BLE RSSI power gate holds ranging off until the connection
@@ -616,6 +622,20 @@ int main(void)
 #endif
 			/* fall through */
 		case ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD:
+#ifdef CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+			/* A denial is sticky for this credential session.  The first
+			 * denial repairs the approach controller once; later unlock
+			 * actions are simply ignored until the next session edge. */
+			if (unlock_gate_session_blocked()) {
+				break;
+			}
+			if (!unlock_gate_allows_passive()) {
+				unlock_gate_session_block();
+				ultrawidelock_approach_veto(&approach);
+				LOG_INF("passive unlock withheld by owner gate for this session");
+				break;
+			}
+#endif
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_SIDE_GATE)
 			/*
 			 * Safety gate for ALL passive approach unlocks. Requires

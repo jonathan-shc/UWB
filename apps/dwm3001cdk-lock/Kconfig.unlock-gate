@@ -1,0 +1,11 @@
+config ULTRAWIDELOCK_UNLOCK_GATE_SWITCH
+	bool "Owner-controlled Matter switch for passive UWB unlocks"
+	depends on ULTRAWIDELOCK_MATTER_BLE
+	default n
+	help
+	  Adds a separate Matter On/Off endpoint that gates only passive UWB/approach
+	  unlock grants. ON preserves normal walk-up unlock behaviour; OFF suppresses
+	  those passive grants. Intentional Home/NFC paths remain unchanged.
+
+	  This feature is deliberately off by default and isolated so it can be
+	  carried as a standalone downstream patch or proposed upstream independently.

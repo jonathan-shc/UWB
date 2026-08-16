@@ -29,6 +29,10 @@ if(CONFIG_ULTRAWIDELOCK_MATTER)
     ${SRC}/matter_fabric.c
     ${SRC}/matter_case.c)
 
+  if(CONFIG_ULTRAWIDELOCK_UNLOCK_GATE_SWITCH)
+    zephyr_library_sources(${SRC}/unlock_gate.c)
+  endif()
+
   zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
   # matter_crypto.c uses ultrawidelock_hash.h for SHA-256/HKDF, and the
