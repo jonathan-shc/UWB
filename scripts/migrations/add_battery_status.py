@@ -60,11 +60,13 @@ def replace_once(path: Path, old: str, new: str):
 (APP / "Kconfig.battery-status").write_text(KCONFIG)
 (APP / "overlay-battery-status.conf").write_text(OVERLAY)
 
-# One Kconfig hook, independent from every other custom feature.
+# One Kconfig hook, independent from every other custom feature. `rsource`
+# resolves relative to this Kconfig file; plain `source` resolves from Zephyr's
+# global srctree and therefore cannot find the app-local fragment.
 kcfg = APP / "Kconfig"
 replace_once(kcfg,
              'source "Kconfig.zephyr"\n',
-             'source "Kconfig.battery-status"\n\nsource "Kconfig.zephyr"\n')
+             'rsource "Kconfig.battery-status"\n\nsource "Kconfig.zephyr"\n')
 
 # Compile the battery implementation only when explicitly enabled.
 cmake = APP / "CMakeLists.txt"
