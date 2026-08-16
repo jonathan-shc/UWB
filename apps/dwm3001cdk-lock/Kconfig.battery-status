@@ -1,0 +1,7 @@
+config CUSTOM_BATTERY_STATUS
+    bool "Matter battery percentage reporting"
+    depends on ULTRAWIDELOCK_MATTER_BLE
+    default n
+    help
+      Adds the downstream battery status extension. When disabled, no battery
+      source code or Matter battery hooks are compiled.

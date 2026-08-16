@@ -95,6 +95,7 @@ target_sources_ifdef(CONFIG_ULTRAWIDELOCK_THREAD_GATE app PRIVATE src/thread_gat
 # window was the first thing worth showing, not the only one, and the `reader`
 # image has no receiver and used to light nothing at all.
 target_sources_ifdef(CONFIG_ULTRAWIDELOCK_STATUS_LED app PRIVATE src/status_led.c)
+target_sources_ifdef(CONFIG_CUSTOM_BATTERY_STATUS app PRIVATE src/battery_status.c)
 target_sources_ifdef(CONFIG_ULTRAWIDELOCK_CIRDIAG_CAPTURE app PRIVATE src/cirdiag_capture.c)
 target_sources_ifdef(CONFIG_ULTRAWIDELOCK_CASE_BENCH app PRIVATE src/case_bench.c)
 # Initiator (User-Device role) transport: ultrawidelock_zephyr_port compiles the central

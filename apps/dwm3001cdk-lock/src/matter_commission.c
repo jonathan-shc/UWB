@@ -56,6 +56,9 @@
 #include "matter_pase_sm.h"
 #include "matter_thread.h"
 #include "status_led.h" /* the lock LED; a tile tap has to move it too */
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+#include "battery_status.h"
+#endif
 
 LOG_MODULE_DECLARE(matter_ble, CONFIG_ULTRAWIDELOCK_MATTER_BLE_LOG_LEVEL);
 
@@ -102,6 +105,17 @@ static struct matter_device_info s_info = {
 	.approach_direction = MATTER_APPROACH_DIRECTION_ALL,
 };
 static struct matter_im_server s_im;
+
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+static struct k_work_delayable s_battery_refresh_work;
+
+static void battery_refresh_work(struct k_work *work)
+{
+    ARG_UNUSED(work);
+    s_info.battery_percent = battery_status_percent();
+    (void)k_work_reschedule(&s_battery_refresh_work, K_MINUTES(5));
+}
+#endif
 
 /**
  * Framed reply: both headers, the largest message, and the AEAD tag.
@@ -3360,6 +3374,11 @@ bool matter_commission_has_fabric(void)
 
 int matter_commission_init(void)
 {
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+    s_info.battery_percent = battery_status_percent();
+    k_work_init_delayable(&s_battery_refresh_work, battery_refresh_work);
+    (void)k_work_schedule(&s_battery_refresh_work, K_MINUTES(5));
+#endif
 	ecdh_known_answer_test();
 	srp_sign_self_test();
 

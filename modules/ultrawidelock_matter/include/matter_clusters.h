@@ -45,6 +45,22 @@ extern "C" {
 #define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
 #define MATTER_CLUSTER_ADMIN_COMMISSIONING     0x003Cu
 #define MATTER_CLUSTER_DOOR_LOCK               0x0101u
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+#define MATTER_CLUSTER_POWER_SOURCE            0x002Fu
+#define MATTER_ATTR_PS_STATUS                   0x0000u
+#define MATTER_ATTR_PS_ORDER                    0x0001u
+#define MATTER_ATTR_PS_DESCRIPTION              0x0002u
+#define MATTER_ATTR_PS_BAT_PERCENT_REMAINING    0x000Cu
+#define MATTER_ATTR_PS_BAT_CHARGE_LEVEL         0x000Eu
+#define MATTER_ATTR_PS_BAT_REPLACEMENT_NEEDED  0x000Fu
+#define MATTER_ATTR_PS_BAT_REPLACEABILITY       0x0010u
+#define MATTER_ATTR_PS_BAT_PRESENT              0x0011u
+#define MATTER_ATTR_PS_ENDPOINT_LIST            0x001Fu
+#define MATTER_PS_STATUS_ACTIVE                 1u
+#define MATTER_PS_FEATURE_BATTERY               0x02u
+#define MATTER_PS_FEATURE_RECHARGEABLE          0x04u
+#define MATTER_PS_REPLACEABILITY_USER           2u
+#endif
 
 /*
  * Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349
@@ -118,6 +134,10 @@ extern "C" {
  */
 #define MATTER_DEVICE_TYPE_DOOR_LOCK 0x000Au
 #define MATTER_DEVICE_TYPE_LOCK_REV  3u
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+#define MATTER_DEVICE_TYPE_POWER_SOURCE     0x0011u
+#define MATTER_DEVICE_TYPE_POWER_SOURCE_REV 1u
+#endif
 
 /* Door Lock attributes (DoorLock/AttributeIds.h:24-147). */
 #define MATTER_ATTR_DL_LOCK_STATE                0x0000u
@@ -657,6 +677,9 @@ struct matter_lock_event {
 #define MATTER_ENDPOINT_ROOT 0u
 /** The Door Lock. Listed in the root endpoint's PartsList. */
 #define MATTER_ENDPOINT_LOCK 1u
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+#define MATTER_ENDPOINT_POWER_SOURCE 2u
+#endif
 
 /**
  * Complete device information structure held by the Matter node, including vendor/product IDs,
@@ -696,6 +719,9 @@ struct matter_device_info {
 	 * refuses to send UnlockDoor to something already reporting Unlocked.
 	 */
 	uint8_t lock_state;
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	uint8_t battery_percent;
+#endif
 	/**
 	 * AutoRelockTime, in seconds; 0 means no automatic relock.
 	 *

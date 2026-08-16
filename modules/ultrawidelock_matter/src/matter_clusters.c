@@ -82,6 +82,12 @@ static const uint32_t k_lock_servers[] = {
 	MATTER_CLUSTER_DOOR_LOCK,
 	MATTER_CLUSTER_APPROACH_DIRECTION,
 };
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+static const uint32_t k_power_servers[] = {
+	MATTER_CLUSTER_DESCRIPTOR,
+	MATTER_CLUSTER_POWER_SOURCE,
+};
+#endif
 
 /* NetworkInfoStruct (python clusters/Objects.py, NetworkInfoStruct). */
 #define TAG_NETINFO_ID        0u
@@ -160,6 +166,11 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 {
 	(void)ctx;
 
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	if (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
+		return cluster == MATTER_CLUSTER_DESCRIPTOR || cluster == MATTER_CLUSTER_POWER_SOURCE;
+	}
+#endif
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		return cluster == MATTER_CLUSTER_DESCRIPTOR ||
 		       cluster == MATTER_CLUSTER_DOOR_LOCK ||
@@ -189,6 +200,9 @@ static bool has_cluster(void *ctx, uint16_t endpoint, uint32_t cluster)
 static const uint16_t k_endpoints[] = {
 	MATTER_ENDPOINT_ROOT,
 	MATTER_ENDPOINT_LOCK,
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	MATTER_ENDPOINT_POWER_SOURCE,
+#endif
 };
 
 /**
