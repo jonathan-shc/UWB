@@ -58,8 +58,8 @@ extern "C" {
 #define MATTER_ATTR_PS_ENDPOINT_LIST            0x001Fu
 #define MATTER_PS_STATUS_ACTIVE                 1u
 #define MATTER_PS_FEATURE_BATTERY               0x02u
-#define MATTER_PS_FEATURE_RECHARGEABLE          0x04u
-#define MATTER_PS_REPLACEABILITY_USER           2u
+#define MATTER_PS_CLUSTER_REVISION              3u
+#define MATTER_PS_REPLACEABILITY_NOT_REPLACEABLE 1u
 #endif
 
 /*

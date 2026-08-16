@@ -3375,6 +3375,9 @@ bool matter_commission_has_fabric(void)
 int matter_commission_init(void)
 {
 #ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	s_info.battery_percent = battery_status_percent();
+#endif
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
     s_info.battery_percent = battery_status_percent();
     k_work_init_delayable(&s_battery_refresh_work, battery_refresh_work);
     (void)k_work_schedule(&s_battery_refresh_work, K_MINUTES(5));

@@ -231,6 +231,43 @@ static uint8_t attr_status(void *ctx, uint16_t endpoint, uint32_t cluster, uint3
 	 * MetadataLookup.cpp:68-88 reports the outermost thing that is missing,
 	 * so a bad endpoint must not be reported as a bad attribute.
 	 */
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	if (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
+		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+			switch (attribute) {
+			case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			case MATTER_ATTR_DESC_SERVER_LIST:
+			case MATTER_ATTR_DESC_CLIENT_LIST:
+			case MATTER_ATTR_DESC_PARTS_LIST:
+				return MATTER_IM_STATUS_SUCCESS;
+			default:
+				return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+			}
+		}
+		if (cluster != MATTER_CLUSTER_POWER_SOURCE) {
+			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
+		}
+		switch (attribute) {
+		case MATTER_ATTR_PS_STATUS:
+		case MATTER_ATTR_PS_ORDER:
+		case MATTER_ATTR_PS_DESCRIPTION:
+		case MATTER_ATTR_PS_BAT_PERCENT_REMAINING:
+		case MATTER_ATTR_PS_BAT_CHARGE_LEVEL:
+		case MATTER_ATTR_PS_BAT_REPLACEMENT_NEEDED:
+		case MATTER_ATTR_PS_BAT_REPLACEABILITY:
+		case MATTER_ATTR_PS_BAT_PRESENT:
+		case MATTER_ATTR_PS_ENDPOINT_LIST:
+		case MATTER_ATTR_GENERATED_CMD_LIST:
+		case MATTER_ATTR_ACCEPTED_CMD_LIST:
+		case MATTER_ATTR_ATTRIBUTE_LIST:
+		case MATTER_ATTR_FEATURE_MAP:
+		case MATTER_ATTR_CLUSTER_REVISION:
+			return MATTER_IM_STATUS_SUCCESS;
+		default:
+			return MATTER_IM_STATUS_UNSUPPORTED_ATTRIBUTE;
+		}
+	}
+#endif
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
 			switch (attribute) {
@@ -511,6 +548,95 @@ static void put_id_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const
  * share cluster IDs -- Descriptor is on both -- and a single flat switch on
  * cluster would answer the root's Descriptor for the lock.
  */
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+static void power_attr_value(const struct matter_device_info *info, uint32_t cluster,
+                             uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	size_t i;
+
+	if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+		switch (attribute) {
+		case MATTER_ATTR_DESC_DEVICE_TYPE_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_start_container(w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_TYPE), MATTER_DEVICE_TYPE_POWER_SOURCE);
+			(void)matter_tlv_put_u64(w, MATTER_TLV_CTX(TAG_DEVTYPE_REVISION), MATTER_DEVICE_TYPE_POWER_SOURCE_REV);
+			(void)matter_tlv_end_container(w);
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_SERVER_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			for (i = 0u; i < sizeof(k_power_servers) / sizeof(k_power_servers[0]); i++) {
+				(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, k_power_servers[i]);
+			}
+			(void)matter_tlv_end_container(w);
+			return;
+		case MATTER_ATTR_DESC_CLIENT_LIST:
+		case MATTER_ATTR_DESC_PARTS_LIST:
+			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+			(void)matter_tlv_end_container(w);
+			return;
+		default:
+			return;
+		}
+	}
+
+	if (cluster != MATTER_CLUSTER_POWER_SOURCE) {
+		return;
+	}
+
+	switch (attribute) {
+	case MATTER_ATTR_PS_STATUS:
+		(void)matter_tlv_put_u64(w, tag, MATTER_PS_STATUS_ACTIVE); return;
+	case MATTER_ATTR_PS_ORDER:
+		(void)matter_tlv_put_u64(w, tag, 0u); return;
+	case MATTER_ATTR_PS_DESCRIPTION:
+		(void)matter_tlv_put_utf8(w, tag, "Battery", 7u); return;
+	case MATTER_ATTR_PS_BAT_PERCENT_REMAINING:
+		(void)matter_tlv_put_u64(w, tag, (uint64_t)info->battery_percent * 2u); return;
+	case MATTER_ATTR_PS_BAT_CHARGE_LEVEL:
+		(void)matter_tlv_put_u64(w, tag, info->battery_percent <= 10u ? 2u : info->battery_percent <= 20u ? 1u : 0u); return;
+	case MATTER_ATTR_PS_BAT_REPLACEMENT_NEEDED:
+		(void)matter_tlv_put_bool(w, tag, false); return;
+	case MATTER_ATTR_PS_BAT_REPLACEABILITY:
+		(void)matter_tlv_put_u64(w, tag, MATTER_PS_REPLACEABILITY_NOT_REPLACEABLE); return;
+	case MATTER_ATTR_PS_BAT_PRESENT:
+		(void)matter_tlv_put_bool(w, tag, true); return;
+	case MATTER_ATTR_PS_ENDPOINT_LIST:
+		(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_LOCK);
+		(void)matter_tlv_end_container(w); return;
+	case MATTER_ATTR_FEATURE_MAP:
+		(void)matter_tlv_put_u64(w, tag, MATTER_PS_FEATURE_BATTERY); return;
+	case MATTER_ATTR_CLUSTER_REVISION:
+		(void)matter_tlv_put_u64(w, tag, MATTER_PS_CLUSTER_REVISION); return;
+	case MATTER_ATTR_ATTRIBUTE_LIST:
+		(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_STATUS);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_ORDER);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_DESCRIPTION);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_BAT_PERCENT_REMAINING);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_BAT_CHARGE_LEVEL);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_BAT_REPLACEMENT_NEEDED);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_BAT_REPLACEABILITY);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_BAT_PRESENT);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_PS_ENDPOINT_LIST);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_GENERATED_CMD_LIST);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_ACCEPTED_CMD_LIST);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_ATTRIBUTE_LIST);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_FEATURE_MAP);
+		(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ATTR_CLUSTER_REVISION);
+		(void)matter_tlv_end_container(w); return;
+	case MATTER_ATTR_ACCEPTED_CMD_LIST:
+	case MATTER_ATTR_GENERATED_CMD_LIST:
+		(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
+		(void)matter_tlv_end_container(w); return;
+	default:
+		return;
+	}
+}
+#endif
+
 static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster,
 			    uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 {
@@ -715,6 +841,12 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 	 * it can still assume the root. attr_status() has already refused any
 	 * endpoint that is neither.
 	 */
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	if (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
+		power_attr_value(info, cluster, attribute, w, tag);
+		return;
+	}
+#endif
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		lock_attr_value(info, cluster, attribute, w, tag);
 		return;
@@ -927,6 +1059,9 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			 */
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
 			(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_LOCK);
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+			(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_POWER_SOURCE);
+#endif
 			(void)matter_tlv_end_container(w);
 			return;
 		default:
@@ -1133,6 +1268,17 @@ static const uint32_t k_basic_attrs[] = {
 	MATTER_ATTR_BASIC_MAX_PATHS_PER_INVOKE,
 };
 
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+static const uint32_t k_power_attrs[] = {
+	MATTER_ATTR_PS_STATUS, MATTER_ATTR_PS_ORDER, MATTER_ATTR_PS_DESCRIPTION,
+	MATTER_ATTR_PS_BAT_PERCENT_REMAINING, MATTER_ATTR_PS_BAT_CHARGE_LEVEL,
+	MATTER_ATTR_PS_BAT_REPLACEMENT_NEEDED, MATTER_ATTR_PS_BAT_REPLACEABILITY,
+	MATTER_ATTR_PS_BAT_PRESENT, MATTER_ATTR_PS_ENDPOINT_LIST,
+	MATTER_ATTR_GENERATED_CMD_LIST, MATTER_ATTR_ACCEPTED_CMD_LIST,
+	MATTER_ATTR_ATTRIBUTE_LIST, MATTER_ATTR_FEATURE_MAP, MATTER_ATTR_CLUSTER_REVISION,
+};
+#endif
+
 static const uint32_t k_desc_attrs[] = {
 	MATTER_ATTR_DESC_DEVICE_TYPE_LIST,
 	MATTER_ATTR_DESC_SERVER_LIST,
@@ -1194,6 +1340,12 @@ static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)
 {
 	(void)ctx;
 
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	if (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
+		*out = k_power_servers;
+		return sizeof(k_power_servers) / sizeof(k_power_servers[0]);
+	}
+#endif
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		*out = k_lock_servers;
 		return sizeof(k_lock_servers) / sizeof(k_lock_servers[0]);
@@ -1213,6 +1365,19 @@ static size_t list_attrs(void *ctx, uint16_t endpoint, uint32_t cluster, const u
 {
 	(void)ctx;
 
+#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+	if (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
+		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
+			*out = k_desc_attrs;
+			return sizeof(k_desc_attrs) / sizeof(k_desc_attrs[0]);
+		}
+		if (cluster == MATTER_CLUSTER_POWER_SOURCE) {
+			*out = k_power_attrs;
+			return sizeof(k_power_attrs) / sizeof(k_power_attrs[0]);
+		}
+		return 0u;
+	}
+#endif
 	if (endpoint == MATTER_ENDPOINT_LOCK) {
 		if (cluster == MATTER_CLUSTER_DESCRIPTOR) {
 			*out = k_desc_attrs;
