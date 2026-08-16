@@ -4,7 +4,7 @@
 This script is intentionally written for the state left behind when
 add_battery_matter.py stops at its old attr_status anchor: the header,
 k_power_servers, has_cluster and k_endpoints may already be patched while the
-rest is still absent.  Every insertion below is idempotent and scoped by the
+rest is still absent. Every insertion below is idempotent and scoped by the
 actual function body rather than fragile comments immediately after a
 signature.
 
@@ -21,15 +21,6 @@ CLUSTERS = ROOT / "modules" / "ultrawidelock_matter" / "src" / "matter_clusters.
 COMMISSION = SRC / "matter_commission.c"
 
 
-def replace_once(path: Path, old: str, new: str) -> None:
-    text = path.read_text()
-    if new in text:
-        return
-    if old not in text:
-        raise SystemExit(f"anchor not found in {path}: {old[:160]!r}")
-    path.write_text(text.replace(old, new, 1))
-
-
 def insert_before_in_function(path: Path, signature: str, needle: str, block: str) -> None:
     text = path.read_text()
     pos = text.find(signature)
@@ -43,8 +34,6 @@ def insert_before_in_function(path: Path, signature: str, needle: str, block: st
     path.write_text(text[:at] + block + text[at:])
 
 
-# The first migration may already have installed these old definitions. Convert
-# them to a deliberately minimal, coherent BAT-only Power Source.
 text = HDR.read_text()
 if "MATTER_PS_FEATURE_RECHARGEABLE" in text:
     text = text.replace(
@@ -59,7 +48,6 @@ if "MATTER_PS_FEATURE_RECHARGEABLE" in text:
     HDR.write_text(text)
 elif "MATTER_PS_CLUSTER_REVISION" not in text:
     raise SystemExit("Power Source definitions are missing; run add_battery_matter.py until its first failure first")
-
 
 power_status = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 \tif (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
@@ -106,9 +94,6 @@ insert_before_in_function(
     power_status,
 )
 
-
-# Value encoder for endpoint 2.  AttributeList is emitted explicitly because
-# k_power_attrs is declared later in this compact hand-written server.
 lock_value_sig = '''static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster,
 \t\t\t    uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
 '''
@@ -159,8 +144,7 @@ static void power_attr_value(const struct matter_device_info *info, uint32_t clu
 \tcase MATTER_ATTR_PS_BAT_PERCENT_REMAINING:
 \t\t(void)matter_tlv_put_u64(w, tag, (uint64_t)info->battery_percent * 2u); return;
 \tcase MATTER_ATTR_PS_BAT_CHARGE_LEVEL:
-\t\t(void)matter_tlv_put_u64(w, tag,
-\t\t\tinfo->battery_percent <= 10u ? 2u : info->battery_percent <= 20u ? 1u : 0u); return;
+\t\t(void)matter_tlv_put_u64(w, tag, info->battery_percent <= 10u ? 2u : info->battery_percent <= 20u ? 1u : 0u); return;
 \tcase MATTER_ATTR_PS_BAT_REPLACEMENT_NEEDED:
 \t\t(void)matter_tlv_put_bool(w, tag, false); return;
 \tcase MATTER_ATTR_PS_BAT_REPLACEABILITY:
@@ -210,7 +194,6 @@ if "static void power_attr_value(" not in text:
         raise SystemExit("lock_attr_value signature not found")
     CLUSTERS.write_text(text[:pos] + power_value + text[pos:])
 
-
 power_dispatch = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 \tif (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
 \t\tpower_attr_value(info, cluster, attribute, w, tag);
@@ -225,8 +208,6 @@ insert_before_in_function(
     power_dispatch,
 )
 
-
-# Root Descriptor PartsList: append endpoint 2 immediately after endpoint 1.
 text = CLUSTERS.read_text()
 parts_line = "\t\t\t(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_LOCK);\n"
 power_parts = "#ifdef CONFIG_CUSTOM_BATTERY_STATUS\n\t\t\t(void)matter_tlv_put_u64(w, MATTER_TLV_ANON, MATTER_ENDPOINT_POWER_SOURCE);\n#endif\n"
@@ -236,7 +217,6 @@ if power_parts not in text:
         raise SystemExit("root PartsList lock endpoint line not found")
     pos += len(parts_line)
     CLUSTERS.write_text(text[:pos] + power_parts + text[pos:])
-
 
 power_attrs_block = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 static const uint32_t k_power_attrs[] = {
@@ -257,8 +237,7 @@ if "static const uint32_t k_power_attrs[]" not in text:
         raise SystemExit("k_desc_attrs anchor not found")
     CLUSTERS.write_text(text[:pos] + power_attrs_block + text[pos:])
 
-
-power_servers_dispatch = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+power_clusters_dispatch = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 \tif (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
 \t\t*out = k_power_servers;
 \t\treturn sizeof(k_power_servers) / sizeof(k_power_servers[0]);
@@ -267,11 +246,10 @@ power_servers_dispatch = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 '''
 insert_before_in_function(
     CLUSTERS,
-    "static size_t list_servers(void *ctx, uint16_t endpoint, const uint32_t **out)\n{\n",
+    "static size_t list_clusters(void *ctx, uint16_t endpoint, const uint32_t **out)\n{\n",
     "\tif (endpoint == MATTER_ENDPOINT_LOCK) {\n",
-    power_servers_dispatch,
+    power_clusters_dispatch,
 )
-
 
 power_attrs_dispatch = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 \tif (endpoint == MATTER_ENDPOINT_POWER_SOURCE) {
@@ -294,8 +272,6 @@ insert_before_in_function(
     power_attrs_dispatch,
 )
 
-
-# Port integration.  These may not have been reached by the failed migration.
 text = COMMISSION.read_text()
 if '#include "battery_status.h"' not in text:
     anchor = '#include "status_led.h" /* the lock LED; a tile tap has to move it too */\n'
@@ -316,5 +292,18 @@ if init_block not in text:
         raise SystemExit("matter_commission_init signature not found")
     pos += len(sig)
     COMMISSION.write_text(text[:pos] + init_block + text[pos:])
+
+text = CLUSTERS.read_text()
+required = [
+    "MATTER_ENDPOINT_POWER_SOURCE",
+    "static void power_attr_value(",
+    "static const uint32_t k_power_attrs[]",
+    "MATTER_ATTR_PS_BAT_PERCENT_REMAINING",
+]
+missing = [item for item in required if item not in text]
+if "MATTER_PS_CLUSTER_REVISION" not in HDR.read_text():
+    missing.append("MATTER_PS_CLUSTER_REVISION")
+if missing:
+    raise SystemExit("battery Matter repair incomplete: " + ", ".join(missing))
 
 print("Resumed battery Matter migration and repaired Power Source metadata.")
