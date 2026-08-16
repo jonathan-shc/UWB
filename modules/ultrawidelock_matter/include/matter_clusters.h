@@ -45,6 +45,12 @@ extern "C" {
 #define MATTER_CLUSTER_OPERATIONAL_CREDENTIALS 0x003Eu
 #define MATTER_CLUSTER_ADMIN_COMMISSIONING     0x003Cu
 #define MATTER_CLUSTER_DOOR_LOCK               0x0101u
+#define MATTER_CLUSTER_ON_OFF                  0x0006u
+
+#define MATTER_ATTR_ON_OFF_ON_OFF              0x0000u
+#define MATTER_CMD_ON_OFF_OFF                  0x0000u
+#define MATTER_CMD_ON_OFF_ON                   0x0001u
+#define MATTER_CMD_ON_OFF_TOGGLE               0x0002u
 
 /*
  * Apple's manufacturer-specific Approach Direction cluster: MEI vendor 0x1349
@@ -118,6 +124,9 @@ extern "C" {
  */
 #define MATTER_DEVICE_TYPE_DOOR_LOCK 0x000Au
 #define MATTER_DEVICE_TYPE_LOCK_REV  3u
+
+#define MATTER_DEVICE_TYPE_ON_OFF_PLUGIN_UNIT 0x010Au
+#define MATTER_DEVICE_TYPE_ON_OFF_PLUGIN_REV  1u
 
 /* Door Lock attributes (DoorLock/AttributeIds.h:24-147). */
 #define MATTER_ATTR_DL_LOCK_STATE                0x0000u
@@ -657,6 +666,7 @@ struct matter_lock_event {
 #define MATTER_ENDPOINT_ROOT 0u
 /** The Door Lock. Listed in the root endpoint's PartsList. */
 #define MATTER_ENDPOINT_LOCK 1u
+#define MATTER_ENDPOINT_UNLOCK_GATE 3u
 
 /**
  * Complete device information structure held by the Matter node, including vendor/product IDs,

@@ -374,6 +374,8 @@ config ULTRAWIDELOCK_HEAP_PROBE
 
 	  Needs CONFIG_MBEDTLS_MEMORY_DEBUG=y, which is not a shipping setting.
 
+rsource "Kconfig.unlock-gate"
+
 source "Kconfig.zephyr"
 
 config ULTRAWIDELOCK_MATTER_BLE
