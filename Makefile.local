@@ -1,0 +1,9 @@
+# Local feature builds. Kept separate from the upstream-oriented Makefile/mk files
+# so upstream updates rarely conflict with downstream feature profiles.
+
+LOCAL_GATE_CONF ?= overlay-thread.conf;overlay-unlock-gate.conf;overlay-lto.conf
+
+.PHONY: build-unlock-gate
+
+build-unlock-gate:
+	$(MAKE) build CDK_CONF='$(LOCAL_GATE_CONF)'
