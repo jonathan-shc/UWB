@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add Matter Power Source presentation for the standalone battery feature.
 
-Run after add_battery_status.py.  Kept separate so the board-side measurement
+Run after add_battery_status.py. Kept separate so the board-side measurement
 and the Matter data-model change can be reviewed/rebased independently.
 """
 from pathlib import Path
@@ -22,7 +22,8 @@ def replace_once(path: Path, old: str, new: str):
         raise SystemExit(f"anchor not found in {path}: {old[:100]!r}")
     path.write_text(text.replace(old, new, 1))
 
-# Public Matter constants + optional device-info fields.  BatPercentRemaining is
+
+# Public Matter constants + optional device-info field. BatPercentRemaining is
 # encoded in half-percent units by Matter (0..200).
 replace_once(HDR,
     '#define MATTER_CLUSTER_DOOR_LOCK               0x0101u\n',
@@ -43,7 +44,7 @@ replace_once(HDR,
     '\tuint8_t battery_percent; /* 0..100; Matter encoder converts to 0..200 */\n'
     '#endif\n')
 
-# Keep the feature on the lock endpoint: Home then associates battery state with
+# Keep the feature on the lock endpoint: Home can associate battery state with
 # the lock accessory instead of creating an unrelated third accessory tile.
 replace_once(CLUSTERS,
     '\tMATTER_CLUSTER_APPROACH_DIRECTION,\n};\n',
@@ -61,11 +62,10 @@ replace_once(CLUSTERS,
     '#endif\n'
     '\t\t       ;\n')
 
-# Attribute support and encoding are inserted before the existing DoorLock-only
-# fallback.  Global attributes are intentionally omitted in this first narrow
-# integration; Home only needs the battery values for the accessory UI.
-needle = '\t\tif (cluster != MATTER_CLUSTER_DOOR_LOCK) {\n\t\t\treturn MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;\n\t\t}\n'
-insert = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+# Attribute support belongs in attr_status(): it only reports whether a path is
+# valid and must never encode TLV values.
+status_anchor = '\t\tif (cluster != MATTER_CLUSTER_DOOR_LOCK) {\n\t\t\treturn MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;\n\t\t}\n'
+status_block = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 		if (cluster == MATTER_CLUSTER_POWER_SOURCE) {
 			switch (attribute) {
 			case MATTER_ATTR_PS_STATUS:
@@ -79,12 +79,19 @@ insert = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 			}
 		}
 #endif
-''' + needle
-replace_once(CLUSTERS, needle, insert)
+''' + status_anchor
+replace_once(CLUSTERS, status_anchor, status_block)
 
-# Encode Power Source values before Approach Direction / DoorLock handling.
-needle2 = '\tif (cluster == MATTER_CLUSTER_APPROACH_DIRECTION) {\n'
-insert2 = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
+# Actual Power Source encoding belongs in lock_attr_value(), where info/w/tag
+# are valid. Anchor on that function body so we cannot accidentally insert into
+# the earlier attr_status() switch (both contain Approach Direction handling).
+value_anchor = '''static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster,
+			    uint32_t attribute, struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+{
+	size_t i;
+
+'''
+value_block = value_anchor + '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 	if (cluster == MATTER_CLUSTER_POWER_SOURCE) {
 		switch (attribute) {
 		case MATTER_ATTR_PS_STATUS:
@@ -100,7 +107,8 @@ insert2 = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 			(void)matter_tlv_put_u64(w, tag, (uint64_t)info->battery_percent * 2u);
 			return;
 		case MATTER_ATTR_PS_BAT_CHARGE_LEVEL:
-			(void)matter_tlv_put_u64(w, tag, info->battery_percent <= 10u ? 2u :
+			(void)matter_tlv_put_u64(w, tag,
+						 info->battery_percent <= 10u ? 2u :
 						 info->battery_percent <= 20u ? 1u : 0u);
 			return;
 		default:
@@ -108,8 +116,9 @@ insert2 = '''#ifdef CONFIG_CUSTOM_BATTERY_STATUS
 		}
 	}
 #endif
-''' + needle2
-replace_once(CLUSTERS, needle2, insert2)
+
+'''
+replace_once(CLUSTERS, value_anchor, value_block)
 
 # Board-specific measurement stays in the app; Matter receives only a percent.
 replace_once(COMMISSION,
