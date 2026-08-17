@@ -10,6 +10,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
