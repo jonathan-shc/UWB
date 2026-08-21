@@ -1000,7 +1000,7 @@ void matter_client_want(void)
 	if (s_info == NULL) {
 		return;
 	}
-	if (s_info->operating_mode == MATTER_DL_OPERATING_MODE_NO_REMOTE) {
+	if (!matter_client_bound_unlock_allowed()) {
 		LOG_INF("bound unlock inhibited by NoRemoteLockUnlock mode");
 		return;
 	}
@@ -1012,6 +1012,14 @@ void matter_client_want(void)
 	 */
 	matter_client_sm_want(&s_sm, now_ms());
 	(void)ultrawidelock_dwork_reschedule(&s_poll_work, 0);
+}
+
+bool matter_client_bound_unlock_allowed(void)
+{
+	/* An absent Matter client must not change the local credential reader's
+	 * behaviour.  Only the explicit persisted gate suppresses the grant. */
+	return s_info == NULL ||
+	       s_info->operating_mode != MATTER_DL_OPERATING_MODE_NO_REMOTE;
 }
 
 bool matter_client_owns_session(uint16_t session_id)

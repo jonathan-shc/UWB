@@ -225,7 +225,11 @@ void test_matter_client(void)
 	t_group("NoRemoteLockUnlock inhibits the bound peer only");
 	{
 		fixture(&info, true, true);
+		T_OK("Normal mode permits the visible credential grant",
+		     matter_client_bound_unlock_allowed());
 		info.operating_mode = MATTER_DL_OPERATING_MODE_NO_REMOTE;
+		T_OK("NoRemoteLockUnlock suppresses the visible credential grant",
+		     !matter_client_bound_unlock_allowed());
 		matter_client_want();
 		tick(1u);
 		T_EQ("no peer lookup starts", (long)matterfake_resolve_count(), 0L);

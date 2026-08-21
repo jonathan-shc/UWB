@@ -679,6 +679,18 @@ int main(void)
 				break;
 			}
 #endif
+
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_CLIENT) && IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+			/* Wallet's successful unlock animation is caused by Reader Status =
+			 * Unsecured below.  When the bound-unlock gate is closed, keep the
+			 * authenticated BLE and UWB session intact but do not claim that a
+			 * lock opened.  matter_client_want() checks again before sending as
+			 * a race-safe backstop. */
+			if (!matter_client_bound_unlock_allowed()) {
+				LOG_INF("credential accepted; Wallet unlock and bound unlock inhibited by mode");
+				break;
+			}
+#endif
 			ultrawidelock_reader_notify_unlock(true); /* Reader Status -> Unsecured (animate) */
 			status_led_signal(STATUS_LED_UNLOCKED, true);
 			granted = true;
@@ -709,8 +721,12 @@ int main(void)
 			break;
 		case ULTRAWIDELOCK_APPROACH_RELOCK_DEPART:
 		case ULTRAWIDELOCK_APPROACH_RELOCK_ABORT:
-			ultrawidelock_reader_notify_unlock(false); /* Reader Status -> Secured */
-			status_led_signal(STATUS_LED_UNLOCKED, false);
+			/* Do not send a Secured transition for a gated grant whose Unsecured
+			 * transition was deliberately withheld from Wallet. */
+			if (granted) {
+				ultrawidelock_reader_notify_unlock(false); /* Reader Status -> Secured */
+				status_led_signal(STATUS_LED_UNLOCKED, false);
+			}
 			granted = false;
 			break;
 		default:

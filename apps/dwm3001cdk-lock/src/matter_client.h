@@ -60,6 +60,15 @@ void matter_client_init(struct matter_device_info *info);
 void matter_client_want(void);
 
 /**
+ * May a local credential grant be presented as an unlock?
+ *
+ * NoRemoteLockUnlock is also the user's gate for the bound lock.  Asking here,
+ * before Reader Status = Unsecured is sent, keeps Wallet from presenting a
+ * successful unlock for a command that will deliberately never reach the peer.
+ */
+bool matter_client_bound_unlock_allowed(void);
+
+/**
  * Is @p session_id the client's own secure session?
  *
  * Asked by matter_thread_on_datagram_owned() before it gives up on an encrypted
