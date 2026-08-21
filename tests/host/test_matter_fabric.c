@@ -102,6 +102,30 @@ void test_matter_fabric(void)
 	T_OK("public key is the certificate's",
 	     memcmp(info.public_key, k_node01_pubkey, sizeof(k_node01_pubkey)) == 0);
 
+	t_group("CASE authenticated tags");
+	{
+		uint8_t cert[160];
+		struct matter_tlv_writer w;
+		size_t cert_len = 0u;
+
+		matter_tlv_writer_init(&w, cert, sizeof(cert));
+		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_start_container(&w, MATTER_TLV_CTX(6u), MATTER_TLV_STRUCTURE);
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(17u), UINT64_C(0x1234));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(21u), UINT64_C(0x5678));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(22u), UINT64_C(0x27730001));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_CTX(22u), UINT64_C(0xABCD0002));
+		(void)matter_tlv_end_container(&w);
+		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(9u), k_node01_pubkey,
+					   sizeof(k_node01_pubkey));
+		(void)matter_tlv_end_container(&w);
+		T_EQ("certificate builds", matter_tlv_writer_finish(&w, &cert_len), MATTER_OK);
+		T_EQ("certificate parses", matter_cert_parse(cert, cert_len, &info), MATTER_OK);
+		T_EQ("both CATs retained", (long)info.cat_count, 2L);
+		T_OK("first CAT is exact", info.cats[0] == UINT32_C(0x27730001));
+		T_OK("second CAT is exact", info.cats[1] == UINT32_C(0xABCD0002));
+	}
+
 	t_group("a root certificate");
 
 	T_EQ("root01 parses", matter_cert_parse(k_root01, sizeof(k_root01), &info), MATTER_OK);

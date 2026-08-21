@@ -13,6 +13,66 @@
 #include "matter_im.h"
 #include "matter_tlv.h"
 
+/* Certificate signature tag (credentials/CHIPCert.h:68-78). */
+#define CERT_TAG_SIGNATURE 11u
+#define TLV_END_CONTAINER  0x18u
+
+int matter_case_cert_verify(const uint8_t *cert, size_t len,
+			    const uint8_t issuer_pub[MATTER_CASE_PUBKEY_LEN], uint8_t *scratch,
+			    size_t scratch_cap)
+{
+	struct matter_tlv_reader r;
+	const uint8_t *sig = NULL;
+	size_t sig_len = 0u;
+	size_t sig_off;
+	int rc;
+
+	if (cert == NULL || issuer_pub == NULL || scratch == NULL || len == 0u) {
+		return MATTER_E_INVAL;
+	}
+	matter_tlv_reader_init(&r, cert, len);
+	if (matter_tlv_next(&r) != MATTER_OK || !matter_tlv_is_container(&r)) {
+		return MATTER_E_INVAL;
+	}
+	rc = matter_tlv_enter(&r);
+	if (rc != MATTER_OK) {
+		return rc;
+	}
+	for (;;) {
+		rc = matter_tlv_next(&r);
+		if (rc == MATTER_END) {
+			break;
+		}
+		if (rc != MATTER_OK) {
+			return rc;
+		}
+		if (matter_tlv_tag(&r) == MATTER_TLV_CTX(CERT_TAG_SIGNATURE) &&
+		    matter_tlv_get_bytes(&r, &sig, &sig_len) != MATTER_OK) {
+			return MATTER_E_TYPE;
+		}
+	}
+	if (sig == NULL || sig_len != MATTER_CASE_SIG_LEN) {
+		return MATTER_E_INVAL;
+	}
+	if ((sig + sig_len) != (cert + len - 1u) || cert[len - 1u] != TLV_END_CONTAINER) {
+		return MATTER_E_INVAL;
+	}
+	sig_off = (size_t)(sig - cert);
+	if (sig_off < 3u || cert[sig_off - 3u] != 0x30u ||
+	    cert[sig_off - 2u] != CERT_TAG_SIGNATURE ||
+	    cert[sig_off - 1u] != MATTER_CASE_SIG_LEN) {
+		return MATTER_E_INVAL;
+	}
+	sig_off -= 3u;
+	if ((sig_off + 1u) > scratch_cap) {
+		return MATTER_E_NOSPACE;
+	}
+	memcpy(scratch, cert, sig_off);
+	scratch[sig_off] = TLV_END_CONTAINER;
+	return matter_case_verify(issuer_pub, scratch, sig_off + 1u, sig) == 0 ? MATTER_OK
+									 : MATTER_E_ACCESS;
+}
+
 /* Sigma1 field tags (CASESession.cpp:74-83). */
 #define TAG_S1_INITIATOR_RANDOM  1u
 #define TAG_S1_INITIATOR_SESSION 2u
@@ -539,6 +599,8 @@ int matter_case_sigma3_open(const struct matter_case_sigma3_in *in, const uint8_
 
 	out->node_id = cert.node_id;
 	out->fabric_id = cert.fabric_id;
+	memcpy(out->cats, cert.cats, sizeof(out->cats));
+	out->cat_count = cert.cat_count;
 	memcpy(out->public_key, cert.public_key, MATTER_CASE_PUBKEY_LEN);
 	return MATTER_OK;
 }

@@ -858,6 +858,8 @@ static bool s_case_ready[MATTER_CASE_SESSIONS];
  * fabric tells a controller it is not on the fabric it just joined.
  */
 static uint8_t s_case_fabric[MATTER_CASE_SESSIONS];
+static uint32_t s_case_cats[MATTER_CASE_SESSIONS][MATTER_CASE_CAT_MAX];
+static size_t s_case_cat_count[MATTER_CASE_SESSIONS];
 /**
  * The slot serving the datagram in flight. Valid only while s_thread_reply is
  * set, which is the whole time a reply can be built.
@@ -1163,7 +1165,9 @@ static ultrawidelock_sem_t s_fab_done;
 static void fab_store_work_fn(struct k_work *w)
 {
 	ARG_UNUSED(w);
-	ultrawidelock_mutex_lock(&s_owner_lock);
+	/* The caller owns s_owner_lock while it waits. That ownership also
+	 * freezes s_info and s_fab_request for this worker; taking the same lock
+	 * here would deadlock until the durability boundary timed out. */
 	s_fab_request.result = -EIO;
 	for (uint8_t attempt = 0u; attempt < FAB_STORE_ATTEMPTS; attempt++) {
 		if (s_fab_request.clear_reader) {
@@ -1181,7 +1185,6 @@ static void fab_store_work_fn(struct k_work *w)
 			break;
 		}
 	}
-	ultrawidelock_mutex_unlock(&s_owner_lock);
 	ultrawidelock_sem_give(&s_fab_done);
 }
 static K_WORK_DEFINE(s_fab_store_work, fab_store_work_fn);
@@ -1571,10 +1574,13 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 		return;
 	}
 
-	(void)tx_frame(slot,
-		       (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		       MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_INVOKE_COMMAND_RESPONSE, payload,
-		       resp_len, false, 0u);
+	rc = tx_frame(slot,
+		      (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
+		      MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_INVOKE_COMMAND_RESPONSE, payload,
+		      resp_len, false, 0u);
+	if (rc != MATTER_OK) {
+		LOG_ERR("cannot frame InvokeResponse (%d)", rc);
+	}
 	/* The response is framed before its own session can be destroyed. */
 	if (removed) {
 		case_drop_fabric(s_info.last_noc_index);
@@ -2522,6 +2528,8 @@ static void case_drop_fabric(uint8_t fabric_index)
 			memset(&s_case_x[i], 0, sizeof(s_case_x[i]));
 			s_case_ready[i] = false;
 			s_case_fabric[i] = 0u;
+			memset(s_case_cats[i], 0, sizeof(s_case_cats[i]));
+			s_case_cat_count[i] = 0u;
 		}
 		if (!s_dormant[i].used || s_dormant[i].fabric_index != fabric_index) {
 			continue;
@@ -3550,6 +3558,8 @@ static size_t handle_sigma3(const uint8_t *sigma3, size_t sigma3_len, const uint
 	}
 	s_case_ready[slot] = true;
 	s_case_fabric[slot] = s_case.fabric->index;
+	memcpy(s_case_cats[slot], peer.cats, sizeof(s_case_cats[slot]));
+	s_case_cat_count[slot] = peer.cat_count;
 	/* Replies to THIS Sigma3 are sealed on the unsecured exchange, but the
 	 * StatusReport that follows is the last thing that session sends before
 	 * the peer starts using the new one, so point the current slot at it. */
@@ -3730,6 +3740,8 @@ static size_t matter_thread_on_datagram_owned(uint8_t *msg, size_t len, uint8_t 
 		/* Whose fabric is asking, for the fabric-scoped attributes. */
 		s_info.accessing_fabric_index = s_case_fabric[slot];
 		s_info.accessing_node_id = s_case_x[slot].peer_op_node_id;
+		memcpy(s_info.accessing_cats, s_case_cats[slot], sizeof(s_info.accessing_cats));
+		s_info.accessing_cat_count = s_case_cat_count[slot];
 		s_thread_reply = reply;
 		s_thread_reply_cap = cap;
 		s_thread_reply_len = 0u;
@@ -3995,6 +4007,8 @@ static void on_message_owned(uint8_t *msg, size_t len)
 	 * datagram handled on the shared data model. */
 	s_info.accessing_fabric_index = 0u;
 	s_info.accessing_node_id = 0u;
+	memset(s_info.accessing_cats, 0, sizeof(s_info.accessing_cats));
+	s_info.accessing_cat_count = 0u;
 
 	if (!s_verifier_ok) {
 		LOG_ERR("no usable SPAKE2P verifier; dropping %u bytes", (unsigned int)len);
