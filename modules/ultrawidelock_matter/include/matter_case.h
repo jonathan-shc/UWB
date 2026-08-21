@@ -204,7 +204,11 @@ struct matter_case_sigma3_in {
 	const uint8_t *responder_eph_pub; /**< 65, the one Sigma2 carried. */
 };
 
-/** Verify a canonical Matter certificate under its issuer's public key. */
+/** Convert a Matter certificate to the canonical X.509 DER TBSCertificate it signs. */
+int matter_case_cert_tbs(const uint8_t *cert, size_t len, uint8_t *out, size_t cap, size_t *out_len,
+			 const uint8_t **signature);
+
+/** Verify a Matter certificate under its issuer's public key. */
 int matter_case_cert_verify(const uint8_t *cert, size_t len,
 			    const uint8_t issuer_pub[MATTER_CASE_PUBKEY_LEN], uint8_t *scratch,
 			    size_t scratch_cap);

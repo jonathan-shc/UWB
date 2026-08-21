@@ -3496,8 +3496,16 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 			if (info->accessing_fabric_index == 0u) {
 				return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 			}
-			rc = matter_binding_write(&info->binding, info->accessing_fabric_index,
-						  data, data_len);
+			if (path->have_list_index) {
+				if (!path->list_index_null) {
+					return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+				}
+				rc = matter_binding_append(&info->binding,
+							   info->accessing_fabric_index, data, data_len);
+			} else {
+				rc = matter_binding_write(&info->binding,
+							  info->accessing_fabric_index, data, data_len);
+			}
 			if (rc == MATTER_E_NOSPACE) {
 				return MATTER_IM_STATUS_RESOURCE_EXHAUSTED;
 			}

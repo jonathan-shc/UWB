@@ -1612,10 +1612,9 @@ static void on_write_request(const struct matter_exchange_in *in)
 		LOG_WRN("unreadable WriteRequest (%d), %u B", rc, (unsigned int)in->payload_len);
 		return;
 	}
-	LOG_INF("  write: endpoint %u cluster 0x%04x attribute 0x%04x, %u B", wr.path.endpoint,
-		(unsigned int)wr.path.cluster, (unsigned int)wr.path.attribute,
-		(unsigned int)wr.data_len);
-
+	LOG_INF("  write: endpoint %u cluster 0x%04x attribute 0x%04x, %u item(s)",
+		wr.items[0].path.endpoint, (unsigned int)wr.items[0].path.cluster,
+		(unsigned int)wr.items[0].path.attribute, (unsigned int)wr.n_items);
 	/*
 	 * Persisted by VALUE CHANGE rather than by write status: the encoder
 	 * only mutates s_info on a write it accepted, so a changed field is
@@ -1646,7 +1645,7 @@ static void on_write_request(const struct matter_exchange_in *in)
 	 * silently gone after the next reboot. The slot argument is unused --
 	 * the table is node-wide and carries its own fabric scoping.
 	 */
-	if (wr.path.cluster == MATTER_CLUSTER_BINDING) {
+	if (wr.items[0].path.cluster == MATTER_CLUSTER_BINDING) {
 		(void)matter_fab_commit(&s_info, MATTER_FABRIC_STORE_BINDING, 0u, NULL, 0u);
 	}
 #endif
