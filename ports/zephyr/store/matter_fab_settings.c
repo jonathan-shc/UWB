@@ -10,10 +10,10 @@
 
 LOG_MODULE_REGISTER(matter_fab, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define FAB_TREE "mf2"
-#define KEY_META FAB_TREE "/meta"
-#define KEY_NET  FAB_TREE "/net"
-#define KEY_ICAC FAB_TREE "/ic"
+#define FAB_TREE     "mf2"
+#define KEY_META     FAB_TREE "/meta"
+#define KEY_NET      FAB_TREE "/net"
+#define KEY_ICAC     FAB_TREE "/ic"
 #define KEY_FAB_TMPL FAB_TREE "/f0"
 #define KEY_ACL_TMPL FAB_TREE "/a0"
 #if MATTER_FEATURE_CLIENT
@@ -121,8 +121,7 @@ static uint32_t s_binding_epoch;
 static uint8_t s_binding_state;
 #endif
 
-BUILD_ASSERT(MATTER_SUPPORTED_FABRICS < 10u,
-	     "the per-fabric settings key carries a single digit");
+BUILD_ASSERT(MATTER_SUPPORTED_FABRICS < 10u, "the per-fabric settings key carries a single digit");
 BUILD_ASSERT(sizeof(struct fabric_record) <= 768u,
 	     "fabric record exceeds the FreeRTOS settings value ceiling");
 BUILD_ASSERT(sizeof(struct acl_record) <= 768u,
@@ -345,8 +344,8 @@ static int store_network(const struct matter_device_info *info)
 	return settings_save_one(KEY_NET, &s_io.network, sizeof(s_io.network));
 }
 
-static int store_acl(const struct matter_device_info *info, uint8_t slot,
-		     const uint8_t *value, size_t value_len)
+static int store_acl(const struct matter_device_info *info, uint8_t slot, const uint8_t *value,
+		     size_t value_len)
 {
 	char key[] = KEY_ACL_TMPL;
 	const struct matter_fabric *f = &info->fabrics[slot];
@@ -494,7 +493,7 @@ static void legacy_cleanup(void)
 
 int matter_fab_load(struct matter_device_info *info)
 {
-	bool used_index[MATTER_SUPPORTED_FABRICS + 1u] = { false };
+	bool used_index[MATTER_SUPPORTED_FABRICS + 1u] = {false};
 	bool icac_valid;
 	int rc;
 
@@ -530,8 +529,7 @@ int matter_fab_load(struct matter_device_info *info)
 		struct matter_fabric *f = &info->fabrics[i];
 
 		if (s_fabric_epoch[i] != s_epoch || s_fabric_state[i] != REC_LIVE ||
-		    f->index == 0u || f->index > MATTER_SUPPORTED_FABRICS ||
-		    used_index[f->index]) {
+		    f->index == 0u || f->index > MATTER_SUPPORTED_FABRICS || used_index[f->index]) {
 			memset(f, 0, sizeof(*f));
 			memset(&info->fabric_acls[i], 0, sizeof(info->fabric_acls[i]));
 			continue;
@@ -566,8 +564,8 @@ int matter_fab_load(struct matter_device_info *info)
 		}
 	}
 #endif
-	icac_valid = s_icac_epoch == s_epoch && s_icac_state == REC_LIVE &&
-		     info->icac.len > 0u && info->icac.owner_index > 0u &&
+	icac_valid = s_icac_epoch == s_epoch && s_icac_state == REC_LIVE && info->icac.len > 0u &&
+		     info->icac.owner_index > 0u &&
 		     info->icac.owner_index <= MATTER_SUPPORTED_FABRICS &&
 		     used_index[info->icac.owner_index];
 	if (!icac_valid) {
@@ -642,9 +640,12 @@ static int scan_epoch(const char *key, size_t len, settings_read_cb read_cb, voi
 int matter_fab_erase(void)
 {
 	struct epoch_scan scan = {0};
-	static const char *const fixed[] = { KEY_META, KEY_NET, KEY_ICAC,
+	static const char *const fixed[] = {
+		KEY_META,
+		KEY_NET,
+		KEY_ICAC,
 #if MATTER_FEATURE_CLIENT
-					     KEY_BIND,
+		KEY_BIND,
 #endif
 	};
 	uint32_t next = 1u;
@@ -689,8 +690,7 @@ int matter_fab_erase(void)
 	rc = ensure_meta();
 	if (rc == 0) {
 		legacy_cleanup();
-		LOG_WRN("Matter operational identity erased at epoch %u",
-			(unsigned int)s_epoch);
+		LOG_WRN("Matter operational identity erased at epoch %u", (unsigned int)s_epoch);
 	}
 	return rc;
 }
@@ -701,9 +701,10 @@ int matter_fab_erase(void)
  * A tree of their own rather than more keys under the Matter identity.
  * These settings survive selective fabric removal and Matter-only erase.
  */
-#define DL_TREE          "mdl"
-#define KEY_AUTO_RELOCK  DL_TREE "/art"
-#define KEY_APPROACH     DL_TREE "/apd"
+#define DL_TREE            "mdl"
+#define KEY_AUTO_RELOCK    DL_TREE "/art"
+#define KEY_APPROACH       DL_TREE "/apd"
+#define KEY_OPERATING_MODE DL_TREE "/opm"
 
 struct dl_attr_target {
 	void *value;
@@ -725,7 +726,7 @@ static int dl_attr_set(const char *name, size_t len, settings_read_cb read_cb, v
 }
 
 int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_auto_relock_s,
-			 uint8_t prev_approach_direction)
+			 uint8_t prev_approach_direction, uint8_t prev_operating_mode)
 {
 	int first_err = 0;
 	int rc;
@@ -747,6 +748,13 @@ int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_au
 			first_err = rc;
 		}
 	}
+	if (info->operating_mode != prev_operating_mode) {
+		rc = settings_save_one(KEY_OPERATING_MODE, &info->operating_mode,
+				       sizeof(info->operating_mode));
+		if (rc != 0 && first_err == 0) {
+			first_err = rc;
+		}
+	}
 	return first_err;
 }
 
@@ -754,6 +762,7 @@ int matter_dl_attr_load(struct matter_device_info *info)
 {
 	struct dl_attr_target relock;
 	struct dl_attr_target approach;
+	struct dl_attr_target operating_mode;
 
 	if (info == NULL) {
 		return -EINVAL;
@@ -766,12 +775,16 @@ int matter_dl_attr_load(struct matter_device_info *info)
 	approach.len = sizeof(info->approach_direction);
 	approach.found = false;
 	(void)settings_load_subtree_direct(KEY_APPROACH, dl_attr_set, &approach);
+	operating_mode.value = &info->operating_mode;
+	operating_mode.len = sizeof(info->operating_mode);
+	operating_mode.found = false;
+	(void)settings_load_subtree_direct(KEY_OPERATING_MODE, dl_attr_set, &operating_mode);
 	return 0;
 }
 
 int matter_dl_attr_erase(void)
 {
-	static const char *const keys[] = { KEY_AUTO_RELOCK, KEY_APPROACH };
+	static const char *const keys[] = {KEY_AUTO_RELOCK, KEY_APPROACH, KEY_OPERATING_MODE};
 	int first_err = 0;
 
 	for (size_t i = 0u; i < ARRAY_SIZE(keys); i++) {

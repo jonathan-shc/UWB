@@ -441,6 +441,12 @@ int main(void)
 	int64_t led_range_ms = 0;
 	bool present = false;
 	bool granted = false;
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_CLIENT) && IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+	/* A credential session may produce more than one approach grant while the
+	 * phone remains connected. The physical lock must receive at most one
+	 * bound unlock command for that session. */
+	bool bound_unlock_sent = false;
+#endif
 	/* Rising-edge detector for the credential session, which is what arms the
 	 * trajectory gate. See ultrawidelock_approach_session_up(). */
 	bool session_was_up = false;
@@ -571,6 +577,9 @@ int main(void)
 			 * already at the door, so a 180 cm range never arrives.
 			 */
 			ultrawidelock_approach_session_up(&approach);
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_CLIENT) && IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+			bound_unlock_sent = false;
+#endif
 		}
 		session_was_up = session_now;
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
@@ -684,7 +693,10 @@ int main(void)
 			 * must not delay them, and matter_client_want() returns
 			 * without waiting for anything at all.
 			 */
-			matter_client_want();
+			if (!bound_unlock_sent) {
+				bound_unlock_sent = true;
+				matter_client_want();
+			}
 #endif
 			if (ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_BOLT_DRIVEN)) {
 				/* This CDK has no motor. BOLT_DRIVEN means the software grant

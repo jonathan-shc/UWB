@@ -52,7 +52,7 @@ int matter_fab_erase(void);
  *         is not fatal -- the RAM value stands for this boot.
  */
 int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_auto_relock_s,
-			 uint8_t prev_approach_direction);
+			 uint8_t prev_approach_direction, uint8_t prev_operating_mode);
 
 /**
  * Read them back over whatever the port initialised them to.

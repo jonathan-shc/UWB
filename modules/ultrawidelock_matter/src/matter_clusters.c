@@ -165,21 +165,21 @@ static size_t fabric_slot_for_request(const struct matter_device_info *info, uin
 	return MATTER_SUPPORTED_FABRICS;
 }
 
-#define MATTER_AC_PRIVILEGE_OPERATE     3u
-#define MATTER_AC_PRIVILEGE_ADMINISTER  5u
-#define MATTER_AC_AUTH_MODE_CASE        2u
-#define MATTER_AC_ENTRY_PRIVILEGE_TAG   0u
-#define MATTER_AC_ENTRY_AUTH_MODE_TAG   1u
-#define MATTER_AC_ENTRY_SUBJECTS_TAG    2u
-#define MATTER_AC_ENTRY_TARGETS_TAG     3u
-#define MATTER_AC_TARGET_CLUSTER_TAG    0u
-#define MATTER_AC_TARGET_ENDPOINT_TAG   1u
-#define MATTER_AC_TARGET_DEVICE_TAG     2u
-#define MATTER_TLV_NULL_TYPE            0x14u
-#define MATTER_DEVICE_TYPE_ROOT_NODE    0x0016u
-#define MATTER_DEVICE_TYPE_DOOR_LOCK    0x000Au
-#define MATTER_CASE_AUTH_TAG_MASK       UINT64_C(0xFFFFFFFF00000000)
-#define MATTER_CASE_AUTH_TAG_PREFIX     UINT64_C(0xFFFFFFFD00000000)
+#define MATTER_AC_PRIVILEGE_OPERATE    3u
+#define MATTER_AC_PRIVILEGE_ADMINISTER 5u
+#define MATTER_AC_AUTH_MODE_CASE       2u
+#define MATTER_AC_ENTRY_PRIVILEGE_TAG  0u
+#define MATTER_AC_ENTRY_AUTH_MODE_TAG  1u
+#define MATTER_AC_ENTRY_SUBJECTS_TAG   2u
+#define MATTER_AC_ENTRY_TARGETS_TAG    3u
+#define MATTER_AC_TARGET_CLUSTER_TAG   0u
+#define MATTER_AC_TARGET_ENDPOINT_TAG  1u
+#define MATTER_AC_TARGET_DEVICE_TAG    2u
+#define MATTER_TLV_NULL_TYPE           0x14u
+#define MATTER_DEVICE_TYPE_ROOT_NODE   0x0016u
+#define MATTER_DEVICE_TYPE_DOOR_LOCK   0x000Au
+#define MATTER_CASE_AUTH_TAG_MASK      UINT64_C(0xFFFFFFFF00000000)
+#define MATTER_CASE_AUTH_TAG_PREFIX    UINT64_C(0xFFFFFFFD00000000)
 
 /* A CASE Authenticated Tag subject is 0xFFFFFFFD || identifier || version.
  * The peer's CATs below came from the NOC whose Sigma3 signature was verified. */
@@ -206,8 +206,8 @@ static bool acl_subject_matches(uint64_t subject, uint64_t node_id, const uint32
 	return false;
 }
 
-static bool acl_subjects_match(struct matter_tlv_reader *r, uint64_t node_id,
-			       const uint32_t *cats, size_t cat_count)
+static bool acl_subjects_match(struct matter_tlv_reader *r, uint64_t node_id, const uint32_t *cats,
+			       size_t cat_count)
 {
 	bool match = false;
 
@@ -316,9 +316,9 @@ static bool acl_targets_match(struct matter_tlv_reader *r, uint16_t endpoint, ui
 	return matter_tlv_exit(r) == MATTER_OK && match;
 }
 
-static bool acl_entry_grants(struct matter_tlv_reader *r, uint64_t node_id,
-			     const uint32_t *cats, size_t cat_count,
-			     uint8_t required_privilege, uint16_t endpoint, uint32_t cluster)
+static bool acl_entry_grants(struct matter_tlv_reader *r, uint64_t node_id, const uint32_t *cats,
+			     size_t cat_count, uint8_t required_privilege, uint16_t endpoint,
+			     uint32_t cluster)
 {
 	uint64_t privilege = 0u;
 	uint64_t auth_mode = 0u;
@@ -359,8 +359,8 @@ static bool acl_entry_grants(struct matter_tlv_reader *r, uint64_t node_id,
 }
 
 static bool fabric_slot_has_privilege(const struct matter_device_info *info, size_t slot,
-			      uint8_t required_privilege, uint16_t endpoint,
-			      uint32_t cluster)
+				      uint8_t required_privilege, uint16_t endpoint,
+				      uint32_t cluster)
 {
 	struct matter_tlv_reader r;
 
@@ -370,16 +370,14 @@ static bool fabric_slot_has_privilege(const struct matter_device_info *info, siz
 	/* Bootstrap authority from AddNOC. It remains a recovery administrator
 	 * even if a later malformed ACL would otherwise lock every controller out. */
 	if (info->fabrics[slot].case_admin_subject != 0u &&
-	    acl_subject_matches(info->fabrics[slot].case_admin_subject,
-				info->accessing_node_id, info->accessing_cats,
-				info->accessing_cat_count)) {
+	    acl_subject_matches(info->fabrics[slot].case_admin_subject, info->accessing_node_id,
+				info->accessing_cats, info->accessing_cat_count)) {
 		return true;
 	}
 	if (info->fabric_acls[slot].len == 0u) {
 		return false;
 	}
-	matter_tlv_reader_init(&r, info->fabric_acls[slot].data,
-			       info->fabric_acls[slot].len);
+	matter_tlv_reader_init(&r, info->fabric_acls[slot].data, info->fabric_acls[slot].len);
 	if (matter_tlv_next(&r) != MATTER_OK || !matter_tlv_is_container(&r) ||
 	    matter_tlv_enter(&r) != MATTER_OK) {
 		return false;
@@ -395,8 +393,8 @@ static bool fabric_slot_has_privilege(const struct matter_device_info *info, siz
 			return false;
 		}
 		if (acl_entry_grants(&r, info->accessing_node_id, info->accessing_cats,
-				     info->accessing_cat_count, required_privilege,
-				     endpoint, cluster)) {
+				     info->accessing_cat_count, required_privilege, endpoint,
+				     cluster)) {
 			return true;
 		}
 	}
@@ -421,13 +419,11 @@ static int fabric_store(struct matter_device_info *info,
 			enum matter_fabric_store_operation operation, size_t slot,
 			const uint8_t *value, size_t value_len)
 {
-	if (info->commissioning_hooks == NULL ||
-	    info->commissioning_hooks->fabric_store == NULL) {
+	if (info->commissioning_hooks == NULL || info->commissioning_hooks->fabric_store == NULL) {
 		return MATTER_OK;
 	}
-	return info->commissioning_hooks->fabric_store(
-		info->commissioning_hooks->ctx, info, operation, (uint8_t)slot, value,
-		value_len);
+	return info->commissioning_hooks->fabric_store(info->commissioning_hooks->ctx, info,
+						       operation, (uint8_t)slot, value, value_len);
 }
 
 static void fabric_slot_clear(struct matter_device_info *info, size_t slot)
@@ -840,12 +836,9 @@ static const uint32_t k_lock_generated_cmds[] = {
 };
 
 static const uint32_t k_approach_attrs[] = {
-	MATTER_ATTR_APPROACH_DIRECTION,
-	MATTER_ATTR_FEATURE_MAP,
-	MATTER_ATTR_CLUSTER_REVISION,
-	MATTER_ATTR_ATTRIBUTE_LIST,
-	MATTER_ATTR_ACCEPTED_CMD_LIST,
-	MATTER_ATTR_GENERATED_CMD_LIST,
+	MATTER_ATTR_APPROACH_DIRECTION, MATTER_ATTR_FEATURE_MAP,
+	MATTER_ATTR_CLUSTER_REVISION,   MATTER_ATTR_ATTRIBUTE_LIST,
+	MATTER_ATTR_ACCEPTED_CMD_LIST,  MATTER_ATTR_GENERATED_CMD_LIST,
 };
 
 #if MATTER_FEATURE_CLIENT
@@ -859,12 +852,8 @@ static const uint32_t k_approach_attrs[] = {
  * has already decided not to answer.
  */
 static const uint32_t k_binding_attrs[] = {
-	MATTER_ATTR_BINDING_LIST,
-	MATTER_ATTR_FEATURE_MAP,
-	MATTER_ATTR_CLUSTER_REVISION,
-	MATTER_ATTR_ATTRIBUTE_LIST,
-	MATTER_ATTR_ACCEPTED_CMD_LIST,
-	MATTER_ATTR_GENERATED_CMD_LIST,
+	MATTER_ATTR_BINDING_LIST,   MATTER_ATTR_FEATURE_MAP,       MATTER_ATTR_CLUSTER_REVISION,
+	MATTER_ATTR_ATTRIBUTE_LIST, MATTER_ATTR_ACCEPTED_CMD_LIST, MATTER_ATTR_GENERATED_CMD_LIST,
 };
 #endif
 
@@ -890,8 +879,8 @@ static void put_id_list(struct matter_tlv_writer *w, matter_tlv_tag_t tag, const
  * cluster would answer the root's Descriptor for the lock.
  */
 static void lock_attr_value(const struct matter_device_info *info, uint32_t cluster,
-			    uint32_t attribute, bool fabric_filtered,
-			    struct matter_tlv_writer *w, matter_tlv_tag_t tag)
+			    uint32_t attribute, bool fabric_filtered, struct matter_tlv_writer *w,
+			    matter_tlv_tag_t tag)
 {
 	size_t i;
 
@@ -945,8 +934,8 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 			 * holding that can write this list and unlock the door.
 			 */
 			matter_binding_read(&info->binding,
-					    fabric_filtered ? info->accessing_fabric_index : 0u,
-					    w, tag);
+					    fabric_filtered ? info->accessing_fabric_index : 0u, w,
+					    tag);
 			return;
 		}
 		if (info->vendor_id != 0u &&
@@ -1067,7 +1056,7 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		(void)matter_tlv_put_u64(w, tag, info->auto_relock_time_s);
 		return;
 	case MATTER_ATTR_DL_OPERATING_MODE:
-		(void)matter_tlv_put_u64(w, tag, MATTER_DL_OPERATING_MODE_NORMAL);
+		(void)matter_tlv_put_u64(w, tag, info->operating_mode);
 		return;
 	case MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES:
 		(void)matter_tlv_put_u64(w, tag, MATTER_DL_SUPPORTED_OPERATING_MODES);
@@ -1276,8 +1265,8 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			(void)matter_tlv_start_container(w, tag, MATTER_TLV_ARRAY);
 			if (info->attempt.have_thread_candidate || info->have_thread_xpanid) {
 				const uint8_t *xpanid = info->attempt.have_thread_candidate
-							? info->attempt.thread_xpanid
-							: info->thread_xpanid;
+								? info->attempt.thread_xpanid
+								: info->thread_xpanid;
 				(void)matter_tlv_start_container(w, MATTER_TLV_ANON,
 								 MATTER_TLV_STRUCTURE);
 				(void)matter_tlv_put_bytes(w, MATTER_TLV_CTX(TAG_NETINFO_ID),
@@ -1376,8 +1365,7 @@ static void attr_value(void *ctx, uint16_t endpoint, uint32_t cluster, uint32_t 
 			 * the stored form in place, but preserving the exact element
 			 * avoids rebuilding fields this implementation does not alter.
 			 */
-			if (slot < MATTER_SUPPORTED_FABRICS &&
-			    info->fabric_acls[slot].len > 0u) {
+			if (slot < MATTER_SUPPORTED_FABRICS && info->fabric_acls[slot].len > 0u) {
 				(void)matter_tlv_put_encoded(w, tag, info->fabric_acls[slot].data,
 							     info->fabric_acls[slot].len);
 			} else {
@@ -1873,11 +1861,10 @@ static bool dataset_channel_mask_valid(const uint8_t *value, size_t len)
  * length that runs past the end is a malformed dataset rather than a reason to
  * read past the buffer.
  */
-static bool dataset_validate(const uint8_t *ds, size_t len,
-			     uint8_t out[MATTER_THREAD_XPANID_LEN])
+static bool dataset_validate(const uint8_t *ds, size_t len, uint8_t out[MATTER_THREAD_XPANID_LEN])
 {
 	size_t i = 0u;
-	uint8_t seen[32] = { 0 };
+	uint8_t seen[32] = {0};
 	uint16_t required = 0u;
 	enum {
 		HAVE_ACTIVE_TIMESTAMP = 1u << 0,
@@ -2371,8 +2358,7 @@ static uint8_t add_noc(struct matter_device_info *info, const struct matter_im_i
 	}
 	/* The constrained target has one ICAC buffer. Refuse a second owner
 	 * before mutating either fabric so no certificate is silently replaced. */
-	if (icac_len != 0u && info->icac.owner_index != 0u &&
-	    info->icac.owner_index != new_index) {
+	if (icac_len != 0u && info->icac.owner_index != 0u && info->icac.owner_index != new_index) {
 		return MATTER_NOC_STATUS_TABLE_FULL;
 	}
 
@@ -2563,9 +2549,9 @@ static uint8_t opcred_command(struct matter_device_info *info, const struct matt
 			return MATTER_IM_STATUS_INVALID_COMMAND;
 		}
 		accessing_slot = fabric_slot_for_index(info, info->accessing_fabric_index);
-		if (!fabric_slot_has_privilege(info, accessing_slot,
-					 MATTER_AC_PRIVILEGE_ADMINISTER, MATTER_ENDPOINT_ROOT,
-					 MATTER_CLUSTER_OPERATIONAL_CREDENTIALS)) {
+		if (!fabric_slot_has_privilege(info, accessing_slot, MATTER_AC_PRIVILEGE_ADMINISTER,
+					       MATTER_ENDPOINT_ROOT,
+					       MATTER_CLUSTER_OPERATIONAL_CREDENTIALS)) {
 			return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 		}
 		/* An index this table cannot hold and an index it merely does
@@ -2729,7 +2715,7 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
 	}
 	if (info->ultrawidelock_credential_cb == NULL ||
 	    info->ultrawidelock_credential_cb((uint8_t)cred_type, data, (uint16_t)cred_index,
-				      (uint16_t)user_index) < 0) {
+					      (uint16_t)user_index) < 0) {
 		info->last_user_index = 0u;      /* nothing was stored to attribute */
 		return MATTER_IM_STATUS_SUCCESS; /* status stays FAILURE */
 	}
@@ -2743,7 +2729,7 @@ static uint8_t set_credential(struct matter_device_info *info, const struct matt
  * hook to persist them, and store copies in the device info structure. Return a status code.
  */
 static uint8_t set_ultrawidelock_reader_config(struct matter_device_info *info,
-				       const struct matter_im_invoke *inv)
+					       const struct matter_im_invoke *inv)
 {
 	const uint8_t *signing = NULL;
 	const uint8_t *verification = NULL;
@@ -2783,7 +2769,8 @@ static uint8_t set_ultrawidelock_reader_config(struct matter_device_info *info,
 		return MATTER_IM_STATUS_FAILURE;
 	}
 
-	memcpy(info->ultrawidelock_verification_key, verification, MATTER_ALIRO_VERIFICATION_KEY_LEN);
+	memcpy(info->ultrawidelock_verification_key, verification,
+	       MATTER_ALIRO_VERIFICATION_KEY_LEN);
 	memcpy(info->ultrawidelock_group_id, group_id, MATTER_ALIRO_GROUP_ID_LEN);
 	memcpy(info->ultrawidelock_group_resolving_key, grk, MATTER_ALIRO_GROUP_ID_LEN);
 	info->have_ultrawidelock_group_resolving_key = true;
@@ -2833,7 +2820,8 @@ static uint8_t clear_credential(struct matter_device_info *info, const struct ma
 		/* Indices are 1-based, so 0 is not a slot this lock could hold. */
 		return MATTER_IM_STATUS_INVALID_COMMAND;
 	}
-	return info->ultrawidelock_credential_clear_cb((uint8_t)cred_type, (uint16_t)cred_index) == 0
+	return info->ultrawidelock_credential_clear_cb((uint8_t)cred_type, (uint16_t)cred_index) ==
+			       0
 		       ? MATTER_IM_STATUS_SUCCESS
 		       : MATTER_IM_STATUS_FAILURE;
 }
@@ -2872,7 +2860,7 @@ static uint8_t clear_user(struct matter_device_info *info, const struct matter_i
 		memset(&info->users[idx - 1u], 0, sizeof(info->users[0]));
 	}
 	return info->ultrawidelock_user_clear_cb((uint16_t)idx) == 0 ? MATTER_IM_STATUS_SUCCESS
-							     : MATTER_IM_STATUS_FAILURE;
+								     : MATTER_IM_STATUS_FAILURE;
 }
 
 static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *response_command)
@@ -2893,8 +2881,7 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 	 * on an endpoint that claims to exist and not exist at once.
 	 */
 	if (inv->endpoint == MATTER_ENDPOINT_LOCK) {
-		size_t accessing_slot =
-			fabric_slot_for_index(info, info->accessing_fabric_index);
+		size_t accessing_slot = fabric_slot_for_index(info, info->accessing_fabric_index);
 
 		if (inv->cluster != MATTER_CLUSTER_DOOR_LOCK) {
 			return MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
@@ -2906,9 +2893,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		}
 		if (inv->command == MATTER_CMD_DL_LOCK_DOOR ||
 		    inv->command == MATTER_CMD_DL_UNLOCK_DOOR) {
-			if (!fabric_slot_has_privilege(info, accessing_slot,
-						 MATTER_AC_PRIVILEGE_OPERATE, MATTER_ENDPOINT_LOCK,
-						 MATTER_CLUSTER_DOOR_LOCK)) {
+			if (!fabric_slot_has_privilege(
+				    info, accessing_slot, MATTER_AC_PRIVILEGE_OPERATE,
+				    MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK)) {
 				return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 			}
 			/*
@@ -2942,9 +2929,8 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 				MATTER_DL_OP_SOURCE_REMOTE, info->accessing_fabric_index, 0u);
 			return MATTER_IM_STATUS_SUCCESS;
 		}
-		if (!fabric_slot_has_privilege(info, accessing_slot,
-					 MATTER_AC_PRIVILEGE_ADMINISTER, MATTER_ENDPOINT_LOCK,
-					 MATTER_CLUSTER_DOOR_LOCK)) {
+		if (!fabric_slot_has_privilege(info, accessing_slot, MATTER_AC_PRIVILEGE_ADMINISTER,
+					       MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK)) {
 			return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 		}
 		if (inv->command == MATTER_CMD_DL_SET_ALIRO_READER_CONFIG) {
@@ -3030,12 +3016,11 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
 	if (inv->cluster == MATTER_CLUSTER_ADMIN_COMMISSIONING) {
-		size_t accessing_slot =
-			fabric_slot_for_index(info, info->accessing_fabric_index);
+		size_t accessing_slot = fabric_slot_for_index(info, info->accessing_fabric_index);
 
-		if (!fabric_slot_has_privilege(info, accessing_slot,
-					 MATTER_AC_PRIVILEGE_ADMINISTER, MATTER_ENDPOINT_ROOT,
-					 MATTER_CLUSTER_ADMIN_COMMISSIONING)) {
+		if (!fabric_slot_has_privilege(info, accessing_slot, MATTER_AC_PRIVILEGE_ADMINISTER,
+					       MATTER_ENDPOINT_ROOT,
+					       MATTER_CLUSTER_ADMIN_COMMISSIONING)) {
 			return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 		}
 		return admin_command(inv, response_command);
@@ -3082,8 +3067,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 			}
 			if (info->commissioning_hooks != NULL &&
 			    info->commissioning_hooks->failsafe_arm != NULL &&
-			    info->commissioning_hooks->failsafe_arm(
-				    info->commissioning_hooks->ctx, (uint16_t)expiry) != MATTER_OK) {
+			    info->commissioning_hooks->failsafe_arm(info->commissioning_hooks->ctx,
+								    (uint16_t)expiry) !=
+				    MATTER_OK) {
 				if (new_attempt) {
 					memset(&info->attempt, 0, sizeof(info->attempt));
 				}
@@ -3118,8 +3104,7 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		*response_command = MATTER_CMD_GC_SET_REGULATORY_CONFIG_RESPONSE;
 		return MATTER_IM_STATUS_SUCCESS;
 
-	case MATTER_CMD_GC_COMMISSIONING_COMPLETE:
-	{
+	case MATTER_CMD_GC_COMMISSIONING_COMPLETE: {
 		size_t slot;
 
 		*response_command = MATTER_CMD_GC_COMMISSIONING_COMPLETE_RESPONSE;
@@ -3142,7 +3127,7 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 			if ((info->attempt.owned_slots & MATTER_FABRIC_SLOT_BIT(slot)) != 0u &&
 			    f->index == info->accessing_fabric_index &&
 			    acl_subject_matches(f->case_admin_subject, info->accessing_node_id,
-					info->accessing_cats, info->accessing_cat_count)) {
+						info->accessing_cats, info->accessing_cat_count)) {
 				break;
 			}
 		}
@@ -3383,8 +3368,8 @@ void matter_clusters_failsafe_expire(struct matter_device_info *info)
 	if (info->attempt.thread_applied) {
 		if (info->committed_slots != 0u && info->thread_dataset_len != 0u) {
 			info->thread_started =
-				matter_thread_start(info->thread_dataset, info->thread_dataset_len) ==
-				MATTER_OK;
+				matter_thread_start(info->thread_dataset,
+						    info->thread_dataset_len) == MATTER_OK;
 			if (info->thread_started) {
 				advertise_operational(info);
 			}
@@ -3424,12 +3409,10 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 		return MATTER_IM_STATUS_UNSUPPORTED_ENDPOINT;
 	}
 	if (path->endpoint == MATTER_ENDPOINT_LOCK) {
-		size_t accessing_slot =
-			fabric_slot_for_index(info, info->accessing_fabric_index);
+		size_t accessing_slot = fabric_slot_for_index(info, info->accessing_fabric_index);
 
-		if (!fabric_slot_has_privilege(info, accessing_slot,
-					 MATTER_AC_PRIVILEGE_ADMINISTER, path->endpoint,
-					 path->cluster)) {
+		if (!fabric_slot_has_privilege(info, accessing_slot, MATTER_AC_PRIVILEGE_ADMINISTER,
+					       path->endpoint, path->cluster)) {
 			return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 		}
 		if (path->cluster == MATTER_CLUSTER_APPROACH_DIRECTION) {
@@ -3501,10 +3484,12 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 					return MATTER_IM_STATUS_CONSTRAINT_ERROR;
 				}
 				rc = matter_binding_append(&info->binding,
-							   info->accessing_fabric_index, data, data_len);
+							   info->accessing_fabric_index, data,
+							   data_len);
 			} else {
 				rc = matter_binding_write(&info->binding,
-							  info->accessing_fabric_index, data, data_len);
+							  info->accessing_fabric_index, data,
+							  data_len);
 			}
 			if (rc == MATTER_E_NOSPACE) {
 				return MATTER_IM_STATUS_RESOURCE_EXHAUSTED;
@@ -3520,7 +3505,8 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 				       ? MATTER_IM_STATUS_UNSUPPORTED_WRITE
 				       : MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
 		}
-		if (path->attribute != MATTER_ATTR_DL_AUTO_RELOCK_TIME) {
+		if (path->attribute != MATTER_ATTR_DL_AUTO_RELOCK_TIME &&
+		    path->attribute != MATTER_ATTR_DL_OPERATING_MODE) {
 			return MATTER_IM_STATUS_UNSUPPORTED_WRITE;
 		}
 		{
@@ -3533,6 +3519,14 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 			matter_tlv_reader_init(&r, data, data_len);
 			if (matter_tlv_next(&r) != 0 || matter_tlv_get_u64(&r, &v) != 0) {
 				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			if (path->attribute == MATTER_ATTR_DL_OPERATING_MODE) {
+				if (v != MATTER_DL_OPERATING_MODE_NORMAL &&
+				    v != MATTER_DL_OPERATING_MODE_NO_REMOTE) {
+					return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+				}
+				info->operating_mode = (uint8_t)v;
+				return MATTER_IM_STATUS_SUCCESS;
 			}
 			/* uint32 per the cluster spec; a wider value is the
 			 * controller's error, not something to truncate. */
@@ -3560,8 +3554,8 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 		return MATTER_IM_STATUS_INVALID_COMMAND;
 	}
 	slot = fabric_slot_for_request(info, info->accessing_fabric_index);
-	if (!fabric_slot_has_privilege(info, slot, MATTER_AC_PRIVILEGE_ADMINISTER,
-				       path->endpoint, path->cluster)) {
+	if (!fabric_slot_has_privilege(info, slot, MATTER_AC_PRIVILEGE_ADMINISTER, path->endpoint,
+				       path->cluster)) {
 		return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
 	}
 	/*

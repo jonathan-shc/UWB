@@ -1000,6 +1000,10 @@ void matter_client_want(void)
 	if (s_info == NULL) {
 		return;
 	}
+	if (s_info->operating_mode == MATTER_DL_OPERATING_MODE_NO_REMOTE) {
+		LOG_INF("bound unlock inhibited by NoRemoteLockUnlock mode");
+		return;
+	}
 	/*
 	 * No lock and no work of its own: this is the walk-up path, and the
 	 * whole contract of this file is that it costs the person at the door

@@ -35,7 +35,7 @@
 #endif
 
 #include "ultrawidelock_hash.h" /* ultrawidelock_sha256, for the CASE transcript */
-#include "ultrawidelock_ble.h" /* ultrawidelock_ble_readvertise, when a fabric arrives */
+#include "ultrawidelock_ble.h"  /* ultrawidelock_ble_readvertise, when a fabric arrives */
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_DFU_RECEIVER)
 #include "ultrawidelock_dfu_rx.h" /* the same gesture opens the update window */
 #endif
@@ -151,8 +151,7 @@ static struct matter_im_server s_im;
  * commissioning session intact and the subscription only dies once the node
  * moves to Thread -- which reads as "worked while pairing, then went away".
  */
-#define MATTER_IM_PAYLOAD_MAX                                                                      \
-	(MATTER_MAX_MESSAGE_LEN - MATTER_EXCHANGE_HEADER_MAX - MATTER_TAG_LEN)
+#define MATTER_IM_PAYLOAD_MAX (MATTER_MAX_MESSAGE_LEN - MATTER_EXCHANGE_HEADER_MAX - MATTER_TAG_LEN)
 
 /* Two packets, not a scratch output plus a scratch payload. Encoding starts at
  * MATTER_EXCHANGE_HEADER_MAX inside a reserved slot, then framing memmoves the
@@ -365,7 +364,7 @@ static void srp_sign_self_test(void)
 	 * BUFFER_TOO_SMALL rather than silently truncating into the stack. */
 	uint8_t priv[96];
 	size_t priv_len = 0u;
-	uint8_t hash[32] = { 0 };
+	uint8_t hash[32] = {0};
 	uint8_t sig[64];
 	size_t sig_len = 0u;
 
@@ -398,8 +397,8 @@ static void srp_sign_self_test(void)
 	key = 0;
 	st = psa_import_key(&attr, priv, priv_len, &key);
 	if (st != PSA_SUCCESS) {
-		LOG_ERR("SRP sign self-test: import FAILED, psa_status=%d (exported %u B)",
-			(int)st, (unsigned int)priv_len);
+		LOG_ERR("SRP sign self-test: import FAILED, psa_status=%d (exported %u B)", (int)st,
+			(unsigned int)priv_len);
 		return;
 	}
 	st = psa_sign_hash(key, alg, hash, sizeof(hash), sig, sizeof(sig), &sig_len);
@@ -521,7 +520,8 @@ static int load_verifier(void)
 	size_t blob_len = 0u;
 	size_t salt_len = 0u;
 
-	if (unhex(CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_VERIFIER, blob, sizeof(blob), &blob_len) != 0) {
+	if (unhex(CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_VERIFIER, blob, sizeof(blob), &blob_len) !=
+	    0) {
 		LOG_ERR("SPAKE2P verifier is not %u bytes of hex", (unsigned int)sizeof(blob));
 		return -EINVAL;
 	}
@@ -538,8 +538,8 @@ static int load_verifier(void)
 		return -EINVAL;
 	}
 
-	if (unhex(CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_SALT, s_verifier.salt, sizeof(s_verifier.salt),
-		  &salt_len) != 0) {
+	if (unhex(CONFIG_ULTRAWIDELOCK_MATTER_SPAKE2P_SALT, s_verifier.salt,
+		  sizeof(s_verifier.salt), &salt_len) != 0) {
 		LOG_ERR("SPAKE2P salt is not valid hex, or longer than %u bytes",
 			(unsigned int)sizeof(s_verifier.salt));
 		return -EINVAL;
@@ -655,9 +655,8 @@ static uint8_t admin_open_enhanced(uint16_t timeout_s, const uint8_t *verifier,
 		return MATTER_ADMIN_STATUS_BUSY;
 	}
 	if (verifier == NULL || salt == NULL || iterations == 0u ||
-	    verifier_len != MATTER_SPAKE_SCALAR_LEN + MATTER_SPAKE_POINT_LEN ||
-	    salt_len == 0u || salt_len > sizeof(s_verifier.salt) ||
-	    verifier[MATTER_SPAKE_SCALAR_LEN] != 0x04u) {
+	    verifier_len != MATTER_SPAKE_SCALAR_LEN + MATTER_SPAKE_POINT_LEN || salt_len == 0u ||
+	    salt_len > sizeof(s_verifier.salt) || verifier[MATTER_SPAKE_SCALAR_LEN] != 0x04u) {
 		LOG_WRN("OpenCommissioningWindow: bad PAKE parameters");
 		return MATTER_ADMIN_STATUS_PAKE_PARAM_ERROR;
 	}
@@ -974,8 +973,7 @@ static struct matter_tx_slot *tx_acquire(void)
 
 	if (slot != NULL) {
 		memset(&s_tx_effects[tx_slot_index(slot)], 0, sizeof(s_tx_effects[0]));
-		memset(&s_tx_thread_owner[tx_slot_index(slot)], 0,
-		       sizeof(s_tx_thread_owner[0]));
+		memset(&s_tx_thread_owner[tx_slot_index(slot)], 0, sizeof(s_tx_thread_owner[0]));
 	}
 	return slot;
 }
@@ -1065,13 +1063,14 @@ static int tx_frame(struct matter_tx_slot *slot, struct matter_exchange *x, uint
 	}
 	if (initiator) {
 		rc = matter_exchange_send_initiator(x, exchange_id, protocol, opcode, owned_payload,
-						    payload_len, slot->data, slot->capacity, &framed);
+						    payload_len, slot->data, slot->capacity,
+						    &framed);
 	} else if (protocol == MATTER_PROTOCOL_SECURE_CHANNEL) {
 		rc = matter_exchange_reply(x, opcode, owned_payload, payload_len, slot->data,
 					   slot->capacity, &framed);
 	} else {
-		rc = matter_exchange_send(x, protocol, opcode, owned_payload, payload_len, slot->data,
-					  slot->capacity, &framed);
+		rc = matter_exchange_send(x, protocol, opcode, owned_payload, payload_len,
+					  slot->data, slot->capacity, &framed);
 	}
 	if (rc != MATTER_OK) {
 		tx_abort_build(slot);
@@ -1146,7 +1145,7 @@ static void subscription_heartbeat_arm(void);
 
 /* Storage runs on the system work queue, not OpenThread's small callback
  * stack. The caller waits for durability before the cluster emits success. */
-#define FAB_STORE_ATTEMPTS 3u
+#define FAB_STORE_ATTEMPTS   3u
 #define FAB_STORE_TIMEOUT_MS 10000
 
 struct fab_store_request {
@@ -1190,8 +1189,8 @@ static void fab_store_work_fn(struct k_work *w)
 static K_WORK_DEFINE(s_fab_store_work, fab_store_work_fn);
 
 static int commissioning_fabric_store(void *ctx, const struct matter_device_info *info,
-			      enum matter_fabric_store_operation operation, uint8_t slot,
-			      const uint8_t *value, size_t value_len)
+				      enum matter_fabric_store_operation operation, uint8_t slot,
+				      const uint8_t *value, size_t value_len)
 {
 	ARG_UNUSED(ctx);
 	if (s_fab_request.busy || value_len > sizeof(s_fab_request.value)) {
@@ -1201,9 +1200,8 @@ static int commissioning_fabric_store(void *ctx, const struct matter_device_info
 	s_fab_request.operation = operation;
 	s_fab_request.slot = slot;
 	s_fab_request.value_len = value_len;
-	s_fab_request.clear_reader =
-		operation == MATTER_FABRIC_STORE_REMOVE &&
-		info->committed_slots == MATTER_FABRIC_SLOT_BIT(slot);
+	s_fab_request.clear_reader = operation == MATTER_FABRIC_STORE_REMOVE &&
+				     info->committed_slots == MATTER_FABRIC_SLOT_BIT(slot);
 	if (value_len != 0u) {
 		memcpy(s_fab_request.value, value, value_len);
 	}
@@ -1239,7 +1237,7 @@ static int commissioning_failsafe_arm(void *ctx, uint16_t expiry_s)
 {
 	ARG_UNUSED(ctx);
 	return k_work_reschedule(&s_failsafe_work, K_SECONDS(expiry_s)) < 0 ? MATTER_E_STATE
-									 : MATTER_OK;
+									    : MATTER_OK;
 }
 
 static void commissioning_failsafe_cancel(void *ctx)
@@ -1294,7 +1292,7 @@ static struct matter_im_read_state s_reads[MATTER_READ_SLOTS];
 static struct matter_im_read_pool s_read_pool;
 
 static struct matter_im_read_state *read_state_find(uint16_t session_id, uint16_t exchange_id,
-						     bool over_thread)
+						    bool over_thread)
 {
 	return matter_im_read_pool_find(&s_read_pool, session_id, exchange_id, over_thread);
 }
@@ -1322,9 +1320,8 @@ static void send_read_chunk(struct matter_im_read_state *s)
 		return;
 	}
 	payload = tx_payload(slot, &payload_cap);
-	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, payload,
-					 payload_cap, &report_len, &more, &emitted,
-					 &stats);
+	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, payload, payload_cap,
+					 &report_len, &more, &emitted, &stats);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build Read ReportData chunk (%d)", rc);
 		tx_abort_build(slot);
@@ -1341,9 +1338,8 @@ static void send_read_chunk(struct matter_im_read_state *s)
 		LOG_WRN("%u wildcard path(s) not expanded; Read report is incomplete",
 			stats.unexpanded_wildcard);
 	}
-	LOG_INF("  Read chunk %u B, %u report(s), %u total, %s",
-		(unsigned int)report_len, emitted, (unsigned int)(s->sent + emitted),
-		more ? "MORE" : "last");
+	LOG_INF("  Read chunk %u B, %u report(s), %u total, %s", (unsigned int)report_len, emitted,
+		(unsigned int)(s->sent + emitted), more ? "MORE" : "last");
 	s_tx_effects[tx_slot_index(slot)] = (struct tx_effect){
 		.kind = TX_EFFECT_READ,
 		.session_id = s->session_id,
@@ -1353,9 +1349,10 @@ static void send_read_chunk(struct matter_im_read_state *s)
 		.over_thread = s->over_thread,
 	};
 	if (tx_frame(slot,
-		     (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		     MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_REPORT_DATA, payload, report_len,
-		     false, 0u) != MATTER_OK) {
+		     (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+								: &s_exchange,
+		     MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_REPORT_DATA, payload,
+		     report_len, false, 0u) != MATTER_OK) {
 		LOG_ERR("Read ReportData was not accepted by its transport");
 		s->in_use = false;
 	}
@@ -1375,7 +1372,8 @@ static void on_read_request(const struct matter_exchange_in *in)
 	int rc;
 
 	session_id = current_session_id();
-	rc = matter_im_read_pool_acquire(&s_read_pool, session_id, in->exchange_id, over_thread, &s);
+	rc = matter_im_read_pool_acquire(&s_read_pool, session_id, in->exchange_id, over_thread,
+					 &s);
 	if (rc == MATTER_E_DUP) {
 		/* Exchange replay filtering normally consumes this earlier. Keep the
 		 * cursor intact if a duplicate ever reaches this boundary. */
@@ -1390,14 +1388,14 @@ static void on_read_request(const struct matter_exchange_in *in)
 		LOG_WRN("two chunked Reads are already live; refusing another");
 		payload = tx_payload(slot, &payload_cap);
 		if (slot != NULL &&
-		    matter_im_status_response_encode(MATTER_IM_STATUS_RESOURCE_EXHAUSTED,
-						     payload, payload_cap, &status_len) ==
-		    MATTER_OK) {
-			(void)tx_frame(slot,
-				       (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
-										 : &s_exchange,
-				       MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_STATUS_RESPONSE,
-				       payload, status_len, false, 0u);
+		    matter_im_status_response_encode(MATTER_IM_STATUS_RESOURCE_EXHAUSTED, payload,
+						     payload_cap, &status_len) == MATTER_OK) {
+			(void)tx_frame(
+				slot,
+				(s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+									   : &s_exchange,
+				MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_STATUS_RESPONSE,
+				payload, status_len, false, 0u);
 		} else if (slot != NULL) {
 			tx_abort_build(slot);
 		}
@@ -1575,9 +1573,10 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	}
 
 	rc = tx_frame(slot,
-		      (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		      MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_INVOKE_COMMAND_RESPONSE, payload,
-		      resp_len, false, 0u);
+		      (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+								 : &s_exchange,
+		      MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_INVOKE_COMMAND_RESPONSE,
+		      payload, resp_len, false, 0u);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot frame InvokeResponse (%d)", rc);
 	}
@@ -1604,6 +1603,7 @@ static void on_write_request(const struct matter_exchange_in *in)
 	size_t payload_cap;
 	uint32_t prev_relock_s;
 	uint8_t prev_approach;
+	uint8_t prev_operating_mode;
 	size_t resp_len = 0u;
 	int rc;
 
@@ -1624,6 +1624,7 @@ static void on_write_request(const struct matter_exchange_in *in)
 	 */
 	prev_relock_s = s_info.auto_relock_time_s;
 	prev_approach = s_info.approach_direction;
+	prev_operating_mode = s_info.operating_mode;
 	slot = tx_acquire();
 	if (slot == NULL) {
 		LOG_ERR("no owned packet slot for WriteResponse");
@@ -1636,7 +1637,7 @@ static void on_write_request(const struct matter_exchange_in *in)
 		tx_abort_build(slot);
 		return;
 	}
-	(void)matter_dl_attr_store(&s_info, prev_relock_s, prev_approach);
+	(void)matter_dl_attr_store(&s_info, prev_relock_s, prev_approach, prev_operating_mode);
 #if MATTER_FEATURE_CLIENT
 	/*
 	 * Keyed on the CLUSTER rather than on the write status: the encoder
@@ -1656,9 +1657,10 @@ static void on_write_request(const struct matter_exchange_in *in)
 		return;
 	}
 	(void)tx_frame(slot,
-		       (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		       MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_WRITE_RESPONSE, payload, resp_len,
-		       false, 0u);
+		       (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+								  : &s_exchange,
+		       MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_WRITE_RESPONSE, payload,
+		       resp_len, false, 0u);
 }
 
 /**
@@ -1744,9 +1746,9 @@ static uint8_t s_sub_next_victim;
  * StatusResponse says so either way, and the log lines below name which
  * happened -- that is the whole experiment.
  */
-#define SUB_TREE     "msub"
-#define SUB_KEY_FMT  SUB_TREE "/%u"
-#define SUB_KEY_MAX  16u
+#define SUB_TREE    "msub"
+#define SUB_KEY_FMT SUB_TREE "/%u"
+#define SUB_KEY_MAX 16u
 
 /**
  * Persisted subscription state: peer node ID, subscription ID, maximum heartbeat interval in
@@ -1998,8 +2000,7 @@ static void notify_lock_state(struct sub_state *s)
 		one.event_min = s->event_min;
 	}
 
-	rc = matter_im_report_data_encode(&s_im, &one, payload, payload_cap, &tlv_len,
-					  NULL);
+	rc = matter_im_report_data_encode(&s_im, &one, payload, payload_cap, &tlv_len, NULL);
 	if (rc != MATTER_OK) {
 		LOG_ERR("  cannot build the LockState report (%d)", rc);
 		tx_abort_build(packet);
@@ -2008,8 +2009,8 @@ static void notify_lock_state(struct sub_state *s)
 
 	rc = matter_exchange_send_initiator(&s_case_x[slot], s_next_init_exchange++,
 					    MATTER_PROTOCOL_INTERACTION_MODEL,
-					    MATTER_IM_OP_REPORT_DATA, payload, tlv_len, packet->data,
-					    packet->capacity, &framed);
+					    MATTER_IM_OP_REPORT_DATA, payload, tlv_len,
+					    packet->data, packet->capacity, &framed);
 	if (rc != MATTER_OK) {
 		LOG_ERR("  cannot frame the LockState report (%d)", rc);
 		tx_abort_build(packet);
@@ -2259,10 +2260,9 @@ static void on_ultrawidelock_lock_state(bool unlocked)
 	 * is the reader's own and no controller asked for it. The credential
 	 * source is exactly what the spec's enum has that value for.
 	 */
-	matter_clusters_record_lock_operation(&s_info,
-					      unlocked ? MATTER_DL_LOCK_OP_UNLOCK
-						       : MATTER_DL_LOCK_OP_LOCK,
-					      MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
+	matter_clusters_record_lock_operation(
+		&s_info, unlocked ? MATTER_DL_LOCK_OP_UNLOCK : MATTER_DL_LOCK_OP_LOCK,
+		MATTER_DL_OP_SOURCE_ALIRO, 0u, 0u);
 	LOG_INF("Credential %s the lock; telling Matter", unlocked ? "opened" : "relocked");
 	notify_lock_state_changed();
 out:
@@ -2384,8 +2384,8 @@ static void tx_thread_reap_schedule_owned(uint32_t now_ms)
 	for (size_t i = 0u; i < MATTER_TX_SLOTS; i++) {
 		const struct matter_tx_slot *slot = &s_tx_slots[i];
 
-		if (slot->transport != TX_TRANSPORT_THREAD ||
-		    slot->state != MATTER_TX_SLOT_READY || !slot->retry_deadline_set) {
+		if (slot->transport != TX_TRANSPORT_THREAD || slot->state != MATTER_TX_SLOT_READY ||
+		    !slot->retry_deadline_set) {
 			continue;
 		}
 		if (!have_next || (int32_t)(slot->retry_deadline_ms - next_deadline) < 0) {
@@ -2397,7 +2397,7 @@ static void tx_thread_reap_schedule_owned(uint32_t now_ms)
 		int32_t delay_ms = (int32_t)(next_deadline - now_ms);
 
 		(void)k_work_reschedule(&s_thread_reap_work,
-						delay_ms <= 0 ? K_NO_WAIT : K_MSEC(delay_ms));
+					delay_ms <= 0 ? K_NO_WAIT : K_MSEC(delay_ms));
 	}
 }
 
@@ -2437,9 +2437,9 @@ static bool tx_thread_retry(struct matter_exchange *x)
 		struct matter_tx_slot *slot = &s_tx_slots[i];
 		const struct tx_thread_owner *owner = &s_tx_thread_owner[i];
 
-		if (slot->transport != TX_TRANSPORT_THREAD ||
-		    slot->state != MATTER_TX_SLOT_READY || !owner->retryable ||
-		    owner->session_id != session_id || owner->exchange_id != x->exchange_id ||
+		if (slot->transport != TX_TRANSPORT_THREAD || slot->state != MATTER_TX_SLOT_READY ||
+		    !owner->retryable || owner->session_id != session_id ||
+		    owner->exchange_id != x->exchange_id ||
 		    owner->request_counter != x->ack_counter || slot->len > s_thread_reply_cap) {
 			continue;
 		}
@@ -2602,9 +2602,8 @@ static void send_report_chunk(struct sub_state *s)
 		return;
 	}
 	payload = tx_payload(slot, &payload_cap);
-	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, payload,
-					 payload_cap, &report_len, &more, &emitted,
-					 &stats);
+	rc = matter_im_report_data_chunk(&s_im, &s->read, s->sent, payload, payload_cap,
+					 &report_len, &more, &emitted, &stats);
 	if (rc != MATTER_OK) {
 		LOG_ERR("cannot build the report chunk (%d)", rc);
 		tx_abort_build(slot);
@@ -2633,9 +2632,10 @@ static void send_report_chunk(struct sub_state *s)
 		.more = more,
 	};
 	if (tx_frame(slot,
-		     (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		     MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_REPORT_DATA, payload, report_len,
-		     false, 0u) != MATTER_OK) {
+		     (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+								: &s_exchange,
+		     MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_REPORT_DATA, payload,
+		     report_len, false, 0u) != MATTER_OK) {
 		s->in_use = false;
 	}
 }
@@ -2658,7 +2658,8 @@ static void on_subscribe_request(const struct matter_exchange_in *in)
 
 	rc = matter_im_subscribe_request_decode(in->payload, in->payload_len, &sub);
 	if (rc != MATTER_OK) {
-		LOG_WRN("unreadable SubscribeRequest (%d), %u B", rc, (unsigned int)in->payload_len);
+		LOG_WRN("unreadable SubscribeRequest (%d), %u B", rc,
+			(unsigned int)in->payload_len);
 		return;
 	}
 	matter_thread_peer_current(&peer);
@@ -2806,7 +2807,7 @@ BUILD_ASSERT(MATTER_ALIRO_ENDPOINT_KEYS_SUPPORTED == ULTRAWIDELOCK_TRUST_MAX,
 	     "reported endpoint-key cap must equal the trust store it describes");
 
 static int on_ultrawidelock_credential(uint8_t credential_type, const uint8_t public_key[65],
-			       uint16_t credential_index, uint16_t user_index)
+				       uint16_t credential_index, uint16_t user_index)
 {
 	if (credential_type == MATTER_DL_CRED_ALIRO_ISSUER_KEY) {
 		LOG_INF("  CREDENTIAL issuer key accepted, NOT an anchor (type %u)",
@@ -2814,8 +2815,8 @@ static int on_ultrawidelock_credential(uint8_t credential_type, const uint8_t pu
 		return 0;
 	}
 
-	int rc = ultrawidelock_reader_provision_add_trust(public_key, credential_type, credential_index,
-						  user_index);
+	int rc = ultrawidelock_reader_provision_add_trust(public_key, credential_type,
+							  credential_index, user_index);
 
 	if (rc < 0) {
 		LOG_ERR("  credential type %u REFUSED (%d)", (unsigned int)credential_type, rc);
@@ -2854,15 +2855,15 @@ static int on_ultrawidelock_credential_clear(uint8_t credential_type, uint16_t c
 				(unsigned int)credential_type);
 			return -1;
 		}
-		LOG_WRN("  CREDENTIAL CLEAR type %u revoked %d anchor(s)", (unsigned int)credential_type,
-			rc);
+		LOG_WRN("  CREDENTIAL CLEAR type %u revoked %d anchor(s)",
+			(unsigned int)credential_type, rc);
 		return 0;
 	}
 
 	int rc = ultrawidelock_reader_provision_remove_trust(credential_type, credential_index);
 
-	LOG_WRN("  CREDENTIAL CLEAR credential type %u index %u -> %s", (unsigned int)credential_type,
-		(unsigned int)credential_index,
+	LOG_WRN("  CREDENTIAL CLEAR credential type %u index %u -> %s",
+		(unsigned int)credential_type, (unsigned int)credential_index,
 		rc < 0 ? "NOT PERSISTED" : (rc == 1 ? "no such anchor" : "REVOKED"));
 	return rc < 0 ? -1 : 0;
 }
@@ -2881,7 +2882,8 @@ static int on_ultrawidelock_user_clear(uint16_t user_index)
 		LOG_ERR("  CREDENTIAL CLEAR user index %u NOT PERSISTED", (unsigned int)user_index);
 		return -1;
 	}
-	LOG_WRN("  CREDENTIAL CLEAR user index %u revoked %d anchor(s)", (unsigned int)user_index, rc);
+	LOG_WRN("  CREDENTIAL CLEAR user index %u revoked %d anchor(s)", (unsigned int)user_index,
+		rc);
 	return 0;
 }
 
@@ -2891,8 +2893,9 @@ static int on_ultrawidelock_user_clear(uint16_t user_index)
  * reader engine, retire the device key, and log success or error.
  */
 static int on_ultrawidelock_reader_config(const uint8_t signing_key[32],
-				  const uint8_t verification_key[65], const uint8_t group_id[16],
-				  const uint8_t *group_resolving_key)
+					  const uint8_t verification_key[65],
+					  const uint8_t group_id[16],
+					  const uint8_t *group_resolving_key)
 {
 	uint8_t reader_id[32];
 	int rc;
@@ -2924,7 +2927,8 @@ static void on_timed_request(const struct matter_exchange_in *in)
 	uint16_t timeout_ms = 0u;
 	size_t resp_len = 0u;
 
-	if (matter_im_timed_request_decode(in->payload, in->payload_len, &timeout_ms) != MATTER_OK) {
+	if (matter_im_timed_request_decode(in->payload, in->payload_len, &timeout_ms) !=
+	    MATTER_OK) {
 		LOG_WRN("  malformed TimedRequest");
 		return;
 	}
@@ -2943,9 +2947,10 @@ static void on_timed_request(const struct matter_exchange_in *in)
 		return;
 	}
 	(void)tx_frame(slot,
-		       (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		       MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_STATUS_RESPONSE, payload, resp_len,
-		       false, 0u);
+		       (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+								  : &s_exchange,
+		       MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_STATUS_RESPONSE, payload,
+		       resp_len, false, 0u);
 }
 
 /**
@@ -3010,8 +3015,8 @@ static void on_status_response(const struct matter_exchange_in *in)
 		return;
 	}
 	payload = tx_payload(slot, &payload_cap);
-	if (matter_im_subscribe_response_encode(s->id, s->max_interval_s, payload,
-						payload_cap, &resp_len) != MATTER_OK) {
+	if (matter_im_subscribe_response_encode(s->id, s->max_interval_s, payload, payload_cap,
+						&resp_len) != MATTER_OK) {
 		LOG_ERR("cannot build the SubscribeResponse");
 		tx_abort_build(slot);
 		s->in_use = false;
@@ -3025,9 +3030,10 @@ static void on_status_response(const struct matter_exchange_in *in)
 		.subscription_id = s->id,
 	};
 	if (tx_frame(slot,
-		     (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur] : &s_exchange,
-		     MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_SUBSCRIBE_RESPONSE, payload, resp_len,
-		     false, 0u) != MATTER_OK) {
+		     (s_thread_reply != NULL && !s_thread_pase) ? &s_case_x[s_case_cur]
+								: &s_exchange,
+		     MATTER_PROTOCOL_INTERACTION_MODEL, MATTER_IM_OP_SUBSCRIBE_RESPONSE, payload,
+		     resp_len, false, 0u) != MATTER_OK) {
 		s->in_use = false;
 	}
 }
@@ -3040,8 +3046,7 @@ static void on_secure(const struct matter_exchange_in *in)
 	 * -- and there is one after every message -- reporting that nothing
 	 * needed doing. That is what kept filling the trace ring.
 	 */
-	if (in->protocol_id == MATTER_PROTOCOL_SECURE_CHANNEL &&
-	    in->opcode == MATTER_SC_OP_ACK) {
+	if (in->protocol_id == MATTER_PROTOCOL_SECURE_CHANNEL && in->opcode == MATTER_SC_OP_ACK) {
 		return;
 	}
 
@@ -3147,7 +3152,6 @@ static struct {
 	size_t sigma2_len;
 } s_case;
 
-
 /** The unencrypted Matter message counter for the operational exchange. */
 static uint32_t s_case_counter;
 
@@ -3200,11 +3204,12 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		s_case.sigma2_len = 0u;
 	}
 
-	if (!repeat && (ultrawidelock_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
-	    ultrawidelock_random(s_case.responder_random, sizeof(s_case.responder_random)) != 0 ||
-	    ultrawidelock_random(s_case.resumption_id, sizeof(s_case.resumption_id)) != 0 ||
-	    ultrawidelock_random((uint8_t *)&s_case.local_session_id, sizeof(s_case.local_session_id)) !=
-		    0)) {
+	if (!repeat &&
+	    (ultrawidelock_ec_p256_keygen(s_case.eph_priv, s_case.eph_pub) != 0 ||
+	     ultrawidelock_random(s_case.responder_random, sizeof(s_case.responder_random)) != 0 ||
+	     ultrawidelock_random(s_case.resumption_id, sizeof(s_case.resumption_id)) != 0 ||
+	     ultrawidelock_random((uint8_t *)&s_case.local_session_id,
+				  sizeof(s_case.local_session_id)) != 0)) {
 		LOG_ERR("  no entropy for Sigma2");
 		return 0u;
 	}
@@ -3257,8 +3262,7 @@ static size_t send_sigma2(const struct matter_case_sigma1 *s1, const uint8_t *ip
 		uint8_t derived[MATTER_CASE_PUBKEY_LEN];
 
 		if (ultrawidelock_ec_p256_pub_from_priv(f->op_priv, derived) == 0 &&
-		    matter_cert_parse(f->noc, f->noc_len, &ci) == MATTER_OK &&
-		    ci.have_public_key) {
+		    matter_cert_parse(f->noc, f->noc_len, &ci) == MATTER_OK && ci.have_public_key) {
 			LOG_INF("  signing key %s the NOC; noc %u B, icac %u B",
 				memcmp(derived, ci.public_key, sizeof(derived)) == 0
 					? "MATCHES"
@@ -3661,8 +3665,7 @@ static size_t case_status_report(const struct matter_proto_header *req,
  * the root key, the fabric and node ids out of the NOC -- all agree with what a
  * real commissioner computed independently.
  */
-static size_t matter_thread_on_datagram_owned(uint8_t *msg, size_t len, uint8_t *reply,
-					       size_t cap)
+static size_t matter_thread_on_datagram_owned(uint8_t *msg, size_t len, uint8_t *reply, size_t cap)
 {
 	struct matter_msg_header mh;
 	struct matter_proto_header ph;
@@ -3859,8 +3862,8 @@ static size_t matter_thread_on_datagram_owned(uint8_t *msg, size_t len, uint8_t 
 			(unsigned int)ph.protocol_id, ph.opcode, (unsigned int)ph.exchange_id,
 			(ph.exchange_flags & MATTER_EX_FLAG_A) ? "+" : "-");
 		if (len > mh_len + ph_len) {
-			LOG_HEXDUMP_INF(msg + mh_len + ph_len,
-					MIN(len - mh_len - ph_len, 16u), "  payload");
+			LOG_HEXDUMP_INF(msg + mh_len + ph_len, MIN(len - mh_len - ph_len, 16u),
+					"  payload");
 		}
 		return 0u;
 	}
@@ -4176,7 +4179,7 @@ int matter_commission_init(void)
 	 * which is the better answer once Matter state persists. Revisit then.
 	 */
 	{
-		uint32_t id[2] = { NRF_FICR->DEVICEID[0], NRF_FICR->DEVICEID[1] };
+		uint32_t id[2] = {NRF_FICR->DEVICEID[0], NRF_FICR->DEVICEID[1]};
 		struct ultrawidelock_sha256 h;
 		uint8_t digest[ULTRAWIDELOCK_SHA256_LEN];
 
@@ -4224,7 +4227,8 @@ int matter_commission_init(void)
 			/* -ENOENT is the dev identity and is not news. Anything
 			 * else means a stored identity exists and could not be
 			 * read back, which leaves the attributes lying. */
-			LOG_ERR("stored credential identity unreadable (%d); attributes stay null", rc);
+			LOG_ERR("stored credential identity unreadable (%d); attributes stay null",
+				rc);
 		}
 		memset(reader_id, 0, sizeof(reader_id));
 		memset(grk, 0, sizeof(grk));
@@ -4311,7 +4315,8 @@ int matter_commission_init(void)
 				if (clear_rc == 0) {
 					reader_readback_clear();
 				} else {
-					LOG_ERR("no Matter administrator, but Home Key identity clear failed (%d)",
+					LOG_ERR("no Matter administrator, but Home Key identity "
+						"clear failed (%d)",
 						clear_rc);
 				}
 			}

@@ -39,9 +39,9 @@
 
 #include "test.h"
 
-#define FABRIC_A    1u
-#define PEER_NODE   0x0102030405060708ull
-#define PEER_ENDPT  1u
+#define FABRIC_A   1u
+#define PEER_NODE  0x0102030405060708ull
+#define PEER_ENDPT 1u
 
 /**
  * A fabric complete enough for choose_target() to derive keys from.
@@ -222,6 +222,21 @@ void test_matter_client(void)
 		T_EQ("and nothing was sent", (long)matterfake_tx_count(), 0L);
 	}
 
+	t_group("NoRemoteLockUnlock inhibits the bound peer only");
+	{
+		fixture(&info, true, true);
+		info.operating_mode = MATTER_DL_OPERATING_MODE_NO_REMOTE;
+		matter_client_want();
+		tick(1u);
+		T_EQ("no peer lookup starts", (long)matterfake_resolve_count(), 0L);
+		T_EQ("and nothing is sent", (long)matterfake_tx_count(), 0L);
+
+		info.operating_mode = MATTER_DL_OPERATING_MODE_NORMAL;
+		matter_client_want();
+		tick(1u);
+		T_EQ("Normal mode permits the lookup", (long)matterfake_resolve_count(), 1L);
+	}
+
 	t_group("a binding whose administrator was never committed is not a target");
 	{
 		fixture(&info, false, true);
@@ -240,7 +255,8 @@ void test_matter_client(void)
 		T_EQ("the walk-up starts exactly one lookup", (long)matterfake_resolve_count(), 1L);
 		T_OK("which is still outstanding", matterfake_resolve_pending());
 		T_OK("named as a Matter operational instance",
-		     matterfake_resolve_name() != NULL && strlen(matterfake_resolve_name()) == 33u &&
+		     matterfake_resolve_name() != NULL &&
+			     strlen(matterfake_resolve_name()) == 33u &&
 			     matterfake_resolve_name()[16] == '-');
 		T_EQ("and nothing is on the wire yet", (long)matterfake_tx_count(), 0L);
 	}
@@ -252,8 +268,8 @@ void test_matter_client(void)
 		tick(1u);
 		matterfake_resolve_answer(NULL);
 		tick(1u);
-		T_EQ("nothing is sent to a lock that does not resolve",
-		     (long)matterfake_tx_count(), 0L);
+		T_EQ("nothing is sent to a lock that does not resolve", (long)matterfake_tx_count(),
+		     0L);
 		T_EQ("and it is not retried on the spot", (long)matterfake_resolve_count(), 1L);
 	}
 
@@ -450,8 +466,7 @@ void test_matter_client(void)
 		matterfake_some_peer(&peer);
 		matterfake_resolve_answer(&peer);
 		tick(1u);
-		T_EQ("the stale answer does not produce a Sigma1", (long)matterfake_tx_count(),
-		     0L);
+		T_EQ("the stale answer does not produce a Sigma1", (long)matterfake_tx_count(), 0L);
 	}
 
 	/*

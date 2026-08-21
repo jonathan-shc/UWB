@@ -249,7 +249,8 @@ static size_t build_clear_cred_fields(uint8_t *buf, size_t cap, bool have_cred_s
 }
 
 /** ClearUser arguments. @p have_index false omits the only field there is. */
-static size_t build_clear_user_fields(uint8_t *buf, size_t cap, bool have_index, uint64_t user_index)
+static size_t build_clear_user_fields(uint8_t *buf, size_t cap, bool have_index,
+				      uint64_t user_index)
 {
 	struct matter_tlv_writer w;
 	size_t len = 0u;
@@ -264,8 +265,8 @@ static size_t build_clear_user_fields(uint8_t *buf, size_t cap, bool have_index,
 	return len;
 }
 
-static size_t build_acl(uint8_t *buf, size_t cap, uint8_t privilege, uint64_t subject,
-			bool scoped, uint16_t endpoint, uint32_t cluster)
+static size_t build_acl(uint8_t *buf, size_t cap, uint8_t privilege, uint64_t subject, bool scoped,
+			uint16_t endpoint, uint32_t cluster)
 {
 	struct matter_tlv_writer w;
 	size_t len = 0u;
@@ -374,8 +375,8 @@ void test_matter_clusters(void)
 		 * it goes to the store and nowhere else. */
 		T_OK("config marked present", info.have_ultrawidelock_reader_config);
 		T_OK("resolving key marked present", info.have_ultrawidelock_group_resolving_key);
-		T_OK("verification key mirrored",
-		     memcmp(info.ultrawidelock_verification_key, verification, sizeof(verification)) == 0);
+		T_OK("verification key mirrored", memcmp(info.ultrawidelock_verification_key,
+							 verification, sizeof(verification)) == 0);
 		T_OK("group id mirrored",
 		     memcmp(info.ultrawidelock_group_id, group_id, sizeof(group_id)) == 0);
 		T_OK("resolving key mirrored",
@@ -544,8 +545,9 @@ void test_matter_clusters(void)
 		     MATTER_IM_STATUS_UNSUPPORTED_COMMAND);
 		T_EQ("and nothing was installed", s_cred_calls, 0);
 
-		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
-					 true, verification, sizeof(verification) - 1u, true, 1u);
+		flen = build_cred_fields(fields, sizeof(fields), 1u,
+					 MATTER_DL_CRED_ALIRO_ISSUER_KEY, true, verification,
+					 sizeof(verification) - 1u, true, 1u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
 				 fields, flen, &resp),
@@ -563,8 +565,8 @@ void test_matter_clusters(void)
 		T_EQ("no CredentialStruct is an invalid command", info.last_credential_status,
 		     MATTER_IM_STATUS_INVALID_COMMAND);
 
-		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
-					 true, NULL, 0u, true, 1u);
+		flen = build_cred_fields(fields, sizeof(fields), 1u,
+					 MATTER_DL_CRED_ALIRO_ISSUER_KEY, true, NULL, 0u, true, 1u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
 				 fields, flen, &resp),
@@ -597,8 +599,8 @@ void test_matter_clusters(void)
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
 				 fields, flen, &resp),
 		     MATTER_IM_STATUS_SUCCESS);
-		T_EQ("a user index past 16 bits is an invalid command",
-		     info.last_credential_status, MATTER_IM_STATUS_INVALID_COMMAND);
+		T_EQ("a user index past 16 bits is an invalid command", info.last_credential_status,
+		     MATTER_IM_STATUS_INVALID_COMMAND);
 		T_EQ("and nothing was installed", s_cred_calls, 0);
 		T_EQ("and no user index is claimed", info.last_user_index, 0u);
 	}
@@ -610,8 +612,9 @@ void test_matter_clusters(void)
 		info.ultrawidelock_credential_cb = NULL;
 		matter_clusters_init(&srv, &info);
 
-		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
-					 true, verification, sizeof(verification), true, 3u);
+		flen = build_cred_fields(fields, sizeof(fields), 1u,
+					 MATTER_DL_CRED_ALIRO_ISSUER_KEY, true, verification,
+					 sizeof(verification), true, 3u);
 		T_EQ("command still succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
 				 fields, flen, NULL),
@@ -636,8 +639,9 @@ void test_matter_clusters(void)
 		reset_doubles();
 		fill_info(&info);
 		matter_clusters_init(&srv, &info);
-		flen = build_cred_fields(fields, sizeof(fields), 1u, MATTER_DL_CRED_ALIRO_ISSUER_KEY,
-					 true, verification, sizeof(verification), false, 0u);
+		flen = build_cred_fields(fields, sizeof(fields), 1u,
+					 MATTER_DL_CRED_ALIRO_ISSUER_KEY, true, verification,
+					 sizeof(verification), false, 0u);
 		T_EQ("command succeeds",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_CREDENTIAL,
 				 fields, flen, NULL),
@@ -738,8 +742,8 @@ void test_matter_clusters(void)
 
 		acl_len = build_acl(acl, sizeof(acl), 5u, 0x77u, false, 0u, 0u);
 		T_OK("administrator ACL builds", acl_len > 0u);
-		T_EQ("bootstrap administrator stores it",
-		     srv.write(srv.ctx, &path, acl, acl_len), MATTER_IM_STATUS_SUCCESS);
+		T_EQ("bootstrap administrator stores it", srv.write(srv.ctx, &path, acl, acl_len),
+		     MATTER_IM_STATUS_SUCCESS);
 
 		info.accessing_node_id = 0x77u;
 		matter_tlv_writer_init(&w, args, sizeof(args));
@@ -772,8 +776,8 @@ void test_matter_clusters(void)
 		     srv.write(srv.ctx, &path, acl, acl_len), MATTER_IM_STATUS_SUCCESS);
 		info.accessing_node_id = 0x88u;
 		T_EQ("scoped operator can unlock",
-		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_UNLOCK_DOOR,
-				 NULL, 0u, NULL),
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_UNLOCK_DOOR, NULL,
+				 0u, NULL),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("but cannot manage users",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_SET_USER, args,
@@ -787,8 +791,8 @@ void test_matter_clusters(void)
 		info.accessing_fabric_index = 0u;
 		info.accessing_node_id = 0u;
 		T_EQ("PASE cannot operate the lock",
-		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_UNLOCK_DOOR,
-				 NULL, 0u, NULL),
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_UNLOCK_DOOR, NULL,
+				 0u, NULL),
 		     MATTER_IM_STATUS_UNSUPPORTED_ACCESS);
 	}
 
@@ -807,6 +811,20 @@ void test_matter_clusters(void)
 		memset(&path, 0, sizeof(path));
 		path.endpoint = MATTER_ENDPOINT_LOCK;
 		path.cluster = MATTER_CLUSTER_DOOR_LOCK;
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_DL_ACTUATOR_ENABLED, false, &w, MATTER_TLV_ANON);
+		{
+			struct matter_tlv_reader r;
+			bool enabled = false;
+
+			matter_tlv_reader_init(&r, out, w.len);
+			T_OK("the credential reader is not advertised as an actuator",
+			     matter_tlv_next(&r) == MATTER_OK &&
+				     matter_tlv_get_bool(&r, &enabled) == MATTER_OK && !enabled);
+		}
+
 		path.attribute = MATTER_ATTR_DL_AUTO_RELOCK_TIME;
 
 		T_EQ("readable before any write",
@@ -816,8 +834,7 @@ void test_matter_clusters(void)
 
 		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
 		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 120u);
-		T_EQ("a u32 write is accepted",
-		     srv.write(srv.ctx, &path, tlv, w.len),
+		T_EQ("a u32 write is accepted", srv.write(srv.ctx, &path, tlv, w.len),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("the seconds are stored", info.auto_relock_time_s, 120u);
 
@@ -831,28 +848,56 @@ void test_matter_clusters(void)
 			uint64_t v = 0u;
 
 			matter_tlv_reader_init(&r, out, n);
-			T_OK("read decodes", matter_tlv_next(&r) == 0 &&
-					     matter_tlv_get_u64(&r, &v) == 0);
+			T_OK("read decodes",
+			     matter_tlv_next(&r) == 0 && matter_tlv_get_u64(&r, &v) == 0);
 			T_EQ("read value matches", (uint32_t)v, 120u);
 		}
 
 		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
 		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 0x100000000ull);
 		T_EQ("a value wider than u32 is a constraint error",
-		     srv.write(srv.ctx, &path, tlv, w.len),
-		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
+		     srv.write(srv.ctx, &path, tlv, w.len), MATTER_IM_STATUS_CONSTRAINT_ERROR);
 		T_EQ("and the stored value is untouched", info.auto_relock_time_s, 120u);
 
-		T_EQ("an empty write is an invalid command",
-		     srv.write(srv.ctx, &path, tlv, 0u), MATTER_IM_STATUS_INVALID_COMMAND);
+		path.attribute = MATTER_ATTR_DL_OPERATING_MODE;
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, MATTER_DL_OPERATING_MODE_NO_REMOTE);
+		T_EQ("NoRemoteLockUnlock is writable", srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and becomes current", info.operating_mode,
+		     MATTER_DL_OPERATING_MODE_NO_REMOTE);
+
+		matter_tlv_writer_init(&w, out, sizeof(out));
+		srv.value(srv.ctx, MATTER_ENDPOINT_LOCK, MATTER_CLUSTER_DOOR_LOCK,
+			  MATTER_ATTR_DL_OPERATING_MODE, false, &w, MATTER_TLV_ANON);
+		{
+			struct matter_tlv_reader r;
+			uint64_t v = 0u;
+
+			matter_tlv_reader_init(&r, out, w.len);
+			T_OK("the mode reads back",
+			     matter_tlv_next(&r) == MATTER_OK &&
+				     matter_tlv_get_u64(&r, &v) == MATTER_OK);
+			T_EQ("as NoRemoteLockUnlock", v, MATTER_DL_OPERATING_MODE_NO_REMOTE);
+		}
+
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 2u);
+		T_EQ("an unsupported mode is rejected", srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
+		T_EQ("without changing the mode", info.operating_mode,
+		     MATTER_DL_OPERATING_MODE_NO_REMOTE);
+
+		T_EQ("an empty write is an invalid command", srv.write(srv.ctx, &path, tlv, 0u),
+		     MATTER_IM_STATUS_INVALID_COMMAND);
 
 		path.attribute = MATTER_ATTR_DL_LOCK_STATE;
-		T_EQ("LockState itself is not writable",
-		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+		T_EQ("LockState itself is not writable", srv.write(srv.ctx, &path, tlv, 4u),
+		     MATTER_IM_STATUS_UNSUPPORTED_WRITE);
 
 		path.cluster = MATTER_CLUSTER_DESCRIPTOR;
-		T_EQ("the lock's Descriptor is read-only",
-		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+		T_EQ("the lock's Descriptor is read-only", srv.write(srv.ctx, &path, tlv, 4u),
+		     MATTER_IM_STATUS_UNSUPPORTED_WRITE);
 
 		path.cluster = 0x1234u;
 		T_EQ("a cluster the lock endpoint lacks says UNSUPPORTED_CLUSTER",
@@ -972,8 +1017,8 @@ void test_matter_clusters(void)
 		T_EQ("and the stored value is untouched", info.approach_direction, 0x01u);
 
 		path.attribute = MATTER_ATTR_CLUSTER_REVISION;
-		T_EQ("the cluster's globals are read-only",
-		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
+		T_EQ("the cluster's globals are read-only", srv.write(srv.ctx, &path, tlv, 4u),
+		     MATTER_IM_STATUS_UNSUPPORTED_WRITE);
 	}
 
 	t_group("the lock endpoint answers its own commands");
@@ -1139,7 +1184,8 @@ void test_matter_clusters(void)
 		matter_clusters_init(&srv, &info);
 
 		/* A credential class this node never claimed cannot be holding one. */
-		flen = build_clear_cred_fields(fields, sizeof(fields), true, 1u /* PIN */, true, 1u);
+		flen = build_clear_cred_fields(fields, sizeof(fields), true, 1u /* PIN */, true,
+					       1u);
 		T_EQ("a PIN credential is not ours",
 		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_CLEAR_CREDENTIAL,
 				 fields, flen, NULL),
@@ -1317,7 +1363,7 @@ void test_matter_clusters(void)
 		static const uint8_t sdk_clear_cred[] = {
 			0x15, 0x35, 0x00, 0x24, 0x00, 0x07, 0x24, 0x01, 0x09, 0x18, 0x18,
 		};
-		static const uint8_t sdk_clear_user[] = { 0x15, 0x24, 0x00, 0x05, 0x18 };
+		static const uint8_t sdk_clear_user[] = {0x15, 0x24, 0x00, 0x05, 0x18};
 
 		reset_doubles();
 		fill_info(&info);
@@ -1399,18 +1445,14 @@ void test_matter_clusters(void)
 			0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04,
 		};
 		uint8_t ds[] = {
-			0x0e, 0x08, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x03, 0x00, 0x00, 0x19,
-			0x35, 0x06, 0x00, 0x04, 0x00, 0x1f, 0xff, 0xe0,
-			0x02, 0x08, 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04,
-			0x05, 0x10, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
-			0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
-			0x03, 0x04, 'h',  'o',  'm',  'e',
-			0x01, 0x02, 0x12, 0x34,
-			0x07, 0x08, 0xfd, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
-			0x04, 0x10, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
-			0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
-			0x0c, 0x04, 0x02, 0xa0, 0xff, 0xf8,
+			0x0e, 0x08, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x00, 0x00, 0x19, 0x35, 0x06, 0x00, 0x04, 0x00, 0x1f, 0xff, 0xe0, 0x02,
+			0x08, 0xde, 0xad, 0xbe, 0xef, 0x01, 0x02, 0x03, 0x04, 0x05, 0x10, 0xaa,
+			0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+			0xaa, 0xaa, 0xaa, 0x03, 0x04, 'h',  'o',  'm',  'e',  0x01, 0x02, 0x12,
+			0x34, 0x07, 0x08, 0xfd, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x04,
+			0x10, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+			0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0x0c, 0x04, 0x02, 0xa0, 0xff, 0xf8,
 		};
 		uint8_t candidate[sizeof(ds)];
 		uint8_t fields[256];
@@ -1438,12 +1480,13 @@ void test_matter_clusters(void)
 		g_thread_attached_to = 1;
 		T_EQ("the dataset is accepted",
 		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
-				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen,
+				      NULL),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("the stack is NOT restarted", g_thread_start_calls, 0);
 		T_OK("the dataset is staged", info.attempt.have_thread_candidate);
-		T_EQ("attachment is not touched before ConnectNetwork",
-		     g_thread_attached_to_calls, 0);
+		T_EQ("attachment is not touched before ConnectNetwork", g_thread_attached_to_calls,
+		     0);
 
 		/* A second controller may carry a newer timestamp or even stale
 		 * credentials for the same Extended PAN ID. Accept the network
@@ -1472,13 +1515,13 @@ void test_matter_clusters(void)
 		}
 		matter_tlv_writer_init(&w, fields, sizeof(fields));
 		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
-		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(0u), candidate,
-					   sizeof(candidate));
+		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(0u), candidate, sizeof(candidate));
 		(void)matter_tlv_end_container(&w);
 		(void)matter_tlv_writer_finish(&w, &flen);
 		T_EQ("same-network credentials are answered",
 		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
-				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen,
+				      NULL),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("and accepted", info.last_network_status, MATTER_NC_STATUS_SUCCESS);
 		T_OK("while the committed dataset wins",
@@ -1500,13 +1543,13 @@ void test_matter_clusters(void)
 		}
 		matter_tlv_writer_init(&w, fields, sizeof(fields));
 		(void)matter_tlv_start_container(&w, MATTER_TLV_ANON, MATTER_TLV_STRUCTURE);
-		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(0u), candidate,
-					   sizeof(candidate));
+		(void)matter_tlv_put_bytes(&w, MATTER_TLV_CTX(0u), candidate, sizeof(candidate));
 		(void)matter_tlv_end_container(&w);
 		(void)matter_tlv_writer_finish(&w, &flen);
 		T_EQ("a different network is answered",
 		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
-				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen,
+				      NULL),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("and rejected without moving the lock", info.last_network_status,
 		     MATTER_NC_STATUS_BOUNDS_EXCEEDED);
@@ -1530,7 +1573,8 @@ void test_matter_clusters(void)
 		(void)matter_tlv_writer_finish(&w, &flen);
 		T_EQ("a dataset without an ext PAN id is answered",
 		     run_root_command(&srv, MATTER_CLUSTER_NETWORK_COMMISSIONING,
-				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen, NULL),
+				      MATTER_CMD_NC_ADD_OR_UPDATE_THREAD_NETWORK, fields, flen,
+				      NULL),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("as malformed", info.last_network_status, MATTER_NC_STATUS_OUT_OF_RANGE);
 		T_EQ("and the stack remains untouched", g_thread_start_calls, 0);
@@ -1568,8 +1612,7 @@ void test_matter_clusters(void)
 				sizeof(info.fabrics[i].root_public_key), (uint8_t)(0x40u + i));
 			info.fabrics[i].root_public_key[0] = 0x04u;
 		}
-		info.committed_slots = MATTER_FABRIC_SLOT_BIT(0u) |
-				       MATTER_FABRIC_SLOT_BIT(1u) |
+		info.committed_slots = MATTER_FABRIC_SLOT_BIT(0u) | MATTER_FABRIC_SLOT_BIT(1u) |
 				       MATTER_FABRIC_SLOT_BIT(2u);
 		info.fabrics[0].case_admin_subject = UINT64_C(0xFFFFFFFD27730001);
 		info.accessing_fabric_index = 1u;
@@ -1615,8 +1658,8 @@ void test_matter_clusters(void)
 		T_EQ("status OK", info.last_noc_status, MATTER_NOC_STATUS_OK);
 		T_EQ("naming the removed index", info.last_noc_index, 2u);
 		T_EQ("the slot is empty", info.fabrics[1].index, 0u);
-		T_OK("and holds nothing else", !info.fabrics[1].have_root &&
-		     info.fabrics[1].noc_len == 0u);
+		T_OK("and holds nothing else",
+		     !info.fabrics[1].have_root && info.fabrics[1].noc_len == 0u);
 		T_EQ("its neighbours are untouched", info.fabrics[0].index, 1u);
 		T_EQ("both of them", info.fabrics[2].index, 3u);
 		T_EQ("the ICAC area it owned is freed", (long)info.icac.len, 0L);

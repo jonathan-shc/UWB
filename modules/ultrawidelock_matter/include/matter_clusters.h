@@ -58,9 +58,9 @@ extern "C" {
  * Nothing gates unlock on it -- a single-antenna DW3110 cannot measure the
  * angle -- so the value is stored and reported but never enforced.
  */
-#define MATTER_CLUSTER_APPROACH_DIRECTION    0x1349FC03u
-#define MATTER_ATTR_APPROACH_DIRECTION       0x0000u
-#define MATTER_APPROACH_DIRECTION_ALL        0x07u
+#define MATTER_CLUSTER_APPROACH_DIRECTION     0x1349FC03u
+#define MATTER_ATTR_APPROACH_DIRECTION        0x0000u
+#define MATTER_APPROACH_DIRECTION_ALL         0x07u
 #define MATTER_APPROACH_DIRECTION_CLUSTER_REV 1u
 
 /*
@@ -333,6 +333,7 @@ struct matter_user {
 #define MATTER_DL_LOCK_STATE_LOCKED         1u
 #define MATTER_DL_LOCK_STATE_UNLOCKED       2u
 #define MATTER_DL_OPERATING_MODE_NORMAL     0u
+#define MATTER_DL_OPERATING_MODE_NO_REMOTE  3u
 /**
  * SupportedOperatingModes is INVERTED: a bit CLEARED to 0 means the mode is
  * supported (DoorLock cluster spec, DlSupportedOperatingModes). The previous
@@ -699,7 +700,7 @@ struct matter_lock_event {
 /* NetworkCommissioningStatusEnum, the values this node returns. */
 #define MATTER_NC_STATUS_SUCCESS                 0x00u
 #define MATTER_NC_STATUS_OUT_OF_RANGE            0x01u
-#define MATTER_NC_STATUS_BOUNDS_EXCEEDED          0x02u
+#define MATTER_NC_STATUS_BOUNDS_EXCEEDED         0x02u
 #define MATTER_NC_STATUS_NETWORK_ID_NOT_FOUND    0x03u
 #define MATTER_NC_STATUS_OTHER_CONNECTION_FAILUR 0x09u
 
@@ -894,6 +895,8 @@ struct matter_device_info {
 	 * a successful write response.
 	 */
 	uint32_t auto_relock_time_s;
+	/** Normal, or NoRemoteLockUnlock when bound remote actuation is inhibited. */
+	uint8_t operating_mode;
 	/**
 	 * The Approach Direction bitmap, whatever the controller last wrote.
 	 *
@@ -972,9 +975,10 @@ struct matter_device_info {
 	 * NULL is the honest answer. Returns 0 on success; anything else makes
 	 * the command report FAILURE rather than claiming an identity was kept.
 	 */
-	int (*ultrawidelock_credential_cb)(uint8_t credential_type,
-				   const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
-				   uint16_t credential_index, uint16_t user_index);
+	int (*ultrawidelock_credential_cb)(
+		uint8_t credential_type,
+		const uint8_t public_key[MATTER_ALIRO_VERIFICATION_KEY_LEN],
+		uint16_t credential_index, uint16_t user_index);
 	/**
 	 * Where a ClearCredential lands, set by the port.
 	 *
@@ -989,7 +993,8 @@ struct matter_device_info {
 	 * a removal succeeded when it did not survive the next reboot is worse
 	 * than one told it failed.
 	 */
-	int (*ultrawidelock_credential_clear_cb)(uint8_t credential_type, uint16_t credential_index);
+	int (*ultrawidelock_credential_clear_cb)(uint8_t credential_type,
+						 uint16_t credential_index);
 	/**
 	 * Where a ClearUser lands, set by the port.
 	 *
