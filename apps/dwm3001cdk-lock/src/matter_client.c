@@ -179,6 +179,8 @@ static uint32_t s_counter;
  */
 static bool s_desired_unlocked;
 static bool s_synced_unlocked;
+/** A departure happened; the next approach must send UnlockDoor again. */
+static bool s_unlock_rearm;
 /** What the invoke now in flight is trying to make true. */
 static bool s_inflight_unlocked;
 
@@ -1027,6 +1029,10 @@ void matter_client_init(struct matter_device_info *info)
 	s_local_session = 0u;
 	s_peer_session = 0u;
 	s_invoke_ms = 0u;
+	s_desired_unlocked = false;
+	s_synced_unlocked = false;
+	s_unlock_rearm = false;
+	s_inflight_unlocked = false;
 	s_info = info;
 	matter_client_sm_init(&s_sm);
 }
@@ -1036,6 +1042,13 @@ void matter_client_want(bool unlocked)
 	if (s_info == NULL) {
 		return;
 	}
+	if (!unlocked) {
+		/* Departure rearms the next unlock; binding never sends LockDoor. */
+		s_unlock_rearm = true;
+		s_synced_unlocked = false;
+		return;
+	}
+	s_unlock_rearm = false;
 	s_desired_unlocked = unlocked;
 	if (s_desired_unlocked == s_synced_unlocked) {
 		/* Already where it should be. Says nothing on the wire, which
@@ -1275,7 +1288,7 @@ size_t matter_client_on_secure(uint8_t *msg, size_t len, uint8_t *reply, size_t 
 			 * on a refusal too and the two would look in step while
 			 * the far door stood open.
 			 */
-			s_synced_unlocked = s_inflight_unlocked;
+			s_synced_unlocked = s_unlock_rearm ? false : s_inflight_unlocked;
 		} else {
 			LOG_WRN("the bound lock refused %sDoor (status 0x%02x, decode %d)",
 				s_inflight_unlocked ? "Unlock" : "Lock",
@@ -1289,7 +1302,7 @@ size_t matter_client_on_secure(uint8_t *msg, size_t len, uint8_t *reply, size_t 
 		 * so without this the second edge is dropped -- exactly the
 		 * walk-in-and-straight-out case.
 		 */
-		if (ok && s_desired_unlocked != s_synced_unlocked) {
+		if (ok && !s_unlock_rearm && s_desired_unlocked != s_synced_unlocked) {
 			matter_client_sm_want(&s_sm, now_ms());
 		}
 		/* The peer asked to be acknowledged and this is the end of the
