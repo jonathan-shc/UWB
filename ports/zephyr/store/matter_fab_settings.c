@@ -705,6 +705,7 @@ int matter_fab_erase(void)
 #define DL_TREE          "mdl"
 #define KEY_AUTO_RELOCK  DL_TREE "/art"
 #define KEY_APPROACH     DL_TREE "/apd"
+#define KEY_OPERATING    DL_TREE "/opm"
 
 struct dl_attr_target {
 	void *value;
@@ -726,7 +727,7 @@ static int dl_attr_set(const char *name, size_t len, settings_read_cb read_cb, v
 }
 
 int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_auto_relock_s,
-			 uint8_t prev_approach_direction)
+			 uint8_t prev_approach_direction, uint8_t prev_operating_mode)
 {
 	int first_err = 0;
 	int rc;
@@ -748,6 +749,13 @@ int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_au
 			first_err = rc;
 		}
 	}
+	if (info->operating_mode != prev_operating_mode) {
+		rc = settings_save_one(KEY_OPERATING, &info->operating_mode,
+				       sizeof(info->operating_mode));
+		if (rc != 0 && first_err == 0) {
+			first_err = rc;
+		}
+	}
 	return first_err;
 }
 
@@ -755,6 +763,7 @@ int matter_dl_attr_load(struct matter_device_info *info)
 {
 	struct dl_attr_target relock;
 	struct dl_attr_target approach;
+	struct dl_attr_target operating;
 
 	if (info == NULL) {
 		return -EINVAL;
@@ -767,12 +776,16 @@ int matter_dl_attr_load(struct matter_device_info *info)
 	approach.len = sizeof(info->approach_direction);
 	approach.found = false;
 	(void)settings_load_subtree_direct(KEY_APPROACH, dl_attr_set, &approach);
+	operating.value = &info->operating_mode;
+	operating.len = sizeof(info->operating_mode);
+	operating.found = false;
+	(void)settings_load_subtree_direct(KEY_OPERATING, dl_attr_set, &operating);
 	return 0;
 }
 
 int matter_dl_attr_erase(void)
 {
-	static const char *const keys[] = { KEY_AUTO_RELOCK, KEY_APPROACH };
+	static const char *const keys[] = { KEY_AUTO_RELOCK, KEY_APPROACH, KEY_OPERATING };
 	int first_err = 0;
 
 	for (size_t i = 0u; i < ARRAY_SIZE(keys); i++) {

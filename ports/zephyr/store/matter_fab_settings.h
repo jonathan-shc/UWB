@@ -41,8 +41,8 @@ int matter_fab_load(struct matter_device_info *info);
 int matter_fab_erase(void);
 
 /**
- * Write the two Door Lock attributes a controller sets and expects to read
- * back: AutoRelockTime and the Approach Direction bitmap.
+ * Write the Door Lock attributes a controller sets and expects to read back:
+ * AutoRelockTime, Approach Direction and OperatingMode.
  *
  * Only what CHANGED is written, which is why the previous values are asked
  * for: a controller re-writing a value it already set should cost no flash.
@@ -52,7 +52,7 @@ int matter_fab_erase(void);
  *         is not fatal -- the RAM value stands for this boot.
  */
 int matter_dl_attr_store(const struct matter_device_info *info, uint32_t prev_auto_relock_s,
-			 uint8_t prev_approach_direction);
+			 uint8_t prev_approach_direction, uint8_t prev_operating_mode);
 
 /**
  * Read them back over whatever the port initialised them to.

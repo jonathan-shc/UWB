@@ -219,7 +219,7 @@ void test_matter_fab_settings(void)
 	T_OK("legacy Matter key is reclaimed", !settingsfake_has("mfab/f0"));
 
 	/*
-	 * The two attributes a controller WRITES, which lived only in RAM until
+	 * The attributes a controller WRITES, which lived only in RAM until
 	 * now: every reset silently undid whatever auto-lock timing and approach
 	 * direction the home app had configured, and the app has no way to tell
 	 * that apart from a lock that ignored the setting.
@@ -229,31 +229,36 @@ void test_matter_fab_settings(void)
 	memset(&stored, 0, sizeof(stored));
 	stored.auto_relock_time_s = 120u;
 	stored.approach_direction = 0x05u;
-	T_EQ("both changed values are stored", matter_dl_attr_store(&stored, 0u, 0x07u), 0);
-	T_EQ("and each got its own key", settingsfake_key_count(), 2);
+	stored.operating_mode = MATTER_DL_OPERATING_MODE_NO_REMOTE;
+	T_EQ("all changed values are stored", matter_dl_attr_store(&stored, 0u, 0x07u, 0u), 0);
+	T_EQ("and each got its own key", settingsfake_key_count(), 3);
 	T_OK("under a tree of their own, not the identity's",
-	     settingsfake_has("mdl/art") && settingsfake_has("mdl/apd"));
+	     settingsfake_has("mdl/art") && settingsfake_has("mdl/apd") &&
+		     settingsfake_has("mdl/opm"));
 
 	memset(&loaded, 0, sizeof(loaded));
 	loaded.auto_relock_time_s = 999u;
 	loaded.approach_direction = 0x07u;
+	loaded.operating_mode = MATTER_DL_OPERATING_MODE_NORMAL;
 	T_EQ("the load succeeds", matter_dl_attr_load(&loaded), 0);
 	T_EQ("AutoRelockTime comes back", loaded.auto_relock_time_s, 120u);
 	T_EQ("the approach direction comes back", loaded.approach_direction, 0x05u);
+	T_EQ("OperatingMode comes back", loaded.operating_mode,
+	     MATTER_DL_OPERATING_MODE_NO_REMOTE);
 
 	t_group("matter_dl_attr: only what changed is written");
 	settingsfake_reset();
 	memset(&stored, 0, sizeof(stored));
 	stored.auto_relock_time_s = 60u;
 	stored.approach_direction = 0x07u;
-	T_EQ("a store of two changes", matter_dl_attr_store(&stored, 0u, 0x00u), 0);
+	T_EQ("a store of two changes", matter_dl_attr_store(&stored, 0u, 0x00u, 0u), 0);
 	T_EQ("costs two saves", settingsfake_save_count(), 2);
 	T_EQ("re-writing the same values succeeds",
-	     matter_dl_attr_store(&stored, 60u, 0x07u), 0);
+	     matter_dl_attr_store(&stored, 60u, 0x07u, 0u), 0);
 	T_EQ("and costs no flash at all", settingsfake_save_count(), 2);
 
 	stored.auto_relock_time_s = 0u;
-	T_EQ("zero is a value, not an absence", matter_dl_attr_store(&stored, 60u, 0x07u), 0);
+	T_EQ("zero is a value, not an absence", matter_dl_attr_store(&stored, 60u, 0x07u, 0u), 0);
 	T_EQ("so it is written", settingsfake_save_count(), 3);
 	memset(&loaded, 0, sizeof(loaded));
 	loaded.auto_relock_time_s = 999u;
@@ -279,7 +284,7 @@ void test_matter_fab_settings(void)
 	memset(&stored, 0, sizeof(stored));
 	stored.auto_relock_time_s = 30u;
 	settingsfake_fail_saves_after(0);
-	T_OK("a failed save is reported", matter_dl_attr_store(&stored, 0u, 0u) != 0);
+	T_OK("a failed save is reported", matter_dl_attr_store(&stored, 0u, 0u, 0u) != 0);
 	settingsfake_fail_saves_after(-1);
 	T_EQ("and nothing was stored", settingsfake_key_count(), 0);
 
@@ -288,7 +293,7 @@ void test_matter_fab_settings(void)
 	memset(&stored, 0, sizeof(stored));
 	stored.auto_relock_time_s = 90u;
 	stored.approach_direction = 0x01u;
-	T_EQ("store for erase", matter_dl_attr_store(&stored, 0u, 0u), 0);
+	T_EQ("store for erase", matter_dl_attr_store(&stored, 0u, 0u, 0u), 0);
 	T_EQ("erase succeeds", matter_dl_attr_erase(), 0);
 	T_EQ("both keys are gone", settingsfake_key_count(), 0);
 
@@ -302,7 +307,7 @@ void test_matter_fab_settings(void)
 	stored.auto_relock_time_s = 75u;
 	stored.approach_direction = 0x02u;
 	T_EQ("identity stored", store_identity(&stored), 0);
-	T_EQ("attributes stored", matter_dl_attr_store(&stored, 0u, 0u), 0);
+	T_EQ("attributes stored", matter_dl_attr_store(&stored, 0u, 0u, 0u), 0);
 	T_EQ("erasing the identity succeeds", matter_fab_erase(), 0);
 	T_OK("and the attributes are still there",
 	     settingsfake_has("mdl/art") && settingsfake_has("mdl/apd"));

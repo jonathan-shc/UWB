@@ -65,6 +65,9 @@ bool matter_commission_window_open(void);
  */
 bool matter_commission_take_deliberate_unlock(void);
 
+/** Whether the current OperatingMode permits an Aliro walk-up to unlock. */
+bool matter_commission_aliro_unlock_enabled(void);
+
 /**
  * Finish the one packet previously accepted by the Matter BLE transport.
  * Called exactly once by the transport after final confirmation or failure.

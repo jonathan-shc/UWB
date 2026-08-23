@@ -1103,7 +1103,7 @@ static void lock_attr_value(const struct matter_device_info *info, uint32_t clus
 		(void)matter_tlv_put_u64(w, tag, info->auto_relock_time_s);
 		return;
 	case MATTER_ATTR_DL_OPERATING_MODE:
-		(void)matter_tlv_put_u64(w, tag, MATTER_DL_OPERATING_MODE_NORMAL);
+		(void)matter_tlv_put_u64(w, tag, info->operating_mode);
 		return;
 	case MATTER_ATTR_DL_SUPPORTED_OPERATING_MODES:
 		(void)matter_tlv_put_u64(w, tag, MATTER_DL_SUPPORTED_OPERATING_MODES);
@@ -3047,6 +3047,9 @@ static uint8_t command(void *ctx, const struct matter_im_invoke *inv, uint32_t *
 		}
 		if (inv->command == MATTER_CMD_DL_LOCK_DOOR ||
 		    inv->command == MATTER_CMD_DL_UNLOCK_DOOR) {
+			if (info->operating_mode == MATTER_DL_OPERATING_MODE_NO_REMOTE) {
+				return MATTER_IM_STATUS_UNSUPPORTED_ACCESS;
+			}
 			if (!fabric_slot_has_privilege(info, accessing_slot,
 						 MATTER_AC_PRIVILEGE_OPERATE, MATTER_ENDPOINT_LOCK,
 						 MATTER_CLUSTER_DOOR_LOCK)) {
@@ -3683,7 +3686,8 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 				       ? MATTER_IM_STATUS_UNSUPPORTED_WRITE
 				       : MATTER_IM_STATUS_UNSUPPORTED_CLUSTER;
 		}
-		if (path->attribute != MATTER_ATTR_DL_AUTO_RELOCK_TIME) {
+		if (path->attribute != MATTER_ATTR_DL_AUTO_RELOCK_TIME &&
+		    path->attribute != MATTER_ATTR_DL_OPERATING_MODE) {
 			return MATTER_IM_STATUS_UNSUPPORTED_WRITE;
 		}
 		{
@@ -3696,6 +3700,14 @@ static uint8_t attr_write(void *ctx, const struct matter_im_path *path, const ui
 			matter_tlv_reader_init(&r, data, data_len);
 			if (matter_tlv_next(&r) != 0 || matter_tlv_get_u64(&r, &v) != 0) {
 				return MATTER_IM_STATUS_INVALID_COMMAND;
+			}
+			if (path->attribute == MATTER_ATTR_DL_OPERATING_MODE) {
+				if (v != MATTER_DL_OPERATING_MODE_NORMAL &&
+				    v != MATTER_DL_OPERATING_MODE_NO_REMOTE) {
+					return MATTER_IM_STATUS_CONSTRAINT_ERROR;
+				}
+				info->operating_mode = (uint8_t)v;
+				return MATTER_IM_STATUS_SUCCESS;
 			}
 			/* uint32 per the cluster spec; a wider value is the
 			 * controller's error, not something to truncate. */

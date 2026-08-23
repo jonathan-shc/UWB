@@ -106,6 +106,7 @@ static struct matter_device_info s_info = {
 	/* All three directions permitted, the default the CHIP builds declare;
 	 * zero is a writable value so it cannot mean "never set". */
 	.approach_direction = MATTER_APPROACH_DIRECTION_ALL,
+	.operating_mode = MATTER_DL_OPERATING_MODE_NORMAL,
 };
 
 /* Advertising and the main loop read these outside the Matter owner. Publish
@@ -116,6 +117,7 @@ static atomic_t s_has_fabric_snapshot;
 /* An UnlockDoor command was invoked; the main loop consumes this. */
 static atomic_t s_deliberate_unlock;
 static atomic_t s_window_open_snapshot;
+static atomic_t s_aliro_unlock_enabled;
 
 static void fabric_snapshot_refresh_owned(void)
 {
@@ -1616,7 +1618,8 @@ static void on_invoke_request(const struct matter_exchange_in *in)
 	 * and this runs on OpenThread's thread.
 	 */
 	if (inv.cluster == MATTER_CLUSTER_DOOR_LOCK &&
-	    (inv.command == MATTER_CMD_DL_LOCK_DOOR || inv.command == MATTER_CMD_DL_UNLOCK_DOOR)) {
+	    (inv.command == MATTER_CMD_DL_LOCK_DOOR || inv.command == MATTER_CMD_DL_UNLOCK_DOOR) &&
+	    s_info.operating_mode != MATTER_DL_OPERATING_MODE_NO_REMOTE) {
 		notify_lock_state_changed();
 		if (inv.command == MATTER_CMD_DL_UNLOCK_DOOR) {
 			atomic_set(&s_deliberate_unlock, 1);
@@ -1721,6 +1724,7 @@ static void on_write_request(const struct matter_exchange_in *in)
 	size_t payload_cap;
 	uint32_t prev_relock_s;
 	uint8_t prev_approach;
+	uint8_t prev_operating;
 	size_t resp_len = 0u;
 	int rc;
 
@@ -1747,6 +1751,7 @@ static void on_write_request(const struct matter_exchange_in *in)
 	 */
 	prev_relock_s = s_info.auto_relock_time_s;
 	prev_approach = s_info.approach_direction;
+	prev_operating = s_info.operating_mode;
 	slot = tx_acquire();
 	if (slot == NULL) {
 		LOG_ERR("no owned packet slot for WriteResponse");
@@ -1759,7 +1764,9 @@ static void on_write_request(const struct matter_exchange_in *in)
 		tx_abort_build(slot);
 		return;
 	}
-	(void)matter_dl_attr_store(&s_info, prev_relock_s, prev_approach);
+	(void)matter_dl_attr_store(&s_info, prev_relock_s, prev_approach, prev_operating);
+	atomic_set(&s_aliro_unlock_enabled,
+		   s_info.operating_mode == MATTER_DL_OPERATING_MODE_NORMAL ? 1 : 0);
 #if MATTER_FEATURE_CLIENT
 	/*
 	 * Keyed on the CLUSTER rather than on the write status: the encoder
@@ -4312,6 +4319,11 @@ bool matter_commission_take_deliberate_unlock(void)
 	return atomic_clear(&s_deliberate_unlock) != 0;
 }
 
+bool matter_commission_aliro_unlock_enabled(void)
+{
+	return atomic_get(&s_aliro_unlock_enabled) != 0;
+}
+
 int matter_commission_init(void)
 {
 	ultrawidelock_sem_init(&s_fab_done, 0u, 1u);
@@ -4441,6 +4453,8 @@ int matter_commission_init(void)
 	 * not survive -- the next commissioner reads what the last one set.
 	 */
 	(void)matter_dl_attr_load(&s_info);
+	atomic_set(&s_aliro_unlock_enabled,
+		   s_info.operating_mode == MATTER_DL_OPERATING_MODE_NORMAL ? 1 : 0);
 #if MATTER_FEATURE_CLIENT
 	/*
 	 * AFTER matter_clusters_init, which zeroes the binding table this

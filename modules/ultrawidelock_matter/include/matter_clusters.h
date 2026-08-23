@@ -333,6 +333,7 @@ struct matter_user {
 #define MATTER_DL_LOCK_STATE_LOCKED         1u
 #define MATTER_DL_LOCK_STATE_UNLOCKED       2u
 #define MATTER_DL_OPERATING_MODE_NORMAL     0u
+#define MATTER_DL_OPERATING_MODE_NO_REMOTE  3u
 /**
  * SupportedOperatingModes is INVERTED: a bit CLEARED to 0 means the mode is
  * supported (DoorLock cluster spec, DlSupportedOperatingModes). The previous
@@ -903,6 +904,8 @@ struct matter_device_info {
 	 * a successful write response.
 	 */
 	uint32_t auto_relock_time_s;
+	/** OperatingMode; Normal by default, persisted after a Matter write. */
+	uint8_t operating_mode;
 	/**
 	 * The Approach Direction bitmap, whatever the controller last wrote.
 	 *

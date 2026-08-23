@@ -1105,6 +1105,20 @@ void test_matter_clusters(void)
 		T_EQ("an empty write is an invalid command",
 		     srv.write(srv.ctx, &path, tlv, 0u), MATTER_IM_STATUS_INVALID_COMMAND);
 
+		path.attribute = MATTER_ATTR_DL_OPERATING_MODE;
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON,
+					 MATTER_DL_OPERATING_MODE_NO_REMOTE);
+		T_EQ("NoRemoteLockUnlock is writable", srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_SUCCESS);
+		T_EQ("and stored", info.operating_mode, MATTER_DL_OPERATING_MODE_NO_REMOTE);
+		matter_tlv_writer_init(&w, tlv, sizeof(tlv));
+		(void)matter_tlv_put_u64(&w, MATTER_TLV_ANON, 2u);
+		T_EQ("an unsupported mode is rejected", srv.write(srv.ctx, &path, tlv, w.len),
+		     MATTER_IM_STATUS_CONSTRAINT_ERROR);
+		T_EQ("without changing the mode", info.operating_mode,
+		     MATTER_DL_OPERATING_MODE_NO_REMOTE);
+
 		path.attribute = MATTER_ATTR_DL_LOCK_STATE;
 		T_EQ("LockState itself is not writable",
 		     srv.write(srv.ctx, &path, tlv, 4u), MATTER_IM_STATUS_UNSUPPORTED_WRITE);
@@ -1255,6 +1269,15 @@ void test_matter_clusters(void)
 				 NULL),
 		     MATTER_IM_STATUS_SUCCESS);
 		T_EQ("and the lock reports locked", info.lock_state, MATTER_DL_LOCK_STATE_LOCKED);
+
+		info.operating_mode = MATTER_DL_OPERATING_MODE_NO_REMOTE;
+		T_EQ("NoRemoteLockUnlock rejects UnlockDoor",
+		     run_command(&srv, MATTER_CLUSTER_DOOR_LOCK, MATTER_CMD_DL_UNLOCK_DOOR, NULL,
+				 0u, NULL),
+		     MATTER_IM_STATUS_UNSUPPORTED_ACCESS);
+		T_EQ("and leaves the lock state unchanged", info.lock_state,
+		     MATTER_DL_LOCK_STATE_LOCKED);
+		info.operating_mode = MATTER_DL_OPERATING_MODE_NORMAL;
 
 		/* A cluster the lock endpoint does not have. Answering
 		 * UNSUPPORTED_ENDPOINT here would contradict every attribute read

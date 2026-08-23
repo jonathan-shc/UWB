@@ -79,6 +79,15 @@ int dfu_ble_start(void);
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
+static bool aliro_unlock_enabled(void)
+{
+#if IS_ENABLED(CONFIG_ULTRAWIDELOCK_MATTER_BLE)
+	return matter_commission_aliro_unlock_enabled();
+#else
+	return true;
+#endif
+}
+
 #if IS_ENABLED(CONFIG_ULTRAWIDELOCK_HEAP_PROBE)
 /* Reported at the grant, because by then the unlock has done every P-256 and
  * AES-GCM operation it is going to do. The peak is cumulative since boot, so it
@@ -1267,6 +1276,7 @@ int main(void)
 			}
 			if (!granted && tg_until != 0 && now < tg_until && session_now &&
 			    latch_cred != LATCH_CRED_NONE &&
+			    aliro_unlock_enabled() &&
 			    ultrawidelock_side_may_passive_unlock(&side_dec, &side_cfg)) {
 				tg_until = 0;
 				LOG_INF("toggle unlock (conf=%u)", side_dec.confidence);
@@ -1283,6 +1293,10 @@ int main(void)
 #endif
 		if (act == ULTRAWIDELOCK_APPROACH_UNLOCK_PREDICT ||
 		    act == ULTRAWIDELOCK_APPROACH_UNLOCK_THRESHOLD) {
+			if (!aliro_unlock_enabled()) {
+				ultrawidelock_approach_veto(&approach);
+				act = ULTRAWIDELOCK_APPROACH_HOLD;
+			}
 			(void)ultrawidelock_lat_mark(ULTRAWIDELOCK_LAT_NEAR_DWELL);
 		}
 
