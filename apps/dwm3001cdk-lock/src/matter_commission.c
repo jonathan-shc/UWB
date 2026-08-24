@@ -109,7 +109,7 @@ static struct matter_device_info s_info = {
 	.uwb_distance_mm = -1,
 	.uwb_config = {
 		.version = MATTER_UWB_CONFIG_VERSION,
-		.distance_relock_enabled = 1u,
+		.policy_flags = MATTER_UWB_POLICY_ALL,
 		.unlock_cm = 100u,
 		.approach_cm = 180u,
 		.relock_cm = 250u,
@@ -2223,6 +2223,9 @@ static void notify_uwb_presence(struct sub_state *s)
 		MATTER_ATTR_UWB_RELOCK_CM,
 		MATTER_ATTR_UWB_MOTOR_MS,
 		MATTER_ATTR_UWB_DISTANCE_RELOCK,
+		MATTER_ATTR_UWB_BOUND_UNLOCK,
+		MATTER_ATTR_UWB_LOCK_RELOCK,
+		MATTER_ATTR_UWB_LOCK_UNLOCK,
 	};
 	struct matter_im_read read;
 	size_t framed = 0u;
